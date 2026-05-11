@@ -74,9 +74,9 @@ describe("SAW (Secret Agent Wallet)", () => {
     await provider.connection.confirmTransaction(sig, "confirmed");
   }
 
-  function deriveWallet(owner: PublicKey, agent: PublicKey, salt: Buffer) {
+  function deriveWallet(owner: PublicKey, _agent: PublicKey, salt: Buffer) {
     return PublicKey.findProgramAddressSync(
-      [Buffer.from("wallet"), owner.toBuffer(), agent.toBuffer(), salt],
+      [Buffer.from("wallet"), owner.toBuffer(), salt],
       agentWalletProgram.programId
     );
   }

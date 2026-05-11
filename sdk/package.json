@@ -1,0 +1,28 @@
+{
+  "name": "@asastuai/saw-sdk",
+  "version": "0.0.1",
+  "description": "TypeScript SDK for SAW (Secret Agent Wallet) — agent-native wallet on Solana with on-chain policy enforcement and human-in-the-loop approval",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.31.1",
+    "@solana/spl-token": "^0.4.0",
+    "@solana/web3.js": "^1.95.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

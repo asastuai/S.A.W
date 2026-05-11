@@ -39,7 +39,6 @@ pub mod agent_wallet {
         let signer_seeds: &[&[u8]] = &[
             b"wallet",
             owner_key.as_ref(),
-            agent.as_ref(),
             &salt,
             &[wallet.bump],
         ];
@@ -108,13 +107,11 @@ pub mod agent_wallet {
         }
 
         let owner_key = wallet.owner;
-        let agent_key = wallet.agent;
         let salt = wallet.salt;
         let bump = wallet.bump;
         let signer_seeds: &[&[u8]] = &[
             b"wallet",
             owner_key.as_ref(),
-            agent_key.as_ref(),
             &salt,
             &[bump],
         ];
@@ -179,13 +176,11 @@ pub mod agent_wallet {
         }
 
         let owner_key = wallet.owner;
-        let agent_key = wallet.agent;
         let salt = wallet.salt;
         let bump = wallet.bump;
         let signer_seeds: &[&[u8]] = &[
             b"wallet",
             owner_key.as_ref(),
-            agent_key.as_ref(),
             &salt,
             &[bump],
         ];
@@ -246,7 +241,6 @@ pub mod agent_wallet {
         }
 
         let owner_key = wallet.owner;
-        let agent_key = wallet.agent;
         let salt = wallet.salt;
         let bump = wallet.bump;
         let amount = request.amount;
@@ -255,7 +249,6 @@ pub mod agent_wallet {
         let signer_seeds: &[&[u8]] = &[
             b"wallet",
             owner_key.as_ref(),
-            agent_key.as_ref(),
             &salt,
             &[bump],
         ];
@@ -310,13 +303,11 @@ pub mod agent_wallet {
         );
 
         let owner_key = wallet.owner;
-        let agent_key = wallet.agent;
         let salt = wallet.salt;
         let bump = wallet.bump;
         let signer_seeds: &[&[u8]] = &[
             b"wallet",
             owner_key.as_ref(),
-            agent_key.as_ref(),
             &salt,
             &[bump],
         ];
@@ -376,13 +367,11 @@ pub mod agent_wallet {
         require!(amount > 0, WalletError::InsufficientBalance);
 
         let owner_key = wallet.owner;
-        let agent_key = wallet.agent;
         let salt = wallet.salt;
         let bump = wallet.bump;
         let signer_seeds: &[&[u8]] = &[
             b"wallet",
             owner_key.as_ref(),
-            agent_key.as_ref(),
             &salt,
             &[bump],
         ];
@@ -430,7 +419,7 @@ pub struct InitializeWallet<'info> {
         init,
         payer = owner,
         space = 8 + WalletAccount::SIZE,
-        seeds = [b"wallet", owner.key().as_ref(), agent.as_ref(), &salt],
+        seeds = [b"wallet", owner.key().as_ref(), &salt],
         bump
     )]
     pub wallet: Account<'info, WalletAccount>,
@@ -460,7 +449,7 @@ pub struct InitializeWallet<'info> {
 #[derive(Accounts)]
 pub struct PayDirect<'info> {
     #[account(
-        seeds = [b"wallet", wallet.owner.as_ref(), wallet.agent.as_ref(), &wallet.salt],
+        seeds = [b"wallet", wallet.owner.as_ref(), &wallet.salt],
         bump = wallet.bump
     )]
     pub wallet: Account<'info, WalletAccount>,
@@ -499,7 +488,7 @@ pub struct PayDirect<'info> {
 #[instruction(to: Pubkey, mint: Pubkey, amount: u64, memo: [u8; 32])]
 pub struct RequestPayment<'info> {
     #[account(
-        seeds = [b"wallet", wallet.owner.as_ref(), wallet.agent.as_ref(), &wallet.salt],
+        seeds = [b"wallet", wallet.owner.as_ref(), &wallet.salt],
         bump = wallet.bump
     )]
     pub wallet: Account<'info, WalletAccount>,
@@ -538,7 +527,7 @@ pub struct RequestPayment<'info> {
 #[derive(Accounts)]
 pub struct ApproveAndExecute<'info> {
     #[account(
-        seeds = [b"wallet", wallet.owner.as_ref(), wallet.agent.as_ref(), &wallet.salt],
+        seeds = [b"wallet", wallet.owner.as_ref(), &wallet.salt],
         bump = wallet.bump
     )]
     pub wallet: Box<Account<'info, WalletAccount>>,
@@ -597,7 +586,7 @@ pub struct ApproveAndExecute<'info> {
 #[derive(Accounts)]
 pub struct DenyRequest<'info> {
     #[account(
-        seeds = [b"wallet", wallet.owner.as_ref(), wallet.agent.as_ref(), &wallet.salt],
+        seeds = [b"wallet", wallet.owner.as_ref(), &wallet.salt],
         bump = wallet.bump
     )]
     pub wallet: Account<'info, WalletAccount>,
@@ -629,7 +618,7 @@ pub struct DenyRequest<'info> {
 pub struct OwnerOnly<'info> {
     #[account(
         mut,
-        seeds = [b"wallet", wallet.owner.as_ref(), wallet.agent.as_ref(), &wallet.salt],
+        seeds = [b"wallet", wallet.owner.as_ref(), &wallet.salt],
         bump = wallet.bump
     )]
     pub wallet: Account<'info, WalletAccount>,
@@ -640,7 +629,7 @@ pub struct OwnerOnly<'info> {
 #[derive(Accounts)]
 pub struct EmergencyWithdraw<'info> {
     #[account(
-        seeds = [b"wallet", wallet.owner.as_ref(), wallet.agent.as_ref(), &wallet.salt],
+        seeds = [b"wallet", wallet.owner.as_ref(), &wallet.salt],
         bump = wallet.bump
     )]
     pub wallet: Account<'info, WalletAccount>,
