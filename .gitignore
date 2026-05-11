@@ -1,0 +1,24 @@
+# Anchor
+.anchor
+target
+**/*.rs.bk
+
+# Node
+node_modules
+.yarn
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+
+# Solana
+test-ledger
+*.log
+
+# Env
+.env
+.env.local
