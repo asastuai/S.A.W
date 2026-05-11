@@ -1,0 +1,579 @@
+{
+  "address": "8HJpiQCaCHcvbDVX7K6shcHmNkUZJUfSEqm9mhVcXXnr",
+  "metadata": {
+    "name": "approval_queue",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "create_request",
+      "discriminator": [
+        219,
+        191,
+        93,
+        237,
+        18,
+        44,
+        42,
+        84
+      ],
+      "accounts": [
+        {
+          "name": "queue",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queue.wallet",
+                "account": "QueueState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "request",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  113,
+                  117,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queue.wallet",
+                "account": "QueueState"
+              },
+              {
+                "kind": "account",
+                "path": "queue.next_request_id",
+                "account": "QueueState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet",
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "to",
+          "type": "pubkey"
+        },
+        {
+          "name": "mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "memo",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ],
+      "returns": "u64"
+    },
+    {
+      "name": "mark_approved",
+      "discriminator": [
+        25,
+        140,
+        220,
+        59,
+        183,
+        74,
+        229,
+        51
+      ],
+      "accounts": [
+        {
+          "name": "queue",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queue.wallet",
+                "account": "QueueState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "request",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  113,
+                  117,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "request.wallet",
+                "account": "RequestAccount"
+              },
+              {
+                "kind": "account",
+                "path": "request.id",
+                "account": "RequestAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "mark_denied",
+      "discriminator": [
+        143,
+        82,
+        189,
+        105,
+        188,
+        43,
+        41,
+        56
+      ],
+      "accounts": [
+        {
+          "name": "queue",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queue.wallet",
+                "account": "QueueState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "request",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  113,
+                  117,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "request.wallet",
+                "account": "RequestAccount"
+              },
+              {
+                "kind": "account",
+                "path": "request.id",
+                "account": "RequestAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "register_queue",
+      "discriminator": [
+        188,
+        11,
+        37,
+        47,
+        42,
+        142,
+        245,
+        37
+      ],
+      "accounts": [
+        {
+          "name": "queue",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet",
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "owner",
+          "type": "pubkey"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "QueueState",
+      "discriminator": [
+        18,
+        227,
+        150,
+        65,
+        218,
+        214,
+        72,
+        191
+      ]
+    },
+    {
+      "name": "RequestAccount",
+      "discriminator": [
+        108,
+        23,
+        6,
+        158,
+        184,
+        6,
+        152,
+        121
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "RequestApproved",
+      "discriminator": [
+        158,
+        196,
+        69,
+        207,
+        98,
+        44,
+        119,
+        187
+      ]
+    },
+    {
+      "name": "RequestCreated",
+      "discriminator": [
+        102,
+        44,
+        0,
+        225,
+        163,
+        110,
+        167,
+        187
+      ]
+    },
+    {
+      "name": "RequestDenied",
+      "discriminator": [
+        21,
+        164,
+        219,
+        5,
+        34,
+        138,
+        199,
+        213
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "MaxPendingReached",
+      "msg": "Maximum pending requests reached for this wallet"
+    },
+    {
+      "code": 6001,
+      "name": "NotPending",
+      "msg": "Request is not in Pending status"
+    },
+    {
+      "code": 6002,
+      "name": "Expired",
+      "msg": "Request has expired"
+    },
+    {
+      "code": 6003,
+      "name": "NotWallet",
+      "msg": "Caller is not the registered wallet"
+    },
+    {
+      "code": 6004,
+      "name": "NotOwner",
+      "msg": "Caller is not the registered owner"
+    },
+    {
+      "code": 6005,
+      "name": "WrongWallet",
+      "msg": "Request does not belong to this wallet"
+    }
+  ],
+  "types": [
+    {
+      "name": "QueueState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "next_request_id",
+            "type": "u64"
+          },
+          {
+            "name": "pending_count",
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RequestAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "memo",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "RequestStatus"
+              }
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RequestApproved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RequestCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RequestDenied",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RequestStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Pending"
+          },
+          {
+            "name": "Approved"
+          },
+          {
+            "name": "Denied"
+          }
+        ]
+      }
+    }
+  ]
+}

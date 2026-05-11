@@ -1,0 +1,369 @@
+{
+  "address": "FGTkQ9C8zr7Rm9WFZ7rK6cDdY7Bju1dTsjSN5GuHqAJF",
+  "metadata": {
+    "name": "policy_registry",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "record_spend",
+      "discriminator": [
+        111,
+        102,
+        17,
+        64,
+        245,
+        202,
+        79,
+        55
+      ],
+      "accounts": [
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "policy.wallet",
+                "account": "PolicyAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "register_policy",
+      "discriminator": [
+        62,
+        66,
+        167,
+        36,
+        252,
+        227,
+        38,
+        132
+      ],
+      "accounts": [
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet",
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "owner",
+          "type": "pubkey"
+        },
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "PolicyParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_policy",
+      "discriminator": [
+        40,
+        133,
+        12,
+        157,
+        235,
+        202,
+        2,
+        132
+      ],
+      "accounts": [
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "policy.wallet",
+                "account": "PolicyAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "PolicyParams"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "PolicyAccount",
+      "discriminator": [
+        218,
+        201,
+        183,
+        164,
+        156,
+        127,
+        81,
+        175
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "PolicySet",
+      "discriminator": [
+        126,
+        246,
+        69,
+        48,
+        9,
+        240,
+        226,
+        52
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "TokenNotAllowed",
+      "msg": "Token is not in the allowlist"
+    },
+    {
+      "code": 6001,
+      "name": "RecipientNotAllowed",
+      "msg": "Recipient is not in the allowlist"
+    },
+    {
+      "code": 6002,
+      "name": "ExceedsPerTxLimit",
+      "msg": "Transaction exceeds per-transaction limit"
+    },
+    {
+      "code": 6003,
+      "name": "ExceedsDailyLimit",
+      "msg": "Transaction exceeds daily spending limit"
+    },
+    {
+      "code": 6004,
+      "name": "CooldownActive",
+      "msg": "Cooldown period has not elapsed"
+    },
+    {
+      "code": 6005,
+      "name": "NotOwner",
+      "msg": "Caller is not the registered owner"
+    },
+    {
+      "code": 6006,
+      "name": "NotWallet",
+      "msg": "Caller is not the registered wallet"
+    },
+    {
+      "code": 6007,
+      "name": "AllowlistTooLarge",
+      "msg": "Allowlist exceeds maximum size"
+    },
+    {
+      "code": 6008,
+      "name": "Overflow",
+      "msg": "Arithmetic overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "PolicyAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "daily_limit",
+            "type": "u64"
+          },
+          {
+            "name": "per_tx_limit",
+            "type": "u64"
+          },
+          {
+            "name": "approval_threshold",
+            "type": "u64"
+          },
+          {
+            "name": "cooldown_seconds",
+            "type": "u64"
+          },
+          {
+            "name": "recipient_allowlist",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "token_allowlist",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "daily_spent",
+            "type": "u64"
+          },
+          {
+            "name": "last_tx_timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "last_reset_timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PolicyParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "daily_limit",
+            "type": "u64"
+          },
+          {
+            "name": "per_tx_limit",
+            "type": "u64"
+          },
+          {
+            "name": "approval_threshold",
+            "type": "u64"
+          },
+          {
+            "name": "cooldown_seconds",
+            "type": "u64"
+          },
+          {
+            "name": "recipient_allowlist",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "token_allowlist",
+            "type": {
+              "vec": "pubkey"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PolicySet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    }
+  ]
+}
