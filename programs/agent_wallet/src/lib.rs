@@ -1,5 +1,7 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use anchor_spl::token_interface::{
+    self, Mint, TokenAccount, TokenInterface, TransferChecked,
+};
 
 pub mod cpi;
 pub mod errors;
@@ -117,17 +119,22 @@ pub mod agent_wallet {
             &[bump],
         ];
 
-        token::transfer(
+        let mint_key = ctx.accounts.mint.key();
+        let decimals = ctx.accounts.mint.decimals;
+
+        token_interface::transfer_checked(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
-                Transfer {
+                TransferChecked {
                     from: ctx.accounts.source_token_account.to_account_info(),
+                    mint: ctx.accounts.mint.to_account_info(),
                     to: ctx.accounts.recipient_token_account.to_account_info(),
                     authority: wallet.to_account_info(),
                 },
                 &[signer_seeds],
             ),
             amount,
+            decimals,
         )?;
 
         cpi::record_spend(
@@ -141,7 +148,7 @@ pub mod agent_wallet {
         emit!(PaymentExecuted {
             wallet: wallet.key(),
             to,
-            mint: ctx.accounts.source_token_account.mint,
+            mint: mint_key,
             amount,
         });
         Ok(())
@@ -261,17 +268,20 @@ pub mod agent_wallet {
             signer_seeds,
         )?;
 
-        token::transfer(
+        let decimals = ctx.accounts.mint.decimals;
+        token_interface::transfer_checked(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
-                Transfer {
+                TransferChecked {
                     from: ctx.accounts.source_token_account.to_account_info(),
+                    mint: ctx.accounts.mint.to_account_info(),
                     to: ctx.accounts.recipient_token_account.to_account_info(),
                     authority: wallet.to_account_info(),
                 },
                 &[signer_seeds],
             ),
             amount,
+            decimals,
         )?;
 
         cpi::record_spend(
@@ -377,22 +387,26 @@ pub mod agent_wallet {
             &[bump],
         ];
 
-        token::transfer(
+        let mint_key = ctx.accounts.mint.key();
+        let decimals = ctx.accounts.mint.decimals;
+        token_interface::transfer_checked(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
-                Transfer {
+                TransferChecked {
                     from: ctx.accounts.source_token_account.to_account_info(),
+                    mint: ctx.accounts.mint.to_account_info(),
                     to: ctx.accounts.owner_token_account.to_account_info(),
                     authority: wallet.to_account_info(),
                 },
                 &[signer_seeds],
             ),
             amount,
+            decimals,
         )?;
 
         emit!(EmergencyWithdrawal {
             wallet: wallet.key(),
-            mint: ctx.accounts.source_token_account.mint,
+            mint: mint_key,
             amount,
         });
         Ok(())
@@ -461,17 +475,24 @@ pub struct PayDirect<'info> {
     )]
     pub policy: Account<'info, PolicyAccount>,
 
-    #[account(mut, token::authority = wallet)]
-    pub source_token_account: Account<'info, TokenAccount>,
+    pub mint: InterfaceAccount<'info, Mint>,
 
-    #[account(mut)]
-    pub recipient_token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        token::authority = wallet,
+        token::mint = mint,
+        token::token_program = token_program
+    )]
+    pub source_token_account: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(mut, token::mint = mint, token::token_program = token_program)]
+    pub recipient_token_account: InterfaceAccount<'info, TokenAccount>,
 
     /// CHECK: policy_registry program
     #[account(address = POLICY_REGISTRY_ID)]
     pub policy_program: UncheckedAccount<'info>,
 
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 #[derive(Accounts)]
@@ -520,7 +541,7 @@ pub struct ApproveAndExecute<'info> {
         seeds = [b"wallet", wallet.owner.as_ref(), wallet.agent.as_ref(), &wallet.salt],
         bump = wallet.bump
     )]
-    pub wallet: Account<'info, WalletAccount>,
+    pub wallet: Box<Account<'info, WalletAccount>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -531,7 +552,7 @@ pub struct ApproveAndExecute<'info> {
         bump = policy.bump,
         seeds::program = POLICY_REGISTRY_ID
     )]
-    pub policy: Account<'info, PolicyAccount>,
+    pub policy: Box<Account<'info, PolicyAccount>>,
 
     #[account(
         mut,
@@ -539,7 +560,7 @@ pub struct ApproveAndExecute<'info> {
         bump = queue.bump,
         seeds::program = APPROVAL_QUEUE_ID
     )]
-    pub queue: Account<'info, QueueState>,
+    pub queue: Box<Account<'info, QueueState>>,
 
     #[account(
         mut,
@@ -547,13 +568,20 @@ pub struct ApproveAndExecute<'info> {
         bump = request.bump,
         seeds::program = APPROVAL_QUEUE_ID
     )]
-    pub request: Account<'info, RequestAccount>,
+    pub request: Box<Account<'info, RequestAccount>>,
 
-    #[account(mut, token::authority = wallet)]
-    pub source_token_account: Account<'info, TokenAccount>,
+    pub mint: Box<InterfaceAccount<'info, Mint>>,
 
-    #[account(mut)]
-    pub recipient_token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        token::authority = wallet,
+        token::mint = mint,
+        token::token_program = token_program
+    )]
+    pub source_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(mut, token::mint = mint, token::token_program = token_program)]
+    pub recipient_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// CHECK: policy_registry program
     #[account(address = POLICY_REGISTRY_ID)]
@@ -563,7 +591,7 @@ pub struct ApproveAndExecute<'info> {
     #[account(address = APPROVAL_QUEUE_ID)]
     pub queue_program: UncheckedAccount<'info>,
 
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 #[derive(Accounts)]
@@ -619,13 +647,20 @@ pub struct EmergencyWithdraw<'info> {
 
     pub owner: Signer<'info>,
 
-    #[account(mut, token::authority = wallet)]
-    pub source_token_account: Account<'info, TokenAccount>,
+    pub mint: InterfaceAccount<'info, Mint>,
 
-    #[account(mut)]
-    pub owner_token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        token::authority = wallet,
+        token::mint = mint,
+        token::token_program = token_program
+    )]
+    pub source_token_account: InterfaceAccount<'info, TokenAccount>,
 
-    pub token_program: Program<'info, Token>,
+    #[account(mut, token::mint = mint, token::token_program = token_program)]
+    pub owner_token_account: InterfaceAccount<'info, TokenAccount>,
+
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 #[event]

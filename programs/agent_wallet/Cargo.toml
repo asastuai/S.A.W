@@ -23,6 +23,6 @@ idl-build = [
 
 [dependencies]
 anchor-lang = "0.31.1"
-anchor-spl = { version = "0.31.1", features = ["token"] }
+anchor-spl = { version = "0.31.1", features = ["token", "token_2022"] }
 policy_registry = { path = "../policy_registry", default-features = false, features = ["no-entrypoint"] }
 approval_queue = { path = "../approval_queue", default-features = false, features = ["no-entrypoint"] }
