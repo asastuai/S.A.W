@@ -1,7 +1,7 @@
 [package]
 name = "agent_wallet"
 version = "0.1.0"
-description = "Created with Anchor"
+description = "SAW agent_wallet program — PDA-based wallet with policy enforcement and human-in-the-loop approval"
 edition = "2021"
 
 [lib]
@@ -14,9 +14,15 @@ cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
-idl-build = ["anchor-lang/idl-build"]
-
+idl-build = [
+    "anchor-lang/idl-build",
+    "anchor-spl/idl-build",
+    "policy_registry/idl-build",
+    "approval_queue/idl-build",
+]
 
 [dependencies]
 anchor-lang = "0.31.1"
-
+anchor-spl = { version = "0.31.1", features = ["token"] }
+policy_registry = { path = "../policy_registry", default-features = false, features = ["no-entrypoint"] }
+approval_queue = { path = "../approval_queue", default-features = false, features = ["no-entrypoint"] }
