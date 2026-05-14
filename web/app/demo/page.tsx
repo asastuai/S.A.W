@@ -1061,24 +1061,77 @@ export default function DemoPage() {
 }
 
 function Idle() {
+  const [showMobileHint, setShowMobileHint] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const ua = navigator.userAgent || "";
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
+    const hasPhantom = !!(window as any).phantom?.solana?.isPhantom;
+    if (isMobile && !hasPhantom) setShowMobileHint(true);
+  }, []);
+
+  function copyUrl() {
+    try {
+      navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  }
+
   return (
-    <div className="border border-ash p-12 text-center">
+    <div className="border border-ash p-8 sm:p-12 text-center">
       <p className="stamp mb-6">Awaiting handler</p>
-      <h2 className="font-display text-4xl mb-4">
+      <h2 className="font-display text-3xl sm:text-4xl mb-4">
         Connect your Phantom.
       </h2>
-      <p className="text-bone/60 max-w-xl mx-auto mb-6">
+      <p className="text-bone/60 max-w-xl mx-auto mb-6 text-sm sm:text-base">
         Pick an agent, brief them by chat, then watch them execute the schedule
         on Solana devnet. You sign only what crosses the threshold.
       </p>
-      <div className="border border-gold/40 bg-gold/5 p-4 max-w-md mx-auto text-sm text-bone/80 leading-relaxed">
-        <span className="text-gold uppercase tracking-widest text-xs block mb-2">
-          One-time setup
-        </span>
-        Open Phantom → settings → developer settings → switch network to{" "}
-        <span className="text-gold">Devnet</span>. Then click Select Wallet
-        above.
-      </div>
+
+      {showMobileHint ? (
+        <div className="border border-gold bg-gold/10 p-5 max-w-md mx-auto text-sm text-bone/90 leading-relaxed text-left">
+          <span className="text-gold uppercase tracking-widest text-xs block mb-3 text-center">
+            📱 Open this in Phantom mobile
+          </span>
+          <p className="mb-4 text-center text-bone/80">
+            The Phantom extension only exists on desktop. On phone you have to load
+            the demo from inside the Phantom app's browser.
+          </p>
+          <ol className="space-y-2 mb-5 text-bone/80">
+            <li>
+              <span className="text-gold mr-2">1.</span>Open the Phantom mobile app
+            </li>
+            <li>
+              <span className="text-gold mr-2">2.</span>Tap the{" "}
+              <span className="text-gold">Browser</span> tab at the bottom
+            </li>
+            <li>
+              <span className="text-gold mr-2">3.</span>Paste this URL and load it
+            </li>
+            <li>
+              <span className="text-gold mr-2">4.</span>Inside Phantom → Settings →
+              Developer → switch to <span className="text-gold">Devnet</span>
+            </li>
+          </ol>
+          <button
+            onClick={copyUrl}
+            className="w-full border border-gold text-gold py-2 text-xs uppercase tracking-widest hover:bg-gold hover:text-ink transition"
+          >
+            {copied ? "✓ URL copied" : "Copy URL"}
+          </button>
+        </div>
+      ) : (
+        <div className="border border-gold/40 bg-gold/5 p-4 max-w-md mx-auto text-sm text-bone/80 leading-relaxed">
+          <span className="text-gold uppercase tracking-widest text-xs block mb-2">
+            One-time setup
+          </span>
+          Open Phantom → settings → developer settings → switch network to{" "}
+          <span className="text-gold">Devnet</span>. Then click Select Wallet
+          above.
+        </div>
+      )}
     </div>
   );
 }
