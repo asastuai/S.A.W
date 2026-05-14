@@ -24,7 +24,7 @@ function Header() {
           Demo
         </Link>
         <a
-          href="https://github.com/asastuai/saw"
+          href="https://github.com/asastuai/S.A.W"
           target="_blank"
           rel="noreferrer"
           className="hover:text-gold transition"
@@ -56,7 +56,7 @@ function Hero() {
           Run the dossier →
         </Link>
         <a
-          href="https://github.com/asastuai/saw"
+          href="https://github.com/asastuai/S.A.W"
           target="_blank"
           rel="noreferrer"
           className="border border-bone/30 text-bone/80 px-6 py-3 uppercase tracking-widest text-sm hover:border-gold hover:text-gold transition"
