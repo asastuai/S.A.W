@@ -3,6 +3,7 @@
 import type { Opportunity, ScheduleItem } from "@/lib/schedule";
 import { describeTrigger, pendingOpportunities } from "@/lib/schedule";
 import { DEMO_DECIMALS } from "@/lib/saw";
+import { CreatorNote } from "@/components/creator-note";
 
 const fmt = (n: number) =>
   `${(n / 10 ** DEMO_DECIMALS).toLocaleString(undefined, {
@@ -35,8 +36,12 @@ export function OpportunityReel({
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className="text-gold font-display text-lg">{glyph}</span>
-          <span className="text-xs uppercase tracking-widest text-gold">
+          <span className="text-xs uppercase tracking-widest text-gold flex items-center gap-2">
             {personaName} spotted
+            <CreatorNote
+              text="Imagine this with sound and a native push notification — like a Robinhood alert when a price hits. Today it's a card; tomorrow it's a buzz in your pocket."
+              position="bottom-left"
+            />
           </span>
           {scanning && (
             <span className="text-xs text-bone/40 italic ml-2">

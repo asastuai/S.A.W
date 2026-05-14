@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "@/lib/schedule";
+import { CreatorNote } from "@/components/creator-note";
 
 export function Chat({
   messages,
@@ -34,8 +35,12 @@ export function Chat({
   return (
     <div className="flex flex-col h-full border border-ash bg-ink">
       <div className="border-b border-ash px-4 py-2 flex items-center justify-between">
-        <div className="text-xs uppercase tracking-widest text-gold">
+        <div className="text-xs uppercase tracking-widest text-gold flex items-center gap-2">
           Briefing channel
+          <CreatorNote
+            text="Imagine this as a phone-notification reel. The mobile version will live closer to a Telegram thread than a desktop card — every agent reply landing as a push you can swipe."
+            position="bottom-right"
+          />
         </div>
         <div className="text-xs text-bone/40">{messages.length} messages</div>
       </div>

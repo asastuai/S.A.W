@@ -61,6 +61,7 @@ import {
 import type { MarketSnapshot } from "@/lib/market";
 import { OpportunityReel } from "@/components/opportunity-reel";
 import { Mascot, MascotPose } from "@/components/mascot";
+import { CreatorNote } from "@/components/creator-note";
 import { Chat } from "@/components/chat";
 import { ScheduleView } from "@/components/schedule-view";
 import { ApiKeyModal } from "@/components/api-key-modal";
@@ -1082,7 +1083,13 @@ function AgentGate({ onOpen }: { onOpen: () => void }) {
 
   return (
     <div className="border border-gold p-8 sm:p-12 text-center max-w-3xl mx-auto">
-      <p className="stamp mb-6">Step 2 of 2</p>
+      <p className="stamp mb-6 flex items-center justify-center gap-2">
+        Step 2 of 2
+        <CreatorNote
+          text="Imagine picking a provider per persona — Greedie uses Groq for speed, Conservador uses Claude for reasoning. The wallet doesn't care which model thinks; the policy is enforced on-chain."
+          position="center"
+        />
+      </p>
       <h2 className="font-display text-3xl sm:text-4xl mb-4">
         Pick a brain for your agent.
       </h2>
@@ -1147,7 +1154,13 @@ function PersonaPicker({
 }) {
   return (
     <div>
-      <p className="stamp mb-6">Choose your operative</p>
+      <p className="stamp mb-6 flex items-center gap-2">
+        Choose your operative
+        <CreatorNote
+          text="Imagine 10+ personas plus a custom builder. Each one is a different policy preset over the same wallet primitive — same on-chain rails, different personalities."
+          position="bottom-right"
+        />
+      </p>
       <h2 className="font-display text-5xl mb-4 tracking-tight">
         Pick the agent.<br />Brief them.
       </h2>
@@ -1259,7 +1272,13 @@ function SetupOverlay({ step, persona }: { step: string; persona: Persona }) {
   return (
     <div className="border border-ash p-12 text-center min-h-[400px] flex flex-col items-center justify-center">
       <Mascot pose="thinking" size={140} glyph={persona.glyph} />
-      <p className="stamp mt-4 mb-2">Briefing {persona.name}</p>
+      <p className="stamp mt-4 mb-2 flex items-center gap-2">
+        Briefing {persona.name}
+        <CreatorNote
+          text="Imagine collapsing these 3 sigs into 1 with session signers — gasless onboarding, no wallet popups for the first minute. The setup itself becomes invisible."
+          position="bottom-right"
+        />
+      </p>
       <h2 className="font-display text-3xl mb-3">{persona.tagline}</h2>
       <p className="text-bone/60 text-sm mb-8">
         Three signatures. Phantom will prompt you for each.
@@ -1315,7 +1334,14 @@ function BriefingRoom({
     <div className="grid lg:grid-cols-[3fr_4fr_3fr] gap-6">
       {/* LEFT: mascot + identity */}
       <div className="space-y-4">
-        <div className="border border-ash p-5 flex flex-col items-center">
+        <div className="border border-ash p-5 flex flex-col items-center relative">
+          <span className="absolute top-2 right-2">
+            <CreatorNote
+              text="Imagine this as an interactive 3D render — or polished 2D animation with persona-specific gestures (Greedie smirks, Conservador adjusts glasses, Estable nods slowly)."
+              position="bottom-left"
+              label="vision note · mascot"
+            />
+          </span>
           <Mascot pose={mascotPose} size={180} glyph={persona.glyph} />
           <div className="stamp mt-4">{persona.role}</div>
           <h2 className="font-display text-2xl mt-1">{persona.name}</h2>
@@ -1578,7 +1604,13 @@ function ApprovalSheet({
         <div className="flex items-center gap-4 mb-6">
           <Mascot pose="thinking" size={80} glyph={persona.glyph} />
           <div>
-            <div className="stamp">Approval requested</div>
+            <div className="stamp flex items-center gap-2">
+              Approval requested
+              <CreatorNote
+                text="Imagine this as a native Phantom mobile push — vibration, biometric, gone in 2 seconds. The browser modal is just the desktop fallback."
+                position="bottom-right"
+              />
+            </div>
             <div className="text-bone font-display text-xl">{persona.name}</div>
           </div>
         </div>

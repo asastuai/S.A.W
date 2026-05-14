@@ -3,6 +3,7 @@
 import type { ScheduleItem, ScheduleStatus } from "@/lib/schedule";
 import { describeTrigger, summarize } from "@/lib/schedule";
 import { DEMO_DECIMALS } from "@/lib/saw";
+import { CreatorNote } from "@/components/creator-note";
 
 const fmtAmount = (n: number) =>
   `${(n / 10 ** DEMO_DECIMALS).toLocaleString(undefined, {
@@ -49,8 +50,12 @@ export function ScheduleView({
     <div className="border border-ash bg-ink">
       <div className="border-b border-ash px-4 py-3 flex items-center justify-between">
         <div>
-          <div className="text-xs uppercase tracking-widest text-gold">
+          <div className="text-xs uppercase tracking-widest text-gold flex items-center gap-2">
             Today's schedule
+            <CreatorNote
+              text="Imagine this as a horizontal timeline rather than a list. Drag items to reorder, swipe to cancel, hover to preview the on-chain tx that will fire."
+              position="bottom-right"
+            />
           </div>
           <div className="text-xs text-bone/50 mt-0.5">
             {stats.queued} queued · {stats.done} done
