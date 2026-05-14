@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { SolanaWalletProvider } from "@/components/wallet-provider";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 export const metadata: Metadata = {
   title: "SAW — Secret Agent Wallet",
@@ -16,7 +17,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="grain min-h-screen scan-line">
-        <SolanaWalletProvider>{children}</SolanaWalletProvider>
+        <ErrorBoundary>
+          <SolanaWalletProvider>{children}</SolanaWalletProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );
