@@ -1,11 +1,15 @@
 {
-  "license": "ISC",
+  "name": "saw-monorepo",
+  "private": true,
+  "license": "Apache-2.0",
   "scripts": {
+    "build": "pnpm -F @asastuai/saw-sdk build && pnpm -F @asastuai/saw-web build",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
   },
   "dependencies": {
-    "@coral-xyz/anchor": "^0.31.1"
+    "@coral-xyz/anchor": "^0.31.1",
+    "next": "14.2.18"
   },
   "devDependencies": {
     "@solana/spl-token": "^0.4.14",

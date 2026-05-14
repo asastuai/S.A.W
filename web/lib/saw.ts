@@ -92,11 +92,17 @@ export type StoredSetup = {
   recipientAta: string;
   mint: string;
   salt: number[];
+  personaId: string;
 };
 
 const setupKey = (handler: PublicKey) => `${STORAGE_PREFIX}:setup:${handler.toBase58()}`;
 
-export function saveSetup(handler: PublicKey, setup: DemoSetup, salt: Buffer) {
+export function saveSetup(
+  handler: PublicKey,
+  setup: DemoSetup,
+  salt: Buffer,
+  personaId: string
+) {
   if (typeof window === "undefined") return;
   const stored: StoredSetup = {
     walletPda: setup.walletPda.toBase58(),
@@ -104,6 +110,7 @@ export function saveSetup(handler: PublicKey, setup: DemoSetup, salt: Buffer) {
     recipientAta: setup.recipientAta.toBase58(),
     mint: setup.mint.toBase58(),
     salt: Array.from(salt),
+    personaId,
   };
   window.localStorage.setItem(setupKey(handler), JSON.stringify(stored));
 }

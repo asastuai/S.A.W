@@ -22,3 +22,21 @@ test-ledger
 # Env
 .env
 .env.local
+.env.*.local
+
+# Next.js
+.next
+out
+
+# Vercel
+.vercel
+
+# pnpm
+.pnpm-store
+
+# SDK build output
+sdk/dist
+
+# Personal drafts (not for public repo)
+APPLY_TO_SENDAI.md
+*.tsbuildinfo

@@ -14,12 +14,12 @@ export default function LandingPage() {
 
 function Header() {
   return (
-    <header className="border-b border-ash px-6 py-4 flex items-center justify-between">
+    <header className="border-b border-ash px-4 sm:px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
       <div className="flex items-center gap-3">
         <span className="font-display text-2xl tracking-widest">S A W</span>
-        <span className="stamp">Devnet // 2026</span>
+        <span className="stamp hidden sm:inline">Devnet // 2026</span>
       </div>
-      <nav className="flex items-center gap-6 text-sm uppercase tracking-widest">
+      <nav className="flex items-center gap-4 sm:gap-6 text-sm uppercase tracking-widest">
         <Link href="/demo" className="hover:text-gold transition">
           Demo
         </Link>
@@ -40,7 +40,7 @@ function Hero() {
   return (
     <section className="px-6 py-24 max-w-5xl mx-auto">
       <p className="stamp mb-8">Classified // Operational</p>
-      <h1 className="font-display text-6xl md:text-8xl leading-none tracking-tight mb-6">
+      <h1 className="font-display text-5xl sm:text-6xl md:text-8xl leading-none tracking-tight mb-6">
         Be the handler<br />of your AI agent.
       </h1>
       <p className="text-bone/70 text-lg max-w-2xl mb-12 leading-relaxed">
