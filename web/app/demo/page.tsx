@@ -983,6 +983,17 @@ export default function DemoPage() {
         </div>
       </header>
 
+      <div className="border-b border-gold/30 bg-gold/5 px-4 sm:px-6 py-2 text-center">
+        <p className="text-xs text-bone/70 inline-flex items-center gap-2 flex-wrap justify-center">
+          <span className="text-gold animate-pulse">✱</span>
+          <span>
+            Gold asterisks across the demo are{" "}
+            <span className="text-gold uppercase tracking-widest">vision notes</span>
+            {" "}— click any of them to read where I want this feature to go next.
+          </span>
+        </p>
+      </div>
+
       <section className="px-4 sm:px-6 py-8 max-w-7xl mx-auto">
         {!wallet.connected ? (
           <Idle />
