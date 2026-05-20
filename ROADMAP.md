@@ -145,9 +145,11 @@ The user always brings their own LLM key (Groq, OpenAI, Anthropic, Gemini, Grok 
 
 No subscriptions. No paywalls. No KYC. No CC. SOL in, SOL out.
 
-**Fee 1 — Jupiter swap routing: `27.5 bps (0.275%)`**
+**Fee 1 — Jupiter swap routing: `55 bps (0.55%)`**
 
-Applied to agent-executed Jupiter swaps via Jupiter's native `platformFeeBps` mechanism. Visible in every swap preview. Handler-signed swaps = no fee. Positioned mid-market (Phantom Swap: 0.85%, Jupiter UI: 0.05% optional).
+Applied to agent-executed Jupiter swaps via Jupiter's native `platformFeeBps` mechanism. Visible in every swap preview. Handler-signed swaps = no fee.
+
+**Positioning rationale:** Phantom Swap charges 0.85% with no agent layer. Pricing SAW at 0.55% gives a clear ~35% discount without crossing into "suspiciously cheap" territory — the kind of gap that makes crypto users ask *"what are they hiding"*. We are cheaper because agents do the work, not because we are venture-subsidized.
 
 **Fee 2 — Performance: `5% on net weekly PnL`**
 
@@ -177,19 +179,19 @@ $2k custodied, 20 swaps/mo @ $200 avg, +5% PnL/mo, agent active daily:
 
 | Source | $ / month |
 |---|---|
-| Swap fees | $11.00 |
+| Swap fees | $22.00 |
 | Performance | $5.00 |
 | AUM | $1.67 |
-| **Total** | **~$17.70** |
+| **Total** | **~$28.67** |
 
 ### Revenue at scale
 
 | Active users | Monthly revenue |
 |---|---|
-| 50 | $885 |
-| 200 | $3,540 |
-| 500 | $8,850 |
-| 1,000 | $17,700 |
+| 50 | $1,435 |
+| 200 | $5,734 |
+| 500 | $14,335 |
+| 1,000 | $28,670 |
 
 500 active devnet users in 4-6 months is realistic if the demo lands. Funds runway without forcing mass-market scale.
 
