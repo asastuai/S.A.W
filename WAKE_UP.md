@@ -9,13 +9,32 @@ Mientras dormías construí toda la estructura "esqueleto" de v1 sin tocar nada 
 ## Commits locales (último → primero)
 
 ```
-HEAD  scaffold(p0-p2): db access layer, providers, jupiter, privy, sentry, docs
+HEAD  scaffold(p0-p4): API routes + dashboard stub
+      docs: wake-up brief for Juan with action items and status
+      scaffold(p0-p2): db access layer, providers, jupiter, privy, sentry, docs
       scaffold(p0): worker package + 3 jobs + tested fee math
       scaffold(p0): db schema + supabase/posthog/byok-crypto stubs + env example
       docs: bump swap fee to 55 bps (cheaper than Phantom, not suspicious)
       docs: v1 roadmap — degen-first, cron-based, BYOK + 3 on-chain fees
       ... (los 4 fixes anteriores ya pusheados)
 ```
+
+## API routes nuevos (todos gated por Privy JWT, gracefully no-op sin keys)
+
+- `GET  /api/handler/me` — upsert + return current handler
+- `POST /api/byok` — encrypt + store BYOK key
+- `GET  /api/byok` — list keys (metadata only, no plaintext)
+- `DELETE /api/byok?id=` — remove key
+- `GET  /api/agents` — list handler agents
+- `POST /api/agents` — create agent after on-chain provision
+- `POST /api/agent/wake` — admin-token-gated manual wake (Trigger.dev stub)
+
+Auth helper en `web/lib/auth.ts`: `extractPrivyClaims`, `requireAuth`, `AuthError`. Decode-only por ahora; signature verification con `@privy-io/server-auth` aterriza en P0.5.
+
+## Dashboard stub
+- `/dashboard` página pública con grid de stats placeholders
+- Linkea al ROADMAP en GitHub
+- Va a tomar datos de `agent_wakes` + `scheduled_items` + `opportunities` cuando DB esté live (P4)
 
 ## Lo que quedó hecho (todo reversible)
 
