@@ -1,6 +1,13 @@
 "use client";
 
-export type MascotPose = "idle" | "listening" | "thinking" | "writing" | "executing" | "speaking";
+export type MascotPose =
+  | "idle"
+  | "listening"
+  | "thinking"
+  | "writing"
+  | "executing"
+  | "speaking"
+  | "sleeping";
 
 export function Mascot({
   pose = "idle",
@@ -33,6 +40,15 @@ export function Mascot({
           <div className="h-px w-6 bg-gold animate-mascot-tick" style={{ animationDelay: "0ms" }} />
           <div className="h-px w-4 bg-gold animate-mascot-tick" style={{ animationDelay: "150ms" }} />
           <div className="h-px w-7 bg-gold animate-mascot-tick" style={{ animationDelay: "300ms" }} />
+        </div>
+      )}
+
+      {/* SLEEPING Zs */}
+      {pose === "sleeping" && (
+        <div className="absolute -top-3 right-0 z-10 flex flex-col items-end gap-0.5">
+          <span className="text-gold/80 font-display text-xs animate-mascot-bounce" style={{ animationDelay: "0ms" }}>z</span>
+          <span className="text-gold/60 font-display text-sm animate-mascot-bounce" style={{ animationDelay: "300ms" }}>z</span>
+          <span className="text-gold/40 font-display text-base animate-mascot-bounce" style={{ animationDelay: "600ms" }}>Z</span>
         </div>
       )}
 

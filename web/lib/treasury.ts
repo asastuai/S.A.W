@@ -1,0 +1,26 @@
+/**
+ * SAW fee treasury — the Solana address that receives all collected fees.
+ *
+ * For v1 (devnet) this is a placeholder generated keypair the team controls.
+ * Before mainnet this becomes a Squads multisig or PDA controlled by the SAW
+ * governance program.
+ *
+ * Configure via NEXT_PUBLIC_SAW_TREASURY env var.
+ */
+
+import { PublicKey } from "@solana/web3.js";
+
+const RAW = process.env.NEXT_PUBLIC_SAW_TREASURY;
+const FALLBACK = "11111111111111111111111111111111"; // system program (visible-bug if leaked)
+
+export function getTreasuryAddress(): PublicKey {
+  return new PublicKey(RAW || FALLBACK);
+}
+
+export function getTreasuryAddressString(): string {
+  return RAW || FALLBACK;
+}
+
+export function isTreasuryConfigured(): boolean {
+  return Boolean(RAW);
+}
