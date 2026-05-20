@@ -1,0 +1,21 @@
+{
+  "name": "@asastuai/saw-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "trigger dev",
+    "deploy": "trigger deploy"
+  },
+  "dependencies": {
+    "@asastuai/saw-sdk": "workspace:*",
+    "@solana/web3.js": "^1.98.4",
+    "@supabase/supabase-js": "^2.45.0",
+    "@trigger.dev/sdk": "^3.3.0",
+    "groq-sdk": "^0.7.0"
+  },
+  "devDependencies": {
+    "@trigger.dev/build": "^3.3.0",
+    "typescript": "^5.7.3"
+  }
+}
