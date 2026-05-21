@@ -77,6 +77,7 @@ import {
 } from "@/lib/hydrate";
 import { SleepingBadge } from "@/components/sleeping-badge";
 import { AgentSettingsModal } from "@/components/agent-settings-modal";
+import { getTreasuryAddress } from "@/lib/treasury";
 import { Chat } from "@/components/chat";
 import { ScheduleView } from "@/components/schedule-view";
 import { ApiKeyModal } from "@/components/api-key-modal";
@@ -1031,6 +1032,31 @@ export default function DemoPage() {
     if (!handle || !setup || !persona || !sawClient) return;
 
     patchItem(item.id, { status: "executing" });
+
+    // SWAP items execute as a real SOL transfer (devnet) from the agent
+    // keypair to the SAW treasury. The "receive" leg (USDC) is mocked in
+    // DB because Jupiter has no real devnet liquidity. The signature is
+    // real and visible on explorer.solana.com/?cluster=devnet.
+    if (item.vendor?.toUpperCase().startsWith("SWAP")) {
+      try {
+        const SWAP_LEG_LAMPORTS = 1_000_000; // 0.001 SOL — symbolic, real
+        const treasury = getTreasuryAddress();
+        const ix = SystemProgram.transfer({
+          fromPubkey: setup.agent.publicKey,
+          toPubkey: treasury,
+          lamports: SWAP_LEG_LAMPORTS,
+        });
+        const sig = await sendAsAgent([ix]);
+        patchItem(item.id, { status: "done", sig });
+      } catch (e: any) {
+        patchItem(item.id, {
+          status: "failed",
+          errorMsg: e.message ?? String(e),
+        });
+      }
+      setMascotPose("idle");
+      return;
+    }
 
     const overThreshold = item.amount > persona.policy.approvalThreshold;
     const remaining = persona.policy.dailyLimit - dailySpent;
