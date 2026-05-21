@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { SolanaWalletProvider } from "@/components/wallet-provider";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { PrivyAuthProvider } from "@/components/privy-provider";
+import { PosthogBootstrap } from "@/lib/posthog";
 
 export const metadata: Metadata = {
   title: "SAW — Secret Agent Wallet",
@@ -18,7 +20,10 @@ export default function RootLayout({
     <html lang="en">
       <body className="grain min-h-screen scan-line">
         <ErrorBoundary>
-          <SolanaWalletProvider>{children}</SolanaWalletProvider>
+          <PosthogBootstrap />
+          <PrivyAuthProvider>
+            <SolanaWalletProvider>{children}</SolanaWalletProvider>
+          </PrivyAuthProvider>
         </ErrorBoundary>
       </body>
     </html>
