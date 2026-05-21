@@ -2,5 +2,11 @@
   "buildCommand": "pnpm -F @asastuai/saw-sdk build && pnpm -F @asastuai/saw-web build",
   "installCommand": "pnpm install --no-frozen-lockfile",
   "outputDirectory": "web/.next",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/cron/wake-due-agents",
+      "schedule": "*/5 * * * *"
+    }
+  ]
 }
