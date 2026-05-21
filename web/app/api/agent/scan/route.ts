@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import Groq from "groq-sdk";
 import { describeMarket, getSnapshot } from "@/lib/market";
+import { detectProvider } from "@/lib/api-key";
+import { getProviderAdapter, isProviderImplemented } from "@/lib/providers";
+import type { ChatMessage as ProviderMessage, ToolDefinition } from "@/lib/providers";
 
 export const runtime = "nodejs";
 
@@ -147,9 +149,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ opportunities: [] });
     }
 
-    const groq = new Groq({ apiKey });
+    const provider = detectProvider(apiKey);
+    if (provider === "unknown" || !isProviderImplemented(provider as any)) {
+      return NextResponse.json({ opportunities: [] });
+    }
+    const adapter = getProviderAdapter(provider as any);
 
-    const messages: any[] = [
+    const normalizedTools: ToolDefinition[] = tools.map((t) => ({
+      name: t.function.name,
+      description: t.function.description,
+      parameters: t.function.parameters,
+    }));
+
+    const messages: ProviderMessage[] = [
       { role: "system", content: buildSystemPrompt(body) },
       { role: "user", content: "Scan the market now. What do you see?" },
     ];
@@ -158,24 +170,25 @@ export async function POST(req: NextRequest) {
     const MAX = 4;
 
     for (let iter = 0; iter < MAX; iter++) {
-      const completion = await groq.chat.completions.create({
-        model: "openai/gpt-oss-20b",
-        messages,
-        tools,
-        tool_choice: "auto",
-        temperature: 0.6,
-        max_tokens: 600,
-      });
+      const response = await adapter.complete(
+        {
+          model: adapter.defaultModel,
+          messages,
+          tools: normalizedTools,
+          toolChoice: "auto",
+          temperature: 0.6,
+          maxTokens: 600,
+        },
+        apiKey
+      );
 
-      const choice = completion.choices[0]?.message;
-      const toolCalls = choice?.tool_calls ?? [];
-
+      const toolCalls = response.toolCalls;
       if (toolCalls.length === 0) break;
 
       messages.push({
         role: "assistant",
-        content: choice?.content ?? "",
-        tool_calls: toolCalls,
+        content: response.content,
+        toolCalls,
       });
 
       let done = false;
@@ -183,19 +196,19 @@ export async function POST(req: NextRequest) {
       for (const call of toolCalls) {
         let args: any = {};
         try {
-          args = JSON.parse(call.function.arguments || "{}");
+          args = JSON.parse(call.arguments || "{}");
         } catch (_) {}
 
         let toolResult = "ok";
 
-        if (call.function.name === "get_market_price") {
+        if (call.name === "get_market_price") {
           try {
             const snap = await getSnapshot(String(args.asset || "SOL"));
             toolResult = describeMarket(snap);
           } catch (e: any) {
             toolResult = `Error: ${e.message ?? String(e)}`;
           }
-        } else if (call.function.name === "propose_opportunity") {
+        } else if (call.name === "propose_opportunity") {
           let trigger: Trigger | undefined;
           let scheduledFor: number | undefined;
           const now = Date.now();
@@ -242,14 +255,14 @@ export async function POST(req: NextRequest) {
           });
           toolResult = "logged";
           done = true;
-        } else if (call.function.name === "no_opportunities") {
+        } else if (call.name === "no_opportunities") {
           toolResult = "noted";
           done = true;
         }
 
         messages.push({
           role: "tool",
-          tool_call_id: call.id,
+          toolCallId: call.id,
           content: toolResult,
         });
       }

@@ -1439,11 +1439,12 @@ function Idle() {
 
 function AgentGate({ onOpen }: { onOpen: () => void }) {
   const providers = [
-    { id: "groq", name: "Groq", note: "Free tier, instant", active: true },
-    { id: "openai", name: "OpenAI", note: "GPT-4 / GPT-5", active: false },
-    { id: "anthropic", name: "Anthropic", note: "Claude Sonnet / Opus", active: false },
-    { id: "gemini", name: "Gemini", note: "Google AI Studio", active: false },
-    { id: "grok", name: "Grok", note: "xAI", active: false },
+    { id: "groq", name: "Groq", note: "Free tier, fast", active: true },
+    { id: "gemini", name: "Gemini", note: "Flash 2.5 · cheap", active: true },
+    { id: "deepseek", name: "DeepSeek", note: "V3 · cheapest", active: true },
+    { id: "grok", name: "Grok", note: "xAI · 3 mini", active: true },
+    { id: "openai", name: "OpenAI", note: "GPT-4 / 5", active: false },
+    { id: "anthropic", name: "Anthropic", note: "Claude", active: false },
   ];
 
   return (

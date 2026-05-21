@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import Groq from "groq-sdk";
 import { describeMarket, getSnapshot } from "@/lib/market";
+import { detectProvider } from "@/lib/api-key";
+import { getProviderAdapter, isProviderImplemented } from "@/lib/providers";
+import type { ChatMessage as ProviderMessage, ToolDefinition } from "@/lib/providers";
 
 export const runtime = "nodejs";
 
@@ -286,17 +288,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(noKeyReply());
     }
 
-    const groq = new Groq({ apiKey });
-    const tools =
+    const provider = detectProvider(apiKey);
+    if (provider === "unknown" || !isProviderImplemented(provider as any)) {
+      return NextResponse.json({
+        reply: `Unsupported API key format. Try Groq (gsk_...), Gemini (AIza...), DeepSeek (sk-...), or Grok (xai-...).`,
+        actions: [],
+      });
+    }
+    const adapter = getProviderAdapter(provider as any);
+
+    const baseToolList =
       body.persona.id === "greedie" ? [...greedieTools, ...baseTools] : baseTools;
+    const tools: ToolDefinition[] = baseToolList.map((t) => ({
+      name: t.function.name,
+      description: t.function.description,
+      parameters: t.function.parameters,
+    }));
     const system = buildSystemPrompt(body);
 
-    const messages: any[] = [
+    const messages: ProviderMessage[] = [
       { role: "system", content: system },
-      ...body.conversation.map((m) => ({
-        role: m.role === "agent" ? "assistant" : m.role === "system" ? "system" : "user",
-        content: m.content,
-      })),
+      ...body.conversation.map(
+        (m): ProviderMessage => ({
+          role: m.role === "agent" ? "assistant" : m.role === "system" ? "system" : "user",
+          content: m.content,
+        })
+      ),
       { role: "user", content: body.newMessage },
     ];
 
@@ -304,27 +321,29 @@ export async function POST(req: NextRequest) {
     let finalReply = "";
 
     for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
-      const completion = await groq.chat.completions.create({
-        model: "openai/gpt-oss-20b",
-        messages,
-        tools,
-        tool_choice: "auto",
-        temperature: 0.5,
-        max_tokens: 900,
-      });
+      const response = await adapter.complete(
+        {
+          model: adapter.defaultModel,
+          messages,
+          tools,
+          toolChoice: "auto",
+          temperature: 0.5,
+          maxTokens: 900,
+        },
+        apiKey
+      );
 
-      const choice = completion.choices[0]?.message;
-      const toolCalls = choice?.tool_calls ?? [];
+      const toolCalls = response.toolCalls;
 
       if (toolCalls.length === 0) {
-        finalReply = (choice?.content ?? "").trim();
+        finalReply = response.content.trim();
         break;
       }
 
       messages.push({
         role: "assistant",
-        content: choice?.content ?? "",
-        tool_calls: toolCalls,
+        content: response.content,
+        toolCalls,
       });
 
       let triggeredAction = false;
@@ -332,12 +351,12 @@ export async function POST(req: NextRequest) {
       for (const call of toolCalls) {
         let args: any = {};
         try {
-          args = JSON.parse(call.function.arguments || "{}");
+          args = JSON.parse(call.arguments || "{}");
         } catch (_) {}
 
         let toolResult = "ok";
 
-        switch (call.function.name) {
+        switch (call.name) {
           case "get_market_price":
             try {
               const snap = await getSnapshot(String(args.asset || "SOL"));
@@ -463,7 +482,7 @@ export async function POST(req: NextRequest) {
 
         messages.push({
           role: "tool",
-          tool_call_id: call.id,
+          toolCallId: call.id,
           content: toolResult,
         });
       }
@@ -473,18 +492,20 @@ export async function POST(req: NextRequest) {
       // after — let it do one more pass max.
       if (
         triggeredAction &&
-        !toolCalls.some((c) => c.function.name === "get_market_price")
+        !toolCalls.some((c) => c.name === "get_market_price")
       ) {
-        // give it one more round to summarize, then break
-        const followup = await groq.chat.completions.create({
-          model: "openai/gpt-oss-20b",
-          messages,
-          tools,
-          tool_choice: "none",
-          temperature: 0.4,
-          max_tokens: 300,
-        });
-        finalReply = (followup.choices[0]?.message?.content ?? "").trim();
+        const followup = await adapter.complete(
+          {
+            model: adapter.defaultModel,
+            messages,
+            tools,
+            toolChoice: "none",
+            temperature: 0.4,
+            maxTokens: 300,
+          },
+          apiKey
+        );
+        finalReply = followup.content.trim();
         break;
       }
     }
