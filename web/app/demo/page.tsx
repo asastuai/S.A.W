@@ -401,18 +401,10 @@ export default function DemoPage() {
         if (cancelled) return;
 
         if (data.error) {
-          setBriefing((prev) => {
-            if (!prev) return prev;
-            const last = prev.conversation[prev.conversation.length - 1];
-            const errLine = `Scan failed: ${data.error}`;
-            if (last && last.role === "system" && last.content === errLine) return prev;
-            const next = {
-              ...prev,
-              conversation: [...prev.conversation, newMessage("system", errLine)],
-            };
-            if (handler) saveBriefing(handler, next);
-            return next;
-          });
+          // Silent log — scanner errors (rate limit, 503, etc.) used to
+          // pollute the chat with repeated system messages. They are
+          // transient and recoverable; keep them out of the conversation.
+          console.warn("[saw] scan error", data.error);
           return;
         }
 
@@ -442,7 +434,10 @@ export default function DemoPage() {
     }
 
     const initialDelay = setTimeout(scan, 4000);
-    const timer = setInterval(scan, 60_000);
+    // 5 min cadence — stays within Gemini Flash-Lite 10-RPM free tier
+    // while leaving room for handler chats. Server-side cron handles
+    // the real wake cycle on its own schedule.
+    const timer = setInterval(scan, 5 * 60_000);
 
     return () => {
       cancelled = true;
