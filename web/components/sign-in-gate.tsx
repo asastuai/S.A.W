@@ -14,26 +14,45 @@ export function SignInGate() {
   const { ready, login } = usePrivy();
 
   return (
-    <div className="border border-ash p-8 sm:p-12 text-center max-w-2xl mx-auto">
-      <p className="stamp mb-6">Awaiting handler</p>
-      <h2 className="font-display text-3xl sm:text-4xl mb-4">Sign in to start.</h2>
-      <p className="text-bone/60 max-w-xl mx-auto mb-8 text-sm sm:text-base leading-relaxed">
-        Bring your Solana wallet, or log in with email / Google / X. SAW
-        creates a programmable agent wallet alongside yours — you remain the
-        handler, always.
-      </p>
+    <div className="max-w-3xl mx-auto">
+      <div className="border border-ash p-8 sm:p-12 text-center">
+        <p className="stamp mb-6">Awaiting handler</p>
+        <h2 className="font-display text-3xl sm:text-5xl mb-4 tracking-tight">
+          Step into the dossier.
+        </h2>
+        <p className="text-bone/60 max-w-xl mx-auto mb-8 text-sm sm:text-base leading-relaxed">
+          Bring your Solana wallet to handle the agent. SAW creates a
+          programmable wallet alongside yours — you remain the handler,
+          always.
+        </p>
 
-      <button
-        onClick={() => login()}
-        disabled={!ready}
-        className="bg-gold text-ink px-8 py-3 uppercase tracking-widest text-sm hover:bg-bone disabled:opacity-40 disabled:cursor-not-allowed transition"
-      >
-        {ready ? "Sign in" : "Loading…"}
-      </button>
+        <button
+          onClick={() => login()}
+          disabled={!ready}
+          className="bg-gold text-ink px-8 py-3 uppercase tracking-widest text-sm hover:bg-bone disabled:opacity-40 disabled:cursor-not-allowed transition"
+        >
+          {ready ? "Sign in" : "Loading…"}
+        </button>
 
-      <p className="text-bone/40 text-xs mt-8">
-        Devnet only. Test SOL, no real funds. You can disconnect any time.
-      </p>
+        <p className="text-bone/40 text-xs mt-8">
+          Devnet only · test SOL · no real funds · disconnect any time
+        </p>
+      </div>
+
+      <div className="grid sm:grid-cols-3 gap-px bg-ash mt-6">
+        <div className="bg-ink p-4">
+          <div className="stamp mb-2">Step I</div>
+          <div className="text-bone/80 text-sm">Connect Phantom</div>
+        </div>
+        <div className="bg-ink p-4">
+          <div className="stamp mb-2">Step II</div>
+          <div className="text-bone/80 text-sm">Bring your LLM key (any of 4)</div>
+        </div>
+        <div className="bg-ink p-4">
+          <div className="stamp mb-2">Step III</div>
+          <div className="text-bone/80 text-sm">Brief Greedie & watch it act</div>
+        </div>
+      </div>
     </div>
   );
 }
