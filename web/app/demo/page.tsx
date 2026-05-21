@@ -228,6 +228,43 @@ export default function DemoPage() {
     }
   }
 
+  // Backfill dbAgentId when handler becomes ready after a session restore.
+  // Without this, syncs silently no-op if the demo entered briefing before
+  // Privy auth finished.
+  useEffect(() => {
+    if (dbAgentId) return;
+    if (!privyAuthed || handlerState.status !== "ready" || !persona) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token) return;
+        const res = await fetch("/api/agents", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const { agents } = await res.json();
+        const mine = (agents ?? []).find((a: any) => a.persona === persona.id);
+        if (mine && !cancelled) {
+          setDbAgentId(mine.id);
+          setDbAgent({
+            cron_cadence_minutes: mine.cron_cadence_minutes,
+            next_wake_at: mine.next_wake_at,
+            last_wake_at: mine.last_wake_at,
+            active_hours_start: mine.active_hours_start,
+            active_hours_end: mine.active_hours_end,
+          });
+          console.log("[saw] dbAgentId backfilled", mine.id);
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dbAgentId, privyAuthed, handlerState.status, persona?.id, getAccessToken]);
+
   // 2.2: Hydrate briefing from DB when dbAgentId is set.
   // DB is the source of truth; localStorage is a fallback only.
   useEffect(() => {
