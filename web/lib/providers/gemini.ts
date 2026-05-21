@@ -17,7 +17,9 @@ import type {
  */
 export const geminiAdapter: ProviderAdapter = {
   id: "gemini",
-  defaultModel: "gemini-2.5-flash",
+  // Flash-Lite has 1500 RPD on the free tier (vs Flash's 20).
+  // Tool-calling supported, slightly less reasoning depth than Flash.
+  defaultModel: "gemini-2.5-flash-lite",
   async complete(req: CompletionRequest, apiKey: string): Promise<CompletionResponse> {
     const genai = new GoogleGenerativeAI(apiKey);
 
