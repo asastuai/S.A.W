@@ -91,19 +91,25 @@ function buildSystemPrompt(body: RequestBody): string {
 
 You are a trader. You read the market before proposing anything.
 
-Workflow when the handler asks you to buy/sell something:
+You have TWO kinds of actions:
+- propose_swap: Jupiter swap between two assets (e.g. SOL→USDC, BONK→SOL). This is your primary tool for any "buy", "sell", "trade", "swap" intent. SAW collects a 55 bps platform fee on each swap, automatically.
+- add_dip_buy_item / add_threshold_buy_item / add_twap_series: legacy TEST-token transfers. Use only if the handler explicitly wants test transfers.
+
+Workflow when the handler asks you to buy/sell/swap something:
 1. ALWAYS call get_market_price first to see current price, 24h range, and momentum.
 2. Decide a strategy based on what you see:
-   - Asset near 24h low + bearish: propose a threshold_buy slightly below current (e.g. -0.5%) with short deadline
-   - Asset mid-range + choppy: propose twap_series spread across the next 60-120 seconds
-   - Asset near 24h high: propose a deeper dip_buy (-2 to -3%) with longer deadline OR suggest waiting
+   - Asset near 24h low + bearish: propose_swap with trigger=below at slightly under current
+   - Asset mid-range + choppy: propose 2-3 propose_swap items spaced via different triggers
+   - Asset near 24h high: propose_swap with trigger=dip (-2 to -3%) and longer deadline, or suggest waiting
    - User asks aggressive: tighter targets, faster execution
    - User asks safe: wider targets, more patience
-3. Explain your reading IN ONE SENTENCE before adding items. ("SOL is at $185, sitting near 24h low after -1.2% — going to spread 3 dip-buys.")
-4. Propose 1-4 conditional items. Be specific about the trigger.
+3. Explain your reading IN ONE SENTENCE before adding items. ("SOL is at $185, sitting near 24h low after -1.2% — going to swap 0.5 SOL for USDC on a dip.")
+4. Propose 1-4 swap items. Be specific about fromAsset, toAsset, amount, trigger.
 5. Wait for handler confirmation before mark_ready_to_run.
 
-For the demo: use short timeframes. Trigger deadlines in 90-180 seconds. TWAP intervals in seconds, not hours.`
+For the demo: use short timeframes. Trigger deadlines in 90-180 seconds.
+
+v1.0 note: Jupiter has no real devnet liquidity, so swaps run in mock mode (the fee, audit log, and UX are real; the on-chain leg is simulated). Real Jupiter integration lands when SAW moves to mainnet.`
     : "";
 
   return `You are ${persona.name}, a ${persona.role}.
@@ -262,6 +268,36 @@ const greedieTools = [
           reason: { type: "string" },
         },
         required: ["vendor", "totalAmount", "count", "intervalSeconds", "reason"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "propose_swap",
+      description:
+        "Schedule a Jupiter swap from one asset to another. v1.0 runs in devnet-mock mode (Jupiter has no real devnet liquidity), but the schedule + fee ledger + UI flow is real. Use this for any 'trade X for Y' intent. SAW takes a 55 bps platform fee, visible in preview.",
+      parameters: {
+        type: "object",
+        properties: {
+          fromAsset: { type: "string", description: "Asset to sell (e.g. SOL, USDC, BONK)" },
+          toAsset: { type: "string", description: "Asset to buy" },
+          amount: {
+            type: "number",
+            description: "Amount of fromAsset to swap, in whole units (e.g. 0.5 SOL → 0.5)",
+          },
+          trigger: {
+            type: "string",
+            enum: ["now", "dip", "below", "above"],
+            description: "When to execute. 'now' = immediate.",
+          },
+          basisPrice: { type: "number", description: "Required when trigger=dip — USD basis price" },
+          dropPct: { type: "number", description: "Required when trigger=dip — drop % from basis" },
+          targetPrice: { type: "number", description: "Required when trigger=below/above — USD target" },
+          deadlineSeconds: { type: "number", description: "Cancel if not triggered in N seconds (default 300)" },
+          reason: { type: "string", description: "Why this swap, short" },
+        },
+        required: ["fromAsset", "toAsset", "amount", "trigger", "reason"],
       },
     },
   },
@@ -475,6 +511,53 @@ export async function POST(req: NextRequest) {
             triggeredAction = true;
             toolResult = "ready";
             break;
+
+          case "propose_swap": {
+            const from = String(args.fromAsset || "SOL").toUpperCase();
+            const to = String(args.toAsset || "USDC").toUpperCase();
+            const amt = Number(args.amount);
+            const tk = String(args.trigger || "now");
+            const reason = String(args.reason || `swap ${from} for ${to}`);
+            const now = Date.now();
+            const deadlineSecs = Math.max(60, Math.round(Number(args.deadlineSeconds) || 300));
+
+            // Build trigger
+            let trigger: any = { kind: "time" };
+            let scheduledFor = now;
+            if (tk === "dip" && args.basisPrice && args.dropPct) {
+              trigger = {
+                kind: "dip",
+                asset: from,
+                basisPrice: Number(args.basisPrice),
+                dropPct: Number(args.dropPct),
+                deadline: now + deadlineSecs * 1000,
+              };
+            } else if ((tk === "below" || tk === "above") && args.targetPrice) {
+              trigger = {
+                kind: tk,
+                asset: from,
+                price: Number(args.targetPrice),
+                deadline: now + deadlineSecs * 1000,
+              };
+            }
+
+            // Encode the swap intent into the existing schedule-item shape:
+            // vendor is a display string the UI parses; amount in TEST units
+            // for now (devnet mock; real Jupiter integration in P2.5).
+            actions.push({
+              type: "add",
+              item: {
+                vendor: `SWAP · ${from} → ${to}`,
+                amount: Math.round(amt * 10 ** DEMO_DECIMALS),
+                scheduledFor,
+                reason,
+                trigger,
+              },
+            });
+            triggeredAction = true;
+            toolResult = `swap scheduled: ${amt} ${from} → ${to} (${tk})`;
+            break;
+          }
 
           default:
             toolResult = "unknown tool";

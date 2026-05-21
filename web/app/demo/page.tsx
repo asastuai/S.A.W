@@ -971,11 +971,19 @@ export default function DemoPage() {
   }, [phase, briefing, handle, setup, persona, pendingApproval, prices]);
 
   function patchItem(id: string, patch: Partial<ScheduleItem>) {
+    let itemAfter: ScheduleItem | undefined;
     setBriefing((prev) => {
       if (!prev) return prev;
       const next = {
         ...prev,
-        schedule: prev.schedule.map((i) => (i.id === id ? { ...i, ...patch } : i)),
+        schedule: prev.schedule.map((i) => {
+          if (i.id === id) {
+            const merged = { ...i, ...patch };
+            itemAfter = merged;
+            return merged;
+          }
+          return i;
+        }),
       };
       if (handler) saveBriefing(handler, next);
       return next;
@@ -985,6 +993,37 @@ export default function DemoPage() {
         txSignature: patch.sig,
         errorMessage: patch.errorMsg,
       });
+    }
+    // Swap fee on successful execution of a SWAP item
+    if (
+      patch.status === "done" &&
+      itemAfter &&
+      itemAfter.vendor?.toUpperCase().startsWith("SWAP")
+    ) {
+      recordSwapFee(itemAfter);
+    }
+  }
+
+  async function recordSwapFee(item: ScheduleItem) {
+    if (!dbAgentId || !privyAuthed) return;
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      await fetch(`/api/agents/${dbAgentId}/fees`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          kind: "swap",
+          swapInputLamports: item.amount, // base units; 55bps applied server-side
+          asset: "SOL",
+          relatedTx: item.sig ?? null,
+        }),
+      });
+    } catch (_) {
+      /* non-fatal */
     }
   }
 
