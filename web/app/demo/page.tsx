@@ -76,6 +76,7 @@ import {
   hydrateSchedule,
 } from "@/lib/hydrate";
 import { SleepingBadge } from "@/components/sleeping-badge";
+import { AgentSettingsModal } from "@/components/agent-settings-modal";
 import { Chat } from "@/components/chat";
 import { ScheduleView } from "@/components/schedule-view";
 import { ApiKeyModal } from "@/components/api-key-modal";
@@ -108,7 +109,11 @@ export default function DemoPage() {
     cron_cadence_minutes: number;
     next_wake_at: string | null;
     last_wake_at: string | null;
+    active_hours_start: number | null;
+    active_hours_end: number | null;
   } | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [phase, setPhase] = useState<Phase>("pick");
   const [setupStep, setSetupStep] = useState<string>("");
   const [setup, setSetup] = useState<Setup | null>(null);
@@ -242,6 +247,8 @@ export default function DemoPage() {
             cron_cadence_minutes: agent.cron_cadence_minutes,
             next_wake_at: agent.next_wake_at,
             last_wake_at: agent.last_wake_at,
+            active_hours_start: agent.active_hours_start,
+            active_hours_end: agent.active_hours_end,
           });
         }
 
@@ -767,6 +774,8 @@ export default function DemoPage() {
                 cron_cadence_minutes: dbAgent.cron_cadence_minutes,
                 next_wake_at: dbAgent.next_wake_at,
                 last_wake_at: dbAgent.last_wake_at,
+                active_hours_start: dbAgent.active_hours_start,
+                active_hours_end: dbAgent.active_hours_end,
               });
               console.log("[saw] agent registered in DB", dbAgent.id);
             } else {
@@ -1220,12 +1229,18 @@ export default function DemoPage() {
       </div>
 
       {dbAgent && (phase === "briefing" || phase === "live") && (
-        <div className="border-b border-ash px-4 sm:px-6 py-2 text-center">
+        <div className="border-b border-ash px-4 sm:px-6 py-2 flex items-center justify-center gap-2 flex-wrap">
           <SleepingBadge
             nextWakeAt={dbAgent.next_wake_at}
             cronCadenceMinutes={dbAgent.cron_cadence_minutes}
             now={now}
           />
+          <button
+            onClick={() => setShowSettings(true)}
+            className="text-xs uppercase tracking-widest border border-ash px-3 py-1.5 text-bone/60 hover:text-gold hover:border-gold transition"
+          >
+            ⚙ settings
+          </button>
         </div>
       )}
 
@@ -1301,6 +1316,45 @@ export default function DemoPage() {
           onSave={handleSaveKey}
           onClear={handleClearKey}
           onClose={() => setShowApiKeyModal(false)}
+        />
+      )}
+
+      {showSettings && dbAgent && dbAgentId && (
+        <AgentSettingsModal
+          initialCadenceMinutes={dbAgent.cron_cadence_minutes}
+          initialActiveHoursStart={dbAgent.active_hours_start}
+          initialActiveHoursEnd={dbAgent.active_hours_end}
+          saving={savingSettings}
+          onClose={() => setShowSettings(false)}
+          onSave={async (input) => {
+            setSavingSettings(true);
+            try {
+              const token = await getAccessToken();
+              if (!token) throw new Error("not authenticated");
+              const res = await fetch(`/api/agents/${dbAgentId}`, {
+                method: "PATCH",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify(input),
+              });
+              if (!res.ok) throw new Error(`update failed: ${res.status}`);
+              const { agent } = await res.json();
+              setDbAgent({
+                cron_cadence_minutes: agent.cron_cadence_minutes,
+                next_wake_at: agent.next_wake_at,
+                last_wake_at: agent.last_wake_at,
+                active_hours_start: agent.active_hours_start,
+                active_hours_end: agent.active_hours_end,
+              });
+              setShowSettings(false);
+            } catch (e: any) {
+              alert(`Couldn't save: ${e.message ?? String(e)}`);
+            } finally {
+              setSavingSettings(false);
+            }
+          }}
         />
       )}
     </main>
