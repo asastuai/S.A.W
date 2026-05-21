@@ -63,6 +63,9 @@ export default async function DashboardPage() {
           <Link href="/dashboard" className="text-gold">
             Dashboard
           </Link>
+          <Link href="/treasury" className="hover:text-gold">
+            Treasury
+          </Link>
           <a
             href="https://github.com/asastuai/S.A.W"
             target="_blank"
