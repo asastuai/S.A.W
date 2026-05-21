@@ -156,6 +156,11 @@ function Row({
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
+            {item.vendor.toUpperCase().startsWith("SWAP") && (
+              <span className="text-gold text-xs uppercase tracking-widest border border-gold/40 px-1.5 py-0.5">
+                ⇄ swap
+              </span>
+            )}
             <span className="font-display text-base text-bone">
               {fmtAmount(item.amount)}
             </span>
