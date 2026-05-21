@@ -49,11 +49,16 @@ export const geminiAdapter: ProviderAdapter = {
       },
     });
 
-    // Gemini expects history (all but last) + the latest message separately
-    const history = otherMsgs.slice(0, -1).map((m) => ({
+    // Gemini expects history (all but last) + the latest message separately.
+    // Critical: history MUST start with a user turn. Drop any leading
+    // assistant/tool messages (e.g. the agent's greeting on a fresh briefing).
+    let history = otherMsgs.slice(0, -1).map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     }));
+    while (history.length > 0 && history[0].role !== "user") {
+      history.shift();
+    }
     const last = otherMsgs[otherMsgs.length - 1];
 
     const chat = model.startChat({ history });
