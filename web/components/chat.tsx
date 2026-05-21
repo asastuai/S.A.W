@@ -45,7 +45,7 @@ export function Chat({
         <div className="text-xs text-bone/40">{messages.length} messages</div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[260px] max-h-[520px]">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 min-h-[260px] max-h-[60vh] sm:max-h-[520px]">
         {messages.length === 0 && !busy ? (
           <div className="text-bone/40 italic text-sm text-center py-12">
             Start the conversation. Tell the agent what you need today.

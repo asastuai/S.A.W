@@ -1888,7 +1888,7 @@ function BriefingRoom({
           onSkip={onSkipOpp}
         />
       )}
-    <div className="grid lg:grid-cols-[3fr_4fr_3fr] gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-[3fr_4fr_3fr] gap-4 lg:gap-6">
       {/* LEFT: mascot + identity */}
       <div className="space-y-4">
         <div className="border border-ash p-5 flex flex-col items-center relative">
@@ -1999,7 +1999,7 @@ function LiveRoom({
           onSkip={onSkipOpp}
         />
       )}
-    <div className="grid lg:grid-cols-[2fr_3fr] gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4 lg:gap-6">
       <div className="space-y-4">
         <div className="border border-ash p-5">
           <div className="flex items-start gap-4 mb-4">
