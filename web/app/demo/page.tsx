@@ -48,6 +48,7 @@ import {
   Briefing,
   Opportunity,
   ScheduleItem,
+  ScheduleStatus,
   clearBriefing,
   describeTrigger,
   loadBriefing,
@@ -62,6 +63,18 @@ import type { MarketSnapshot } from "@/lib/market";
 import { OpportunityReel } from "@/components/opportunity-reel";
 import { Mascot, MascotPose } from "@/components/mascot";
 import { CreatorNote } from "@/components/creator-note";
+import { usePrivy } from "@privy-io/react-auth";
+import { useHandler } from "@/lib/use-handler";
+import {
+  SignInGate,
+  LoadingHandler,
+  HandlerError,
+} from "@/components/sign-in-gate";
+import {
+  hydrateChat,
+  hydrateOpportunities,
+  hydrateSchedule,
+} from "@/lib/hydrate";
 import { Chat } from "@/components/chat";
 import { ScheduleView } from "@/components/schedule-view";
 import { ApiKeyModal } from "@/components/api-key-modal";
@@ -86,7 +99,10 @@ const fmt = (n: number) =>
 export default function DemoPage() {
   const { connection } = useConnection();
   const wallet = useWallet();
+  const { authenticated: privyAuthed, ready: privyReady, logout: privyLogout, getAccessToken } = usePrivy();
+  const handlerState = useHandler();
   const [persona, setPersona] = useState<Persona | null>(null);
+  const [dbAgentId, setDbAgentId] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("pick");
   const [setupStep, setSetupStep] = useState<string>("");
   const [setup, setSetup] = useState<Setup | null>(null);
@@ -117,6 +133,130 @@ export default function DemoPage() {
     setApiKeyState(loadApiKey());
   }, []);
 
+  // 2.3: Fire-and-forget DB sync helper.
+  // Local state is the working copy; DB is the authoritative store synced
+  // in the background. If sync fails (offline, network) the demo keeps
+  // working from local state; the next successful sync or hydrate
+  // reconciles.
+  async function syncChatToDb(role: "user" | "agent" | "system", content: string) {
+    if (!dbAgentId || !privyAuthed) return;
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      await fetch(`/api/agents/${dbAgentId}/chat`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ role, content }),
+      });
+    } catch (_) {
+      /* non-fatal */
+    }
+  }
+
+  async function syncScheduleAddToDb(item: ScheduleItem) {
+    if (!dbAgentId || !privyAuthed) return;
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const triggerBody: any = item.trigger ? { ...item.trigger } : { kind: "time" };
+      if (triggerBody.deadline) triggerBody.deadline = triggerBody.deadline;
+      await fetch(`/api/agents/${dbAgentId}/schedule`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          actionType: "pay",
+          vendor: item.vendor,
+          amount: item.amount,
+          asset: "TEST",
+          reason: item.reason,
+          scheduledFor: item.scheduledFor,
+          trigger: triggerBody,
+        }),
+      });
+    } catch (_) {
+      /* non-fatal */
+    }
+  }
+
+  async function syncScheduleStatusToDb(
+    itemId: string,
+    status: ScheduleStatus,
+    extras?: { txSignature?: string; errorMessage?: string }
+  ) {
+    if (!dbAgentId || !privyAuthed) return;
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      await fetch(
+        `/api/agents/${dbAgentId}/schedule?itemId=${encodeURIComponent(itemId)}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status,
+            txSignature: extras?.txSignature,
+            errorMessage: extras?.errorMessage,
+          }),
+        }
+      );
+    } catch (_) {
+      /* non-fatal */
+    }
+  }
+
+  // 2.2: Hydrate briefing from DB when dbAgentId is set.
+  // DB is the source of truth; localStorage is a fallback only.
+  useEffect(() => {
+    if (!dbAgentId || !privyAuthed) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token) return;
+        const res = await fetch(`/api/agents/${dbAgentId}/state`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          console.warn("[saw] state hydrate failed", res.status);
+          return;
+        }
+        const { chat, schedule, opportunities } = await res.json();
+        if (cancelled) return;
+
+        setBriefing((prev) => {
+          if (!prev) return prev;
+          const merged = {
+            ...prev,
+            conversation: chat.length ? hydrateChat(chat) : prev.conversation,
+            schedule: schedule.length ? hydrateSchedule(schedule) : prev.schedule,
+            opportunities: opportunities.length
+              ? hydrateOpportunities(opportunities)
+              : prev.opportunities,
+          };
+          console.log("[saw] briefing hydrated from DB", {
+            chat: chat.length,
+            schedule: schedule.length,
+            opportunities: opportunities.length,
+          });
+          return merged;
+        });
+      } catch (e) {
+        console.warn("[saw] state hydrate error", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dbAgentId, privyAuthed, getAccessToken]);
 
   function handleSaveKey(key: string) {
     saveApiKey(key);
@@ -407,6 +547,28 @@ export default function DemoPage() {
           setPhase("briefing");
         }
         await refreshState(handle, new PublicKey(stored.walletAta));
+
+        // 2.1: Fetch the db agent id for this persona — used by 2.2/2.3
+        // for chat + schedule sync. Best-effort, non-blocking.
+        if (handlerState.status === "ready" && privyAuthed) {
+          try {
+            const token = await getAccessToken();
+            if (token) {
+              const res = await fetch("/api/agents", {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (res.ok) {
+                const { agents } = await res.json();
+                const mine = (agents ?? []).find(
+                  (a: any) => a.persona === restored.id
+                );
+                if (mine) setDbAgentId(mine.id);
+              }
+            }
+          } catch (_) {
+            /* non-fatal */
+          }
+        }
       } catch (e: any) {
         clearSetup(handler);
         clearBriefing(handler);
@@ -562,6 +724,42 @@ export default function DemoPage() {
       setHandle(handle);
       setSetup(newSetup);
       saveSetup(handler, newSetup, saltBuf, p.id);
+
+      // 2.1: Register the agent in Supabase so the worker + dashboard know
+      // it exists. Best-effort — if it fails (Privy not ready, network),
+      // demo keeps working from localStorage; we just lose multi-device.
+      if (handlerState.status === "ready") {
+        try {
+          const token = await getAccessToken();
+          if (token) {
+            const res = await fetch("/api/agents", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                persona: p.id,
+                agentPubkey: agent.publicKey.toBase58(),
+                walletPda: walletPda.toBase58(),
+                policyPda: derivePolicyPda(walletPda)[0].toBase58(),
+                queuePda: deriveQueuePda(walletPda)[0].toBase58(),
+                cronCadenceMinutes: 60,
+              }),
+            });
+            if (res.ok) {
+              const { agent: dbAgent } = await res.json();
+              setDbAgentId(dbAgent.id);
+              console.log("[saw] agent registered in DB", dbAgent.id);
+            } else {
+              console.warn("[saw] agent DB registration failed", await res.text());
+            }
+          }
+        } catch (e) {
+          console.warn("[saw] agent DB registration error", e);
+        }
+      }
+
       const fresh = freshBriefing(p);
       setBriefing(fresh);
       saveBriefing(handler, fresh);
@@ -593,6 +791,7 @@ export default function DemoPage() {
     };
     setBriefing(optimistic);
     saveBriefing(handler, optimistic);
+    syncChatToDb("user", text);
 
     try {
       setMascotPose("thinking");
@@ -632,10 +831,14 @@ export default function DemoPage() {
             );
             continue;
           }
-          updated = {
-            ...updated,
-            schedule: [...updated.schedule, newItem(action.item)],
-          };
+          {
+            const added = newItem(action.item);
+            updated = {
+              ...updated,
+              schedule: [...updated.schedule, added],
+            };
+            syncScheduleAddToDb(added);
+          }
         } else if (action.type === "remove") {
           updated = {
             ...updated,
@@ -655,13 +858,11 @@ export default function DemoPage() {
 
       setMascotPose("writing");
       const convoAdds = [newMessage("agent", data.reply)];
+      syncChatToDb("agent", data.reply);
       if (skippedReasons.length > 0) {
-        convoAdds.push(
-          newMessage(
-            "system",
-            `Skipped ${skippedReasons.length} item${skippedReasons.length === 1 ? "" : "s"} over policy: ${skippedReasons.join(", ")}`
-          )
-        );
+        const skipMsg = `Skipped ${skippedReasons.length} item${skippedReasons.length === 1 ? "" : "s"} over policy: ${skippedReasons.join(", ")}`;
+        convoAdds.push(newMessage("system", skipMsg));
+        syncChatToDb("system", skipMsg);
       }
       updated = {
         ...updated,
@@ -752,6 +953,12 @@ export default function DemoPage() {
       if (handler) saveBriefing(handler, next);
       return next;
     });
+    if (patch.status) {
+      syncScheduleStatusToDb(id, patch.status, {
+        txSignature: patch.sig,
+        errorMessage: patch.errorMsg,
+      });
+    }
   }
 
   async function dispatchItem(item: ScheduleItem) {
@@ -995,7 +1202,19 @@ export default function DemoPage() {
       </div>
 
       <section className="px-4 sm:px-6 py-8 max-w-7xl mx-auto">
-        {!wallet.connected ? (
+        {/* Privy is configured: outer gate is sign-in, not wallet-connect.
+            If Privy is not configured (no APP_ID), authenticated is always
+            false but we still want the legacy demo to work — fall back to
+            wallet.connected check by treating that as the gate. */}
+        {process.env.NEXT_PUBLIC_PRIVY_APP_ID && !privyReady ? (
+          <LoadingHandler />
+        ) : process.env.NEXT_PUBLIC_PRIVY_APP_ID && !privyAuthed ? (
+          <SignInGate />
+        ) : process.env.NEXT_PUBLIC_PRIVY_APP_ID && handlerState.status === "loading" ? (
+          <LoadingHandler />
+        ) : process.env.NEXT_PUBLIC_PRIVY_APP_ID && handlerState.status === "error" ? (
+          <HandlerError message={handlerState.error} />
+        ) : !wallet.connected ? (
           <Idle />
         ) : !apiKey ? (
           <AgentGate onOpen={() => setShowApiKeyModal(true)} />

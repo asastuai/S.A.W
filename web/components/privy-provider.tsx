@@ -36,9 +36,11 @@ export function PrivyAuthProvider({ children }: { children: React.ReactNode }) {
           logo: undefined,
           walletChainType: "solana-only",
         },
-        loginMethods: ["wallet", "email", "google", "twitter"],
+        // v1.0 — wallet-only auth. Email/social + embedded wallet signing
+        // lands in v1.1 once we wire Privy's signing hooks into the demo.
+        loginMethods: ["wallet"],
         embeddedWallets: {
-          solana: { createOnLogin: "users-without-wallets" },
+          solana: { createOnLogin: "off" },
         },
         externalWallets: {
           solana: { connectors: toSolanaWalletConnectors() },
