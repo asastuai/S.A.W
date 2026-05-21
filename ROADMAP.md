@@ -239,40 +239,55 @@ $2k custodied, 20 swaps/mo @ $200 avg, +5% PnL/mo, agent active daily:
 
 Working full-time. Estimates are honest, not aspirational.
 
-### Phase 0 — Foundation Sprint (Week 1, current)
+### Phase 0 — Foundation Sprint ✅ DONE (2026-05-20/21)
 
 **Goal:** unblock everything by laying server-side foundations.
 
-- [ ] Set up Supabase project, schema for: users, agents, schedules, opportunities, audit_log
-- [ ] Set up Privy app, integrate with current Phantom flow (Phantom continues to work; Privy adds embedded wallet option)
-- [ ] Set up Trigger.dev project, hello-world job
-- [ ] Add Sentry + Posthog SDKs (web + API routes)
-- [ ] Migrate `briefing` from localStorage to DB (sync on change, hydrate on load)
-- [ ] Server-side market snapshot cache (1 fetch / 60s shared) replacing per-client polling
-- [ ] Server-side LLM rate-limit middleware (per user, per day)
+- [x] Set up Supabase project, schema for: handlers, byok_keys, agents, scheduled_items, opportunities, chat_messages, llm_usage, agent_wakes, fee_ledger (9 tables, RLS, indexes)
+- [x] Set up Privy app, integrate with current Phantom flow (wallet login active; embedded + social land in P1.5)
+- [~] Set up Trigger.dev project — CLI auth blocked, replaced with `/api/cron/wake-due-agents` + external cron-job.org trigger
+- [x] Add Sentry + Posthog SDKs (web + API routes, env wired in production)
+- [x] Migrate `briefing` from localStorage to DB (chat + schedule sync, DB authoritative)
+- [x] Server-side market snapshot cache (60s shared in `lib/market.ts`)
+- [x] Server-side LLM rate-limit middleware (per-handler per-day, gated by Privy JWT)
 
-### Phase 1 — Cron-Based Agent (Weeks 2-3)
+### Phase 1 — Cron-Based Agent ✅ DONE (2026-05-21)
 
 **Goal:** Greedie runs as a server-side cron workflow, not a client polling loop.
 
-- [ ] Define `agent_wake` Trigger.dev workflow (steps: fetch market → llm scan → check price triggers → execute or schedule → persist)
-- [ ] Move opportunity scanner from `useEffect` to cron workflow
-- [ ] Move price-trigger watcher from `useEffect` to cron workflow
-- [ ] Persist all agent state, status, and history in DB
-- [ ] Web UI becomes a *view* of agent state, not the runtime
-- [ ] Per-user cron cadence config (default 1h, 15min-24h range)
-- [ ] Active hours config (default 24/7)
-- [ ] Web UI: "Greedie is sleeping. Next wake in 47 min."
+- [x] `/api/cron/wake-due-agents` endpoint with CRON_SECRET auth, polled by cron-job.org every 5min
+- [x] Wake cycle: load agent → active-hours check → market snapshot → check pending triggers → mark fired → advance next_wake_at → audit row
+- [x] All agent state, schedule, chat, opportunities persisted in DB
+- [x] Web UI is now a view: hydrates from DB on session restore, syncs writes back
+- [x] Per-user cron cadence config (15min-24h, default 1h)
+- [x] Active hours config (24/7 or custom UTC window) — with Quick Profile presets (Aggressive/Balanced/Chill)
+- [x] Web UI: SleepingBadge with live countdown ("next wake in 47m")
+- [x] WakesFeed in UI: last 10 wakes with outcome label
+- [x] Public /dashboard with aggregate stats from DB
 
-### Phase 2 — Jupiter Swap Vocabulary (Week 4)
+On-chain execution still browser-side (signs SOL transfer for SWAP items
+via agent keypair). Server-side signing requires Privy delegated wallets
+(P1.5).
 
-**Goal:** agents can swap, not just transfer.
+### v1.1 Multi-provider + Real On-chain Swap Leg ✅ DONE (2026-05-21)
 
-- [ ] Add `swap` action to SDK + Anchor program (or Jupiter CPI wrapper)
-- [ ] Mock Jupiter on devnet (simulated swap that creates fake tx confirming success)
-- [ ] LLM tools: `add_swap_item`, `add_dip_swap`, etc.
-- [ ] Greedie persona prompt updated to include swap strategy
-- [ ] Schedule view supports swap items with from/to/route preview
+**Goal:** LLM provider freedom + first real-on-chain devnet end-to-end.
+
+- [x] Provider abstraction (`web/lib/providers/`) with adapters for Groq, Gemini 2.5 Flash-Lite (1500 RPD free), DeepSeek V3, Grok 3 mini
+- [x] Auto-detect provider from key prefix (gsk_/AIza/sk-/xai-) in API routes
+- [x] AgentGate UI: 4 active provider cards
+- [x] `propose_swap` LLM tool — Greedie's primary trading action
+- [x] SWAP items execute a real on-chain SOL transfer (0.001 SOL devnet) from agent keypair → SAW treasury, signature visible on explorer.solana.com
+- [x] fee_ledger writes 55bps fee row on each completed swap
+
+### Phase 2 — Jupiter Real Swap on Mainnet (post-funding)
+
+**Goal:** agents can do real Jupiter swaps with real liquidity.
+
+- [ ] Replace devnet mock leg with actual Jupiter SDK quote + swap on mainnet
+- [ ] Pre-flight slippage check + show user the route + fee preview before execution
+- [ ] Fee collection via Jupiter's native `platformFeeBps` mechanism
+- [ ] Add `swap` action_type formally to Anchor agent_wallet program (no longer relies on display-string parsing)
 
 ### Phase 3 — Onboarding Polish + Mobile (Weeks 5-6)
 
