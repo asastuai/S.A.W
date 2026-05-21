@@ -75,6 +75,7 @@ import {
   hydrateOpportunities,
   hydrateSchedule,
 } from "@/lib/hydrate";
+import { SleepingBadge } from "@/components/sleeping-badge";
 import { Chat } from "@/components/chat";
 import { ScheduleView } from "@/components/schedule-view";
 import { ApiKeyModal } from "@/components/api-key-modal";
@@ -103,6 +104,11 @@ export default function DemoPage() {
   const handlerState = useHandler();
   const [persona, setPersona] = useState<Persona | null>(null);
   const [dbAgentId, setDbAgentId] = useState<string | null>(null);
+  const [dbAgent, setDbAgent] = useState<{
+    cron_cadence_minutes: number;
+    next_wake_at: string | null;
+    last_wake_at: string | null;
+  } | null>(null);
   const [phase, setPhase] = useState<Phase>("pick");
   const [setupStep, setSetupStep] = useState<string>("");
   const [setup, setSetup] = useState<Setup | null>(null);
@@ -229,8 +235,15 @@ export default function DemoPage() {
           console.warn("[saw] state hydrate failed", res.status);
           return;
         }
-        const { chat, schedule, opportunities } = await res.json();
+        const { agent, chat, schedule, opportunities } = await res.json();
         if (cancelled) return;
+        if (agent) {
+          setDbAgent({
+            cron_cadence_minutes: agent.cron_cadence_minutes,
+            next_wake_at: agent.next_wake_at,
+            last_wake_at: agent.last_wake_at,
+          });
+        }
 
         setBriefing((prev) => {
           if (!prev) return prev;
@@ -750,6 +763,11 @@ export default function DemoPage() {
             if (res.ok) {
               const { agent: dbAgent } = await res.json();
               setDbAgentId(dbAgent.id);
+              setDbAgent({
+                cron_cadence_minutes: dbAgent.cron_cadence_minutes,
+                next_wake_at: dbAgent.next_wake_at,
+                last_wake_at: dbAgent.last_wake_at,
+              });
               console.log("[saw] agent registered in DB", dbAgent.id);
             } else {
               console.warn("[saw] agent DB registration failed", await res.text());
@@ -1200,6 +1218,16 @@ export default function DemoPage() {
           </span>
         </p>
       </div>
+
+      {dbAgent && (phase === "briefing" || phase === "live") && (
+        <div className="border-b border-ash px-4 sm:px-6 py-2 text-center">
+          <SleepingBadge
+            nextWakeAt={dbAgent.next_wake_at}
+            cronCadenceMinutes={dbAgent.cron_cadence_minutes}
+            now={now}
+          />
+        </div>
+      )}
 
       <section className="px-4 sm:px-6 py-8 max-w-7xl mx-auto">
         {/* Privy is configured: outer gate is sign-in, not wallet-connect.
