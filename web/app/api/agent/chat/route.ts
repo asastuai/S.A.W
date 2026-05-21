@@ -3,6 +3,10 @@ import { describeMarket, getSnapshot } from "@/lib/market";
 import { detectProvider } from "@/lib/api-key";
 import { getProviderAdapter, isProviderImplemented } from "@/lib/providers";
 import type { ChatMessage as ProviderMessage, ToolDefinition } from "@/lib/providers";
+import { extractPrivyClaims } from "@/lib/auth";
+import { getHandlerByPrivy } from "@/lib/db/handlers";
+import { llmRateLimitReached, recordLlmUsage } from "@/lib/db/llm";
+import type { Provider } from "@/lib/db/types";
 
 export const runtime = "nodejs";
 
@@ -333,6 +337,31 @@ export async function POST(req: NextRequest) {
     }
     const adapter = getProviderAdapter(provider as any);
 
+    // Optional rate limit: only enforced if the caller sent a Privy JWT
+    // and the handler exists in DB. Anonymous requests pass through.
+    let handlerId: string | null = null;
+    try {
+      const claims = extractPrivyClaims(req);
+      if (claims) {
+        const handler = await getHandlerByPrivy(claims.privy_user_id);
+        if (handler) {
+          handlerId = handler.id;
+          const rl = await llmRateLimitReached(handler.id);
+          if (rl.reached) {
+            return NextResponse.json(
+              {
+                reply: `Daily LLM call cap reached (${rl.used}/${rl.limit}). Resets in 24h. Switch your BYOK provider or upgrade tier when ready.`,
+                actions: [],
+              },
+              { status: 429 }
+            );
+          }
+        }
+      }
+    } catch {
+      /* non-fatal — rate limit is best-effort */
+    }
+
     const baseToolList =
       body.persona.id === "greedie" ? [...greedieTools, ...baseTools] : baseTools;
     const tools: ToolDefinition[] = baseToolList.map((t) => ({
@@ -355,6 +384,9 @@ export async function POST(req: NextRequest) {
 
     const actions: AgentAction[] = [];
     let finalReply = "";
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+    const requestStart = Date.now();
 
     for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
       const response = await adapter.complete(
@@ -368,6 +400,8 @@ export async function POST(req: NextRequest) {
         },
         apiKey
       );
+      totalPromptTokens += response.usage.promptTokens;
+      totalCompletionTokens += response.usage.completionTokens;
 
       const toolCalls = response.toolCalls;
 
@@ -588,6 +622,8 @@ export async function POST(req: NextRequest) {
           },
           apiKey
         );
+        totalPromptTokens += followup.usage.promptTokens;
+        totalCompletionTokens += followup.usage.completionTokens;
         finalReply = followup.content.trim();
         break;
       }
@@ -604,6 +640,23 @@ export async function POST(req: NextRequest) {
       finalReply = parts.join(". ") || "Done.";
     }
     if (!finalReply) finalReply = "…";
+
+    // Best-effort: record usage for transparency + future analytics.
+    if (handlerId) {
+      try {
+        await recordLlmUsage({
+          handlerId,
+          provider: provider as Provider,
+          model: adapter.defaultModel,
+          promptTokens: totalPromptTokens,
+          completionTokens: totalCompletionTokens,
+          endpoint: "chat",
+          durationMs: Date.now() - requestStart,
+        });
+      } catch (e) {
+        console.warn("[chat] llm_usage record failed", e);
+      }
+    }
 
     return NextResponse.json({ reply: finalReply, actions });
   } catch (e: any) {

@@ -3,6 +3,10 @@ import { describeMarket, getSnapshot } from "@/lib/market";
 import { detectProvider } from "@/lib/api-key";
 import { getProviderAdapter, isProviderImplemented } from "@/lib/providers";
 import type { ChatMessage as ProviderMessage, ToolDefinition } from "@/lib/providers";
+import { extractPrivyClaims } from "@/lib/auth";
+import { getHandlerByPrivy } from "@/lib/db/handlers";
+import { llmRateLimitReached, recordLlmUsage } from "@/lib/db/llm";
+import type { Provider } from "@/lib/db/types";
 
 export const runtime = "nodejs";
 
@@ -155,6 +159,30 @@ export async function POST(req: NextRequest) {
     }
     const adapter = getProviderAdapter(provider as any);
 
+    // Optional rate limit (best-effort, requires Privy JWT + handler row)
+    let handlerId: string | null = null;
+    try {
+      const claims = extractPrivyClaims(req);
+      if (claims) {
+        const handler = await getHandlerByPrivy(claims.privy_user_id);
+        if (handler) {
+          handlerId = handler.id;
+          const rl = await llmRateLimitReached(handler.id);
+          if (rl.reached) {
+            return NextResponse.json({
+              opportunities: [],
+              error: `Daily LLM cap reached (${rl.used}/${rl.limit})`,
+            });
+          }
+        }
+      }
+    } catch {
+      /* non-fatal */
+    }
+    const requestStart = Date.now();
+    let scanPromptTokens = 0;
+    let scanCompletionTokens = 0;
+
     const normalizedTools: ToolDefinition[] = tools.map((t) => ({
       name: t.function.name,
       description: t.function.description,
@@ -170,7 +198,7 @@ export async function POST(req: NextRequest) {
     const MAX = 4;
 
     for (let iter = 0; iter < MAX; iter++) {
-      const response = await adapter.complete(
+      const response: any = await adapter.complete(
         {
           model: adapter.defaultModel,
           messages,
@@ -182,6 +210,8 @@ export async function POST(req: NextRequest) {
         apiKey
       );
 
+      scanPromptTokens += response.usage?.promptTokens ?? 0;
+      scanCompletionTokens += response.usage?.completionTokens ?? 0;
       const toolCalls = response.toolCalls;
       if (toolCalls.length === 0) break;
 
@@ -268,6 +298,22 @@ export async function POST(req: NextRequest) {
       }
 
       if (done) break;
+    }
+
+    if (handlerId) {
+      try {
+        await recordLlmUsage({
+          handlerId,
+          provider: provider as Provider,
+          model: adapter.defaultModel,
+          promptTokens: scanPromptTokens,
+          completionTokens: scanCompletionTokens,
+          endpoint: "scan",
+          durationMs: Date.now() - requestStart,
+        });
+      } catch (e) {
+        console.warn("[scan] llm_usage record failed", e);
+      }
     }
 
     return NextResponse.json({ opportunities });

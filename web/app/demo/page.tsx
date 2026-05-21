@@ -77,6 +77,7 @@ import {
 } from "@/lib/hydrate";
 import { SleepingBadge } from "@/components/sleeping-badge";
 import { AgentSettingsModal } from "@/components/agent-settings-modal";
+import { WakesFeed } from "@/components/wakes-feed";
 import { getTreasuryAddress } from "@/lib/treasury";
 import { Chat } from "@/components/chat";
 import { ScheduleView } from "@/components/schedule-view";
@@ -384,11 +385,13 @@ export default function DemoPage() {
           )
           .join("; ");
 
+        const privyToken = privyAuthed ? await getAccessToken() : null;
         const res = await fetch("/api/agent/scan", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             ...(apiKey ? { "x-user-api-key": apiKey } : {}),
+            ...(privyToken ? { Authorization: `Bearer ${privyToken}` } : {}),
           },
           body: JSON.stringify({
             persona: { ...persona!, walletBalance },
@@ -424,6 +427,8 @@ export default function DemoPage() {
           }));
           const next = { ...prev, opportunities: [...prev.opportunities, ...newOpps] };
           if (handler) saveBriefing(handler, next);
+          // Fire-and-forget: persist each new opportunity in DB
+          for (const o of newOpps) syncOpportunityCreateToDb(o);
           return next;
         });
       } catch (e: any) {
@@ -484,6 +489,8 @@ export default function DemoPage() {
     };
     setBriefing(updated);
     saveBriefing(handler, updated);
+    syncOpportunityStatusToDb(opp.id, "accepted");
+    syncScheduleAddToDb(item);
   }
 
   function skipOpportunity(opp: Opportunity) {
@@ -496,6 +503,7 @@ export default function DemoPage() {
     };
     setBriefing(updated);
     saveBriefing(handler, updated);
+    syncOpportunityStatusToDb(opp.id, "skipped");
   }
 
   // Market price poller (Greedie only)
@@ -818,11 +826,13 @@ export default function DemoPage() {
 
     try {
       setMascotPose("thinking");
+      const privyToken = privyAuthed ? await getAccessToken() : null;
       const res = await fetch("/api/agent/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(apiKey ? { "x-user-api-key": apiKey } : {}),
+          ...(privyToken ? { Authorization: `Bearer ${privyToken}` } : {}),
         },
         body: JSON.stringify({
           persona: { ...persona, walletBalance },
@@ -997,6 +1007,70 @@ export default function DemoPage() {
       itemAfter.vendor?.toUpperCase().startsWith("SWAP")
     ) {
       recordSwapFee(itemAfter);
+    }
+  }
+
+  async function syncOpportunityCreateToDb(opp: Opportunity): Promise<string | null> {
+    if (!dbAgentId || !privyAuthed) return null;
+    try {
+      const token = await getAccessToken();
+      if (!token) return null;
+      const res = await fetch(`/api/agents/${dbAgentId}/opportunities`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: opp.title,
+          message: opp.message,
+          suggested: {
+            vendor: opp.suggested.vendor,
+            amount: opp.suggested.amount,
+            asset: "SOL",
+            reason: opp.suggested.reason,
+          },
+          trigger: opp.suggested.trigger
+            ? {
+                kind: (opp.suggested.trigger as any).kind,
+                basisPrice: (opp.suggested.trigger as any).basisPrice,
+                dropPct: (opp.suggested.trigger as any).dropPct,
+                targetPrice: (opp.suggested.trigger as any).price,
+              }
+            : undefined,
+          confidence: opp.confidence,
+          expiresAt: new Date(opp.expiresAt).toISOString(),
+        }),
+      });
+      if (!res.ok) return null;
+      const { opportunity } = await res.json();
+      return opportunity?.id ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function syncOpportunityStatusToDb(
+    oppId: string,
+    status: "accepted" | "skipped" | "expired"
+  ) {
+    if (!dbAgentId || !privyAuthed) return;
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      await fetch(
+        `/api/agents/${dbAgentId}/opportunities?oppId=${encodeURIComponent(oppId)}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status }),
+        }
+      );
+    } catch {
+      /* non-fatal */
     }
   }
 
@@ -1357,6 +1431,16 @@ export default function DemoPage() {
             onSkipOpp={skipOpportunity}
           />
         ) : null}
+
+        {dbAgentId && (phase === "briefing" || phase === "live") && (
+          <div className="mt-6 max-w-7xl mx-auto">
+            <WakesFeed
+              agentId={dbAgentId}
+              getAccessToken={getAccessToken}
+              refreshKey={dbAgent?.last_wake_at ?? undefined as any}
+            />
+          </div>
+        )}
       </section>
 
       {pendingApproval && persona && (
