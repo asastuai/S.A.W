@@ -23,6 +23,9 @@ function Header() {
         <Link href="/demo" className="hover:text-gold transition">
           Demo
         </Link>
+        <Link href="/dashboard" className="hover:text-gold transition hidden sm:inline">
+          Dashboard
+        </Link>
         <a
           href="https://github.com/asastuai/S.A.W"
           target="_blank"

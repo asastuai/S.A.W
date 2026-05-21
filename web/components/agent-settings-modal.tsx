@@ -12,6 +12,30 @@ const CADENCE_PRESETS = [
   { mins: 1440, label: "24 hours" },
 ];
 
+const PROFILE_PRESETS = [
+  {
+    id: "aggressive" as const,
+    label: "Aggressive",
+    description: "15-min cadence · 24/7 · catches every move",
+    cadenceMinutes: 15,
+    hours: null as { start: number; end: number } | null,
+  },
+  {
+    id: "balanced" as const,
+    label: "Balanced",
+    description: "1-hour cadence · 24/7 · default",
+    cadenceMinutes: 60,
+    hours: null,
+  },
+  {
+    id: "chill" as const,
+    label: "Chill",
+    description: "4-hour cadence · 9-18 UTC · sleeps overnight",
+    cadenceMinutes: 240,
+    hours: { start: 9, end: 18 },
+  },
+];
+
 export function AgentSettingsModal({
   initialCadenceMinutes,
   initialActiveHoursStart,
@@ -56,6 +80,38 @@ export function AgentSettingsModal({
             ×
           </button>
         </div>
+
+        <section className="mb-6">
+          <label className="text-xs uppercase tracking-widest text-bone/50 mb-3 block">
+            Quick profile
+          </label>
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {PROFILE_PRESETS.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => {
+                  setCadence(p.cadenceMinutes);
+                  if (p.hours) {
+                    setHoursMode("custom");
+                    setStart(p.hours.start);
+                    setEnd(p.hours.end);
+                  } else {
+                    setHoursMode("24-7");
+                  }
+                }}
+                disabled={saving}
+                className="border border-ash hover:border-gold p-3 text-left transition group"
+              >
+                <div className="text-xs uppercase tracking-widest text-bone group-hover:text-gold transition">
+                  {p.label}
+                </div>
+                <div className="text-[10px] text-bone/40 mt-1 leading-tight">
+                  {p.description}
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
 
         <section className="mb-6">
           <label className="text-xs uppercase tracking-widest text-bone/50 mb-3 block">

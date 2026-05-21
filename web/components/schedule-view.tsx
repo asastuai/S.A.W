@@ -67,8 +67,14 @@ export function ScheduleView({
 
       <div className="p-4 space-y-2 max-h-[600px] overflow-y-auto">
         {upcoming.length === 0 && past.length === 0 && (
-          <div className="text-bone/40 italic text-sm text-center py-8">
-            Empty. Use the chat to brief the agent.
+          <div className="text-center py-10 px-4">
+            <div className="text-4xl text-bone/20 mb-3">∅</div>
+            <div className="text-bone/60 text-sm mb-2">No items scheduled yet.</div>
+            <div className="text-bone/40 text-xs leading-relaxed max-w-xs mx-auto">
+              Try: <span className="text-gold">"buy 0.05 SOL if it dips 1%"</span>{" "}
+              or <span className="text-gold">"swap 30 USDC for BONK now"</span> in
+              the chat.
+            </div>
           </div>
         )}
 
