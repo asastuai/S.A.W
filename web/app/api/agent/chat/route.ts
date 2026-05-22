@@ -282,6 +282,32 @@ const greedieTools = [
   {
     type: "function" as const,
     function: {
+      name: "get_wallet_state",
+      description:
+        "Read the agent's current wallet state: USDC-dev balance, daily-spent so far, daily cap, per-tx cap, approval threshold. Call before suggesting amounts to make sure you stay under limits.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_recent_fees",
+      description:
+        "Read how much in SAW platform fees this handler has paid recently (last N days). Useful to remind the handler what value they've spent on the platform when they ask.",
+      parameters: {
+        type: "object",
+        properties: {
+          days: {
+            type: "number",
+            description: "How many days back to sum (default 7, max 30).",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "get_yield_options",
       description:
         "Fetch top yield/staking opportunities on Solana RIGHT NOW from DefiLlama. Returns top N pools by APR matching an asset filter. CRITICAL: call this BEFORE proposing any yield/staking/lending item — use real live APRs, never training-data estimates.",
@@ -527,6 +553,49 @@ export async function POST(req: NextRequest) {
               toolResult = describeMarket(snap);
             } catch (e: any) {
               toolResult = `Error fetching price: ${e.message ?? String(e)}`;
+            }
+            break;
+
+          case "get_wallet_state":
+            try {
+              const p = body.persona;
+              toolResult = `Wallet state — Balance: ${fmt(p.walletBalance)} · Daily cap: ${fmt(p.policy.dailyLimit)} · Per-tx cap: ${fmt(p.policy.perTxLimit)} · Approval threshold: ${fmt(p.policy.approvalThreshold)} (above this the handler signs at execution)`;
+            } catch (e: any) {
+              toolResult = `Error: ${e.message ?? String(e)}`;
+            }
+            break;
+
+          case "get_recent_fees":
+            try {
+              if (!handlerId) {
+                toolResult = "Recent-fees lookup requires the handler to be authenticated; tell them to use the web app's /dashboard to see the live ledger.";
+                break;
+              }
+              const { supabaseAdmin } = await import("@/lib/supabase");
+              const days = Math.min(30, Math.max(1, Number(args.days) || 7));
+              const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+              const { data, error } = await supabaseAdmin()
+                .from("fee_ledger")
+                .select("fee_kind, amount_lamports")
+                .eq("handler_id", handlerId)
+                .gte("created_at", since);
+              if (error) throw error;
+              const total = (data ?? []).reduce(
+                (acc, r: any) => acc + Number(r.amount_lamports ?? 0),
+                0
+              );
+              const byKind = (data ?? []).reduce<Record<string, number>>(
+                (acc, r: any) => {
+                  acc[r.fee_kind] = (acc[r.fee_kind] ?? 0) + Number(r.amount_lamports ?? 0);
+                  return acc;
+                },
+                {}
+              );
+              toolResult = `Fees in last ${days}d: ${(total / 1e9).toFixed(6)} SOL total. Breakdown: ${
+                Object.entries(byKind).map(([k, v]) => `${k} ${(Number(v) / 1e9).toFixed(6)}`).join(" · ") || "(none yet)"
+              }. Tell the handler the public ledger lives at /treasury and /dashboard.`;
+            } catch (e: any) {
+              toolResult = `Error: ${e.message ?? String(e)}`;
             }
             break;
 
