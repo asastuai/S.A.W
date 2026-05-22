@@ -33,8 +33,7 @@ export function isValidShape(key: string): boolean {
     k.startsWith("AIza") ||      // Google / Gemini
     k.startsWith("sk-") ||       // OpenAI / DeepSeek / Anthropic / Kimi
     k.startsWith("xai-") ||      // Grok
-    k.startsWith("csk-") ||      // Cerebras
-    k.startsWith("Bearer ")      // generic
+    k.startsWith("csk-")         // Cerebras
   );
 }
 
