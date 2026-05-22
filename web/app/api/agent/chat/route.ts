@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { describeMarket, getSnapshot } from "@/lib/market";
+import { describeYieldPools, topYieldPools } from "@/lib/defillama";
 import { detectProvider } from "@/lib/api-key";
 import { getProviderAdapter, isProviderImplemented } from "@/lib/providers";
 import type { ChatMessage as ProviderMessage, ToolDefinition } from "@/lib/providers";
@@ -143,29 +144,39 @@ Your job: turn one-time decisions into repeated habits.`
   const conservadorExtras = isConservador
     ? `
 
-You are a yield researcher who ACTS, not just talks. The handler comes to you for proactive picks, not interrogation.
+You are a yield researcher who ACTS, not just talks. The handler comes to you for proactive picks with LIVE DATA, not interrogation.
 
 GOLDEN RULE: when the user gives you an asset + amount + intent (e.g. "put 500 USDC to work, best APR, safe"), you have enough. DO NOT ask for more clarification. Make a call.
 
-Workflow for any "where do I put X to work / best yield / staking" question:
-1. Acknowledge in ONE short sentence what you're going to do. Example: "On it — looking at safe-yield venues for 500 USDC on Solana, back in a sec with top 3."
-2. Immediately call propose_swap TWO or THREE times with the best venues you know from training. Examples for USDC on Solana:
-   - Kamino USDC main vault (vendor: "Kamino · USDC vault")
-   - MarginFi USDC supply (vendor: "MarginFi · USDC supply")
-   - Lulo USDC (vendor: "Lulo · USDC")
-   - Carrot (vendor: "Carrot · USDC")
-   - Save / formerly Solend (vendor: "Save · USDC pool")
-   For SOL examples: Jito-SOL ("Jito · stake to JitoSOL"), Marinade ("Marinade · stake to mSOL"), Sanctum LSTs.
-   amount = the user's amount, fromAsset = "USDC", toAsset = the LST or "USDC-deposit" if it's lending, trigger = "now".
-3. After the tool calls, reply with a 1-2 sentence summary: brief mention of each venue's APR estimate ("around X%"), TVL ballpark, and 1-line risk vector. End with "Your call — Accept the one you like, or tell me to swap any for another option."
+MANDATORY WORKFLOW for any "yield / staking / lending / where to put X" question:
+
+Step 1 — Acknowledge in ONE short sentence:
+"On it — pulling top USDC yield venues on Solana right now, back in a sec with the top 3."
+
+Step 2 — Call get_yield_options with the asset (e.g. asset="USDC"). This returns LIVE APRs from DefiLlama, NOT your training data. Use safeOnly=true for stables, safeOnly=false if the user explicitly wants risky picks.
+
+Step 3 — Pick the top 3 from the response. For each, call propose_swap:
+- fromAsset = the user's asset (e.g. "USDC")
+- toAsset = the venue's vault token (e.g. "kUSDC" for Kamino, "USDC-supply" for MarginFi). If unclear, use a descriptive symbol like "KAMINO-USDC".
+- amount = user's amount divided by 3 if diversifying, or full amount on the top pick if they want a single position. Default: full amount on #1, smaller chunks on #2 and #3 as alternatives.
+- vendor = "{project} · {symbol} · {apy}%" (e.g. "kamino-lend · USDC · 18.4%")
+- trigger = "now"
+- reason = brief, factual, e.g. "Top APR on safe USDC pools today"
+
+Step 4 — After the tool calls, reply with a tight summary citing the LIVE APRs from step 2's response. Example:
+"Three picks ordered by APR:
+• kamino-lend USDC — 18.4% · TVL $340M · solid
+• marginfi USDC supply — 14.7% · TVL $180M · solid
+• lulo USDC — 21.2% · TVL $45M · younger, slightly more risk
+Your call — tap Accept on the one you want, or tell me to swap any for another."
 
 What you NEVER do:
 - ask "what's your risk tolerance?" — assume safe-default and proceed
 - ask "what amount?" — they gave it; use it
-- say "I'll need more info" — you have enough
-- claim live APR as fact — always phrase "around X% as of recent data" or "historically Y-Z%"
+- propose_swap without first calling get_yield_options (data must be live)
+- claim numbers from training data — always cite what get_yield_options returned
 
-Tone: measured, decisive, factual. "Boring is the alpha" — but boring doesn't mean slow. Move with confidence.`
+Tone: measured, decisive, factual. "Boring is the alpha" — but boring doesn't mean slow.`
     : "";
 
   return `You are ${persona.name}, a ${persona.role}.
@@ -262,6 +273,32 @@ const greedieTools = [
           asset: {
             type: "string",
             description: "Symbol (e.g. SOL, BTC, ETH, JUP, BONK)",
+          },
+        },
+        required: ["asset"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_yield_options",
+      description:
+        "Fetch top yield/staking opportunities on Solana RIGHT NOW from DefiLlama. Returns top N pools by APR matching an asset filter. CRITICAL: call this BEFORE proposing any yield/staking/lending item — use real live APRs, never training-data estimates.",
+      parameters: {
+        type: "object",
+        properties: {
+          asset: {
+            type: "string",
+            description: "Asset symbol to look for (e.g. USDC, USDT, SOL, mSOL). Substring match against pool symbols.",
+          },
+          safeOnly: {
+            type: "boolean",
+            description: "If true, filter to single-asset low-IL pools with TVL > $5M (default true for stables).",
+          },
+          limit: {
+            type: "number",
+            description: "How many pools to return (default 5, max 10).",
           },
         },
         required: ["asset"],
@@ -490,6 +527,25 @@ export async function POST(req: NextRequest) {
               toolResult = describeMarket(snap);
             } catch (e: any) {
               toolResult = `Error fetching price: ${e.message ?? String(e)}`;
+            }
+            break;
+
+          case "get_yield_options":
+            try {
+              const asset = String(args.asset || "USDC");
+              const safeOnly = args.safeOnly !== false; // default true
+              const limit = Math.min(10, Math.max(1, Number(args.limit) || 5));
+              const pools = await topYieldPools({
+                assetFilter: asset,
+                safeOnly,
+                limit,
+              });
+              toolResult =
+                pools.length === 0
+                  ? `No matching pools for ${asset}. Try a broader filter.`
+                  : `Top ${pools.length} ${asset} pools on Solana (DefiLlama, live):\n${describeYieldPools(pools)}`;
+            } catch (e: any) {
+              toolResult = `Error fetching yields: ${e.message ?? String(e)}`;
             }
             break;
 
