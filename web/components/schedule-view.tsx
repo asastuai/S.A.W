@@ -29,12 +29,14 @@ export function ScheduleView({
   items,
   now,
   onRemove,
+  onExecute,
   approvalThreshold,
   readOnly,
 }: {
   items: ScheduleItem[];
   now: number;
   onRemove?: (id: string) => void;
+  onExecute?: (id: string) => void;
   approvalThreshold: number;
   readOnly?: boolean;
 }) {
@@ -86,6 +88,7 @@ export function ScheduleView({
             isUpcoming
             approvalThreshold={approvalThreshold}
             onRemove={onRemove}
+            onExecute={onExecute}
             readOnly={readOnly}
           />
         ))}
@@ -117,6 +120,7 @@ function Row({
   isUpcoming,
   approvalThreshold,
   onRemove,
+  onExecute,
   readOnly,
 }: {
   item: ScheduleItem;
@@ -124,11 +128,17 @@ function Row({
   isUpcoming: boolean;
   approvalThreshold: number;
   onRemove?: (id: string) => void;
+  onExecute?: (id: string) => void;
   readOnly?: boolean;
 }) {
   const overThreshold = item.amount > approvalThreshold;
   const secsUntil = Math.max(0, Math.round((item.scheduledFor - now) / 1000));
   const conditional = item.trigger && item.trigger.kind !== "time";
+
+  // Detect yield picks (Conservador): vendor format "{project} · {symbol} · {apy}%"
+  const aprMatch = item.vendor.match(/(\d+(?:\.\d+)?)\s*%/);
+  const isYieldPick = !!aprMatch && /·/.test(item.vendor);
+  const projectName = isYieldPick ? item.vendor.split("·")[0]?.trim() : null;
 
   const statusBadge = <StatusBadge s={item.status} />;
   const timeText = isUpcoming
@@ -144,6 +154,8 @@ function Row({
   return (
     <div
       className={`border-l-2 pl-3 py-2 ${
+        isYieldPick && item.status === "queued" ? "bg-gold/5" : ""
+      } ${
         item.status === "done"
           ? "border-gold/40"
           : item.status === "executing"
@@ -154,6 +166,8 @@ function Row({
           ? "border-rust/50"
           : item.status === "skipped"
           ? "border-bone/20"
+          : isYieldPick
+          ? "border-gold"
           : overThreshold
           ? "border-rust/60"
           : "border-bone/40"
@@ -167,11 +181,18 @@ function Row({
                 ⇄ swap
               </span>
             )}
+            {isYieldPick && (
+              <span className="text-gold text-xs uppercase tracking-widest border border-gold/40 px-1.5 py-0.5 bg-gold/10">
+                ✦ yield · {aprMatch![1]}%
+              </span>
+            )}
             <span className="font-display text-base text-bone">
               {fmtAmount(item.amount)}
             </span>
             <span className="text-bone/40 text-xs">→</span>
-            <span className="text-bone/80 text-sm truncate">{item.vendor}</span>
+            <span className="text-bone/80 text-sm truncate">
+              {isYieldPick && projectName ? projectName : item.vendor}
+            </span>
             {overThreshold && item.status === "queued" && (
               <span className="text-rust text-[10px] uppercase tracking-widest">
                 ⚠ over threshold
@@ -198,6 +219,14 @@ function Row({
             >
               tx ↗
             </a>
+          )}
+          {!readOnly && isUpcoming && item.status === "queued" && onExecute && (
+            <button
+              onClick={() => onExecute(item.id)}
+              className="text-gold border border-gold/60 hover:bg-gold hover:text-ink text-[10px] uppercase tracking-widest px-2 py-1 transition"
+            >
+              ▶ execute now
+            </button>
           )}
           {!readOnly && isUpcoming && item.status === "queued" && onRemove && (
             <button

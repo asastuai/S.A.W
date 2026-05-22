@@ -991,6 +991,23 @@ export default function DemoPage() {
     setPhase("live");
   }
 
+  // Manual execute on a single item — bypasses the "Lock in & Start"
+  // flow so handlers can tap "Execute now" on individual items
+  // (e.g. Conservador's yield picks).
+  async function executeOne(itemId: string) {
+    if (!briefing || !handler) return;
+    const item = briefing.schedule.find((i) => i.id === itemId);
+    if (!item || item.status !== "queued") return;
+    // Ensure ready + live phase so the watcher and approval flow work
+    if (!briefing.ready || phase !== "live") {
+      const updated = { ...briefing, ready: true };
+      setBriefing(updated);
+      saveBriefing(handler, updated);
+      setPhase("live");
+    }
+    await dispatchItem(item);
+  }
+
   function backToBriefing() {
     setPhase("briefing");
     if (handler && briefing) {
@@ -1466,6 +1483,7 @@ export default function DemoPage() {
             scanning={scanning}
             onSend={sendChat}
             onRemove={removeItem}
+            onExecute={executeOne}
             onStart={startExecution}
             onAcceptOpp={acceptOpportunity}
             onSkipOpp={skipOpportunity}
@@ -1484,6 +1502,7 @@ export default function DemoPage() {
             scanning={scanning}
             onAcceptOpp={acceptOpportunity}
             onSkipOpp={skipOpportunity}
+            onExecute={executeOne}
           />
         ) : null}
 
@@ -1868,6 +1887,7 @@ function BriefingRoom({
   scanning,
   onSend,
   onRemove,
+  onExecute,
   onStart,
   onAcceptOpp,
   onSkipOpp,
@@ -1882,6 +1902,7 @@ function BriefingRoom({
   scanning: boolean;
   onSend: (text: string) => void;
   onRemove: (id: string) => void;
+  onExecute: (id: string) => void;
   onStart: () => void;
   onAcceptOpp: (opp: Opportunity) => void;
   onSkipOpp: (opp: Opportunity) => void;
@@ -1941,6 +1962,7 @@ function BriefingRoom({
           items={briefing.schedule}
           now={now}
           onRemove={onRemove}
+          onExecute={onExecute}
           approvalThreshold={persona.policy.approvalThreshold}
         />
         <button
@@ -1973,6 +1995,7 @@ function LiveRoom({
   scanning,
   onAcceptOpp,
   onSkipOpp,
+  onExecute,
 }: {
   persona: Persona;
   briefing: Briefing;
@@ -1986,6 +2009,7 @@ function LiveRoom({
   scanning: boolean;
   onAcceptOpp: (opp: Opportunity) => void;
   onSkipOpp: (opp: Opportunity) => void;
+  onExecute: (id: string) => void;
 }) {
   const showMarket = persona.id === "greedie";
   const dailyPct = Math.min(
@@ -2108,8 +2132,8 @@ function LiveRoom({
       <ScheduleView
         items={briefing.schedule}
         now={now}
+        onExecute={onExecute}
         approvalThreshold={persona.policy.approvalThreshold}
-        readOnly
       />
     </div>
     </div>
