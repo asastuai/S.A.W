@@ -189,7 +189,7 @@ export default function DemoPage() {
           actionType: "pay",
           vendor: item.vendor,
           amount: item.amount,
-          asset: "TEST",
+          asset: "USDC-dev",
           reason: item.reason,
           scheduledFor: item.scheduledFor,
           trigger: triggerBody,
@@ -426,7 +426,7 @@ export default function DemoPage() {
           .slice(0, 6)
           .map(
             (i) =>
-              `${i.vendor} · ${(i.amount / 10 ** DEMO_DECIMALS).toFixed(0)} TEST · ${i.status}`
+              `${i.vendor} · ${(i.amount / 10 ** DEMO_DECIMALS).toFixed(0)} USDC-dev · ${i.status}`
           )
           .join("; ");
 
@@ -906,7 +906,7 @@ export default function DemoPage() {
         if (action.type === "add") {
           if (action.item.amount <= 0 || action.item.amount > maxAmount) {
             skippedReasons.push(
-              `${(action.item.amount / 10 ** DEMO_DECIMALS).toFixed(2)} TEST exceeds limits`
+              `${(action.item.amount / 10 ** DEMO_DECIMALS).toFixed(2)} USDC-dev exceeds limits`
             );
             continue;
           }

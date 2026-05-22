@@ -8,7 +8,7 @@ import { CreatorNote } from "@/components/creator-note";
 const fmtAmount = (n: number) =>
   `${(n / 10 ** DEMO_DECIMALS).toLocaleString(undefined, {
     maximumFractionDigits: 2,
-  })} TEST`;
+  })} USDC-dev`;
 
 function fmtTime(ts: number): string {
   const date = new Date(ts);

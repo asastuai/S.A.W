@@ -72,7 +72,7 @@ type ActionReady = { type: "ready" };
 export type AgentAction = ActionAdd | ActionRemove | ActionModify | ActionReady;
 
 function fmt(n: number): string {
-  return `${(n / 10 ** DEMO_DECIMALS).toFixed(2)} TEST`;
+  return `${(n / 10 ** DEMO_DECIMALS).toFixed(2)} USDC-dev`;
 }
 
 function buildSystemPrompt(body: RequestBody): string {
@@ -194,7 +194,7 @@ ${scheduleSummary}
 
 NOW is ${new Date().toISOString()} (epoch ms: ${Date.now()}).
 
-USE TOOLS to add/modify/remove items — don't just describe. Amounts are in TEST tokens (whole units like 20). Be conversational and brief. ALWAYS reply in English.
+USE TOOLS to add/modify/remove items — don't just describe. Amounts are in USDC-dev tokens (the agent's wallet holds USDC-dev as a stand-in for USDC on devnet, whole units like 20). Be conversational and brief. ALWAYS reply in English.
 
 CRITICAL OUTPUT RULE: Every response MUST contain a short natural-language reply to the handler in addition to any tool calls. Never return only tool calls with empty text. Even one sentence like "Done, added X" or "Looking at the market now…" is mandatory.${greedieExtras}${conservadorExtras}${estableExtras}
 
@@ -315,7 +315,7 @@ const greedieTools = [
         type: "object",
         properties: {
           vendor: { type: "string", description: "Label, e.g. 'Jupiter · SOL dip-buy'" },
-          amount: { type: "number", description: "TEST tokens (whole units)" },
+          amount: { type: "number", description: "USDC-dev tokens (whole units, agent wallet holds USDC-dev as USDC stand-in on devnet)" },
           asset: { type: "string", description: "Asset symbol to watch" },
           basisPrice: { type: "number", description: "USD price as basis (usually current price)" },
           dropPct: { type: "number", description: "Drop % from basis to trigger (e.g. 1.5)" },
@@ -371,7 +371,7 @@ const greedieTools = [
     function: {
       name: "propose_swap",
       description:
-        "Schedule a Jupiter swap from one asset to another. v1.0 runs in devnet-mock mode (Jupiter has no real devnet liquidity), but the schedule + fee ledger + UI flow is real. Use this for any 'trade X for Y' intent. SAW takes a 55 bps platform fee, visible in preview.",
+        "Schedule a Jupiter swap from one asset to another. v1.0 runs in devnet-mock mode (Jupiter has no real devnet liquidity), but the schedule + fee ledger + UI flow is real. The agent wallet holds USDC-dev as a USDC stand-in on devnet — treat 1 USDC-dev as 1 USDC for any flow involving stablecoins. Use this for any 'trade X for Y' or 'put X to work in Y venue' intent. SAW takes a 55 bps platform fee, visible in preview.",
       parameters: {
         type: "object",
         properties: {

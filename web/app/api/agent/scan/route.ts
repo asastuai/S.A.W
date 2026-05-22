@@ -51,7 +51,7 @@ type RequestBody = {
 };
 
 function fmt(n: number): string {
-  return `${(n / 10 ** DEMO_DECIMALS).toFixed(2)} TEST`;
+  return `${(n / 10 ** DEMO_DECIMALS).toFixed(2)} USDC-dev`;
 }
 
 const tools = [
@@ -136,7 +136,7 @@ Rules:
   - Currently pending: ${body.pendingTitles.length ? body.pendingTitles.join(", ") : "(none)"}
   - Recently dismissed: ${body.dismissedTitles.length ? body.dismissedTitles.join(", ") : "(none)"}
 - Vary the angle each scan — if last opportunity was a dip-buy below current price, next time consider a threshold-buy above, or a TWAP, or a different asset.
-- Respect policy: amounts ≤ per-tx cap (${fmt(persona.policy.perTxLimit)}) and ≤ wallet balance (${fmt(persona.walletBalance)}). Suggested amounts in the 10-50 TEST range work well for demo.
+- Respect policy: amounts ≤ per-tx cap (${fmt(persona.policy.perTxLimit)}) and ≤ wallet balance (${fmt(persona.walletBalance)}). Suggested amounts in the 10-50 USDC-dev range work well for demo.
 - Voice: conversational, brief, like a friend who watches markets. ALWAYS reply in English. Example: "SOL is glued to the day's low — if you want, I'll put 30 below $94 before 4pm".
 
 Current schedule context:
