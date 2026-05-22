@@ -717,19 +717,22 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // If only mutating tools were called (no get_*), we don't need another LLM round
-      // unless the assistant produced no content. But Llama tends to want to summarize
-      // after — let it do one more pass max.
+      // If only mutating tools were called (no observers), give the model
+      // one final pass to summarize. Strip tools entirely so smaller
+      // models can't crash by disobeying tool_choice:"none".
       if (
         triggeredAction &&
-        !toolCalls.some((c) => c.name === "get_market_price")
+        !toolCalls.some(
+          (c) =>
+            c.name === "get_market_price" || c.name === "get_yield_options"
+        )
       ) {
         const followup = await adapter.complete(
           {
             model: adapter.defaultModel,
             messages,
-            tools,
-            toolChoice: "none",
+            tools: undefined,
+            toolChoice: undefined,
             temperature: 0.4,
             maxTokens: 300,
           },
