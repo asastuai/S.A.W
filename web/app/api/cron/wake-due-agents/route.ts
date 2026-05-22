@@ -93,27 +93,23 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      // Check queued items with price triggers
+      // v1.2: cron is OBSERVATION ONLY. It counts items whose triggers
+      // are met but does not touch the row, because the actual dispatcher
+      // lives in the browser (agent keypair signs there). The browser
+      // already polls + fires when its tab is open. Marking executing
+      // here would create stuck rows.
+      // When Privy delegated wallets land (v1.5), the cron will be
+      // promoted to dispatcher.
       const { data: pending } = await db
         .from("scheduled_items")
         .select("*")
         .eq("agent_id", agent.id)
         .eq("status", "queued");
-
       for (const item of pending ?? []) {
         if (shouldFire(item, solSnapshot?.priceUsd ?? null, now)) {
-          await db
-            .from("scheduled_items")
-            .update({
-              status: "executing",
-              error_message:
-                "Cron marked ready — awaiting browser dispatcher (v1.0 limitation)",
-            })
-            .eq("id", item.id);
           firedCount++;
         }
       }
-
       if (firedCount > 0) outcome = "executed-trigger";
     }
 
