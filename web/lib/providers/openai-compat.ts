@@ -110,3 +110,21 @@ export const grokAdapter = makeOpenAICompatAdapter({
   baseURL: "https://api.x.ai/v1",
   defaultModel: "grok-3-mini",
 });
+
+export const openaiAdapter = makeOpenAICompatAdapter({
+  id: "openai",
+  baseURL: "https://api.openai.com/v1",
+  defaultModel: "gpt-4o-mini",
+});
+
+export const cerebrasAdapter = makeOpenAICompatAdapter({
+  id: "cerebras" as any, // not yet in Provider union below — added in db/types
+  baseURL: "https://api.cerebras.ai/v1",
+  defaultModel: "llama-3.3-70b",
+});
+
+export const kimiAdapter = makeOpenAICompatAdapter({
+  id: "kimi" as any,
+  baseURL: "https://api.moonshot.ai/v1",
+  defaultModel: "moonshot-v1-8k",
+});

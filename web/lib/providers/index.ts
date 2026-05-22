@@ -2,26 +2,35 @@ import type { Provider } from "@/lib/db/types";
 import type { ProviderAdapter } from "./types";
 import { groqAdapter } from "./groq";
 import { geminiAdapter } from "./gemini";
-import { deepseekAdapter, grokAdapter } from "./openai-compat";
+import { anthropicAdapter } from "./anthropic";
+import {
+  cerebrasAdapter,
+  deepseekAdapter,
+  grokAdapter,
+  kimiAdapter,
+  openaiAdapter,
+} from "./openai-compat";
 
 /**
- * Provider registry. Active providers in v1.1:
- *   - Groq (free tier, fast inference)
- *   - Gemini 2.5 Flash (very cheap, generous free tier, Google reliability)
- *   - DeepSeek V3 (cheapest market price, OpenAI-compatible)
- *   - Grok 3 mini (xAI, OpenAI-compatible)
- *
- * To add OpenAI / Anthropic / Kimi / Cerebras later:
- *   1. Implement `ProviderAdapter` for the provider
- *   2. Register here
- *   3. Update db/types Provider union if missing
- *   4. Update AgentGate UI to mark the card as active
+ * Provider registry. Active providers in v1.2:
+ *   - Groq (free, fast)
+ *   - Gemini 2.5 Flash-Lite (1500 RPD free)
+ *   - DeepSeek V3 (cheapest)
+ *   - Grok 3 mini (xAI)
+ *   - OpenAI gpt-4o-mini
+ *   - Anthropic Claude Haiku 4.5
+ *   - Cerebras Llama 3.3 70B (free tier, fastest inference)
+ *   - Kimi (Moonshot AI, cheap with Chinese coverage)
  */
 const REGISTRY: Partial<Record<Provider, ProviderAdapter>> = {
   groq: groqAdapter,
   gemini: geminiAdapter,
   deepseek: deepseekAdapter,
   grok: grokAdapter,
+  openai: openaiAdapter,
+  anthropic: anthropicAdapter,
+  cerebras: cerebrasAdapter as any,
+  kimi: kimiAdapter as any,
 };
 
 export function getProviderAdapter(provider: Provider): ProviderAdapter {

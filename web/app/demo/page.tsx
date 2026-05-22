@@ -1630,12 +1630,14 @@ function Idle() {
 
 function AgentGate({ onOpen }: { onOpen: () => void }) {
   const providers = [
-    { id: "groq", name: "Groq", note: "Free tier, fast", active: true },
-    { id: "gemini", name: "Gemini", note: "Flash 2.5 · cheap", active: true },
+    { id: "groq", name: "Groq", note: "Free · fast", active: true },
+    { id: "gemini", name: "Gemini", note: "Flash-Lite · cheap", active: true },
     { id: "deepseek", name: "DeepSeek", note: "V3 · cheapest", active: true },
     { id: "grok", name: "Grok", note: "xAI · 3 mini", active: true },
-    { id: "openai", name: "OpenAI", note: "GPT-4 / 5", active: false },
-    { id: "anthropic", name: "Anthropic", note: "Claude", active: false },
+    { id: "anthropic", name: "Anthropic", note: "Claude Haiku 4.5", active: true },
+    { id: "openai", name: "OpenAI", note: "GPT-4o mini", active: true },
+    { id: "cerebras", name: "Cerebras", note: "Llama · fastest", active: true },
+    { id: "kimi", name: "Kimi", note: "Moonshot AI", active: true },
   ];
 
   return (
@@ -1656,7 +1658,7 @@ function AgentGate({ onOpen }: { onOpen: () => void }) {
         servers.
       </p>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
         {providers.map((p) => (
           <button
             key={p.id}

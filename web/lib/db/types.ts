@@ -6,7 +6,15 @@
  * then re-export from here.
  */
 
-export type Provider = "groq" | "openai" | "anthropic" | "gemini" | "grok" | "deepseek";
+export type Provider =
+  | "groq"
+  | "openai"
+  | "anthropic"
+  | "gemini"
+  | "grok"
+  | "deepseek"
+  | "cerebras"
+  | "kimi";
 export type Persona = "greedie" | "conservador" | "estable";
 export type TriggerKind = "time" | "dip" | "below" | "above";
 export type ActionType = "pay" | "swap";

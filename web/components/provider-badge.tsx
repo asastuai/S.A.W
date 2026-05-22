@@ -7,8 +7,10 @@ const LABEL: Record<string, string> = {
   gemini: "Gemini Flash-Lite",
   deepseek: "DeepSeek V3",
   grok: "Grok 3 mini",
-  openai: "OpenAI",
-  anthropic: "Anthropic",
+  openai: "OpenAI · gpt-4o-mini",
+  anthropic: "Claude Haiku 4.5",
+  cerebras: "Cerebras · Llama 3.3",
+  kimi: "Kimi · Moonshot",
   unknown: "—",
 };
 

@@ -31,8 +31,9 @@ export function isValidShape(key: string): boolean {
   return (
     k.startsWith("gsk_") ||      // Groq
     k.startsWith("AIza") ||      // Google / Gemini
-    k.startsWith("sk-") ||       // OpenAI / DeepSeek / Anthropic
+    k.startsWith("sk-") ||       // OpenAI / DeepSeek / Anthropic / Kimi
     k.startsWith("xai-") ||      // Grok
+    k.startsWith("csk-") ||      // Cerebras
     k.startsWith("Bearer ")      // generic
   );
 }
@@ -48,6 +49,8 @@ export type DetectedProvider =
   | "grok"
   | "openai"
   | "anthropic"
+  | "cerebras"
+  | "kimi"
   | "unknown";
 
 export function detectProvider(key: string): DetectedProvider {
@@ -55,7 +58,14 @@ export function detectProvider(key: string): DetectedProvider {
   if (k.startsWith("gsk_")) return "groq";
   if (k.startsWith("AIza")) return "gemini";
   if (k.startsWith("xai-")) return "grok";
+  if (k.startsWith("csk-")) return "cerebras";
   if (k.startsWith("sk-ant-")) return "anthropic";
-  if (k.startsWith("sk-")) return "deepseek"; // could also be openai — DeepSeek wins by being more common in BYOK contexts
+  if (k.startsWith("sk-proj-") || k.startsWith("sk-svcacct-")) return "openai";
+  if (k.startsWith("sk-")) {
+    // Ambiguous: DeepSeek, OpenAI legacy, Kimi all use plain sk-.
+    // DeepSeek wins as default in this BYOK context; users with
+    // OpenAI legacy keys should generate a new sk-proj- key.
+    return "deepseek";
+  }
   return "unknown";
 }
