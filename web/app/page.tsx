@@ -6,6 +6,8 @@ export default function LandingPage() {
       <Header />
       <Hero />
       <HowItWorks />
+      <Personas />
+      <ShipLog />
       <FeatureGrid />
       <Footer />
     </main>
@@ -53,9 +55,10 @@ function Hero() {
         Be the handler<br />of your AI agent.
       </h1>
       <p className="text-bone/70 text-lg max-w-2xl mb-12 leading-relaxed">
-        SAW is the first agent-native consumer wallet on Solana. Custody, policy,
-        and oversight enforced on-chain. Your agent operates with limits.
-        Your handler signs the override.
+        SAW is the first agent-native consumer wallet on Solana. Custody,
+        policy, and oversight enforced on-chain. Bring your own LLM key
+        (Groq, Gemini, DeepSeek, Grok, OpenAI, Claude, Cerebras, Kimi).
+        Your agent operates with limits. Your handler signs the override.
       </p>
       <div className="flex flex-wrap gap-4 items-center">
         <Link
@@ -118,6 +121,139 @@ function HowItWorks() {
   );
 }
 
+function Personas() {
+  const personas = [
+    {
+      stamp: "Live",
+      glyph: "▲",
+      name: "Greedie",
+      tag: "the degen trader",
+      body:
+        "Watches SOL price, proposes dip buys and TWAPs, scans for opportunities every 5 minutes. Speaks in alpha, never in apologies.",
+      accent: "border-rust text-rust",
+    },
+    {
+      stamp: "Live",
+      glyph: "✦",
+      name: "Conservador",
+      tag: "the yield assistant",
+      body:
+        "Queries live Solana yields from DefiLlama, ranks pools by safety and APR, proposes 1-click stakes. No degenerate plays. Capital preservation first.",
+      accent: "border-gold text-gold",
+    },
+    {
+      stamp: "Live",
+      glyph: "◆",
+      name: "Estable",
+      tag: "the disciplined coach",
+      body:
+        "Helps you set weekly transfers, recurring bills, savings drips. Asks first, executes once approved. Anti-impulse, pro-habit.",
+      accent: "border-bone/40 text-bone",
+    },
+  ];
+  return (
+    <section className="px-6 py-24 border-t border-ash">
+      <div className="max-w-5xl mx-auto">
+        <h2 className="font-display text-4xl mb-4 tracking-tight">
+          The personas.
+        </h2>
+        <p className="text-bone/60 text-sm mb-16 max-w-2xl leading-relaxed">
+          Three LLM personas, each with a distinct policy and prompt. Pick
+          the one that fits your intent. Switch any time. They share the
+          same on-chain wallet but each holds its own threshold.
+        </p>
+        <div className="grid md:grid-cols-3 gap-px bg-ash">
+          {personas.map((p) => (
+            <div key={p.name} className="bg-ink p-8 flex flex-col">
+              <div className="flex items-center justify-between mb-6">
+                <span className={`text-3xl ${p.accent.split(" ")[1]}`}>
+                  {p.glyph}
+                </span>
+                <span className="stamp">{p.stamp}</span>
+              </div>
+              <h3 className="font-display text-2xl mb-1 tracking-wide">
+                {p.name}
+              </h3>
+              <p className="text-bone/40 text-xs uppercase tracking-widest mb-4">
+                {p.tag}
+              </p>
+              <p className="text-bone/60 text-sm leading-relaxed flex-1">
+                {p.body}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ShipLog() {
+  const entries = [
+    {
+      v: "v1.2",
+      title: "Telegram bridge + atomic setup",
+      body:
+        "1-click pairing from web to TG bot. Setup collapses 3 signatures into 1 atomic transaction.",
+    },
+    {
+      v: "v1.1",
+      title: "Conservador goes live",
+      body:
+        "Live yield data from DefiLlama. Action-first prompt. Quick presets. ▶ execute-now button per queued item.",
+    },
+    {
+      v: "v1.0",
+      title: "8-provider BYOK",
+      body:
+        "Bring your own key from any of: Groq, Google Gemini, DeepSeek, Grok, OpenAI, Anthropic, Cerebras, Kimi. Auto-detected by prefix.",
+    },
+    {
+      v: "v0.9",
+      title: "Greedie + opportunity reel",
+      body:
+        "Proactive proposals from the watcher loop. Market price feed cached server-side. Threshold-aware approval modal.",
+    },
+    {
+      v: "v0.5",
+      title: "Anchor programs on devnet",
+      body:
+        "agent_wallet, policy_registry, approval_queue. Token-2022 compatible. PDA-signed CPIs.",
+    },
+  ];
+  return (
+    <section className="px-6 py-24 border-t border-ash">
+      <div className="max-w-5xl mx-auto">
+        <h2 className="font-display text-4xl mb-4 tracking-tight">
+          The ship log.
+        </h2>
+        <p className="text-bone/60 text-sm mb-16 max-w-2xl leading-relaxed">
+          Built solo, full-time, on devnet. Each line is a real ship.
+        </p>
+        <ol className="space-y-8 border-l border-gold/40 pl-6">
+          {entries.map((e) => (
+            <li key={e.v} className="relative">
+              <span
+                className="absolute -left-[31px] top-1 w-2 h-2 bg-gold rounded-full"
+                aria-hidden
+              />
+              <div className="flex items-baseline gap-3 mb-2">
+                <span className="text-gold font-display text-lg">{e.v}</span>
+                <h3 className="text-base tracking-wide">{e.title}</h3>
+              </div>
+              <p className="text-bone/60 text-sm leading-relaxed">{e.body}</p>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-12 text-xs text-bone/40 uppercase tracking-widest">
+          Next: confidential transfers (Token-2022), session-signer pilot,
+          mainnet beta.
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function FeatureGrid() {
   const features = [
     {
@@ -143,6 +279,18 @@ function FeatureGrid() {
       title: "MIT-licensed protocol.",
       body:
         "Use the SDK, fork the programs, build your own client. The handler model is a primitive, not a product moat.",
+    },
+    {
+      tag: "BYOK",
+      title: "Your key, your model, your spend.",
+      body:
+        "Eight LLM providers supported out of the box. Keys live in your browser; the server never stores them. No platform middleman taking margin on tokens.",
+    },
+    {
+      tag: "Yield-aware",
+      title: "Live APRs from DefiLlama.",
+      body:
+        "Conservador queries real Solana pools every 5 minutes. No training-data hallucinations. The agent picks from what actually exists today.",
     },
   ];
   return (

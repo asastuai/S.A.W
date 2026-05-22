@@ -81,6 +81,7 @@ import { WakesFeed } from "@/components/wakes-feed";
 import { FeeSummary } from "@/components/fee-summary";
 import { ProviderBadge } from "@/components/provider-badge";
 import { ConnectTelegramButton } from "@/components/connect-telegram-button";
+import { OnboardingTour } from "@/components/onboarding-tour";
 import { getTreasuryAddress } from "@/lib/treasury";
 import { Chat } from "@/components/chat";
 import { ScheduleView } from "@/components/schedule-view";
@@ -1574,6 +1575,8 @@ export default function DemoPage() {
           }}
         />
       )}
+
+      <OnboardingTour enabled={phase === "briefing" || phase === "live"} />
     </main>
   );
 }
