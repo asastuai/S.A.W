@@ -683,7 +683,7 @@ export default function DemoPage() {
       const policy = buildPolicy(p.policy);
       const [walletPda] = deriveWalletPda(handler, saltBuf);
 
-      setSetupStep("Minting test currency for the dossier…");
+      setSetupStep(`Preparing ${p.name}'s wallet, policy, mint, and funding in one signature…`);
       const mintKp = Keypair.generate();
       const mintRent = await getMinimumBalanceForRentExemptMint(connection);
       const walletAta = getAssociatedTokenAddressSync(
@@ -696,7 +696,29 @@ export default function DemoPage() {
         recipient.publicKey
       );
 
-      const setupTx = new Transaction()
+      const initWalletIx = await sawClient.programs.agentWallet.methods
+        .initializeWallet(Array.from(saltBuf), agent.publicKey, policy as any)
+        .accountsPartial({
+          wallet: walletPda,
+          owner: handler,
+          policy: derivePolicyPda(walletPda)[0],
+          queue: deriveQueuePda(walletPda)[0],
+          policyProgram: sawClient.programs.policyRegistry.programId,
+          queueProgram: sawClient.programs.approvalQueue.programId,
+          systemProgram: SystemProgram.programId,
+        })
+        .instruction();
+
+      // v1.2: collapse the 3 setup signatures into 1 atomic transaction.
+      // Solana processes instructions in order, so dependencies resolve:
+      //   1. create + init mint account
+      //   2. initialize SAW wallet PDA + policy + queue
+      //   3. fund agent keypair with SOL for gas
+      //   4. create handler-funded ATAs for walletPda + recipient
+      //   5. mint initial USDC-dev into walletAta
+      // Fits within the 1232-byte legacy tx limit since most accounts
+      // are referenced once.
+      const oneShotTx = new Transaction()
         .add(
           SystemProgram.createAccount({
             fromPubkey: handler,
@@ -713,37 +735,8 @@ export default function DemoPage() {
             handler,
             null
           )
-        );
-      setupTx.feePayer = handler;
-      setupTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-      setupTx.partialSign(mintKp);
-      const signedSetup = await wallet.signTransaction(setupTx);
-      const setupSig = await connection.sendRawTransaction(signedSetup.serialize());
-      await connection.confirmTransaction(setupSig, "confirmed");
-
-      setSetupStep(`Briefing ${p.name} with policy parameters…`);
-      const ix = await sawClient.programs.agentWallet.methods
-        .initializeWallet(Array.from(saltBuf), agent.publicKey, policy as any)
-        .accountsPartial({
-          wallet: walletPda,
-          owner: handler,
-          policy: derivePolicyPda(walletPda)[0],
-          queue: deriveQueuePda(walletPda)[0],
-          policyProgram: sawClient.programs.policyRegistry.programId,
-          queueProgram: sawClient.programs.approvalQueue.programId,
-          systemProgram: SystemProgram.programId,
-        })
-        .instruction();
-
-      const initTx = new Transaction().add(ix);
-      initTx.feePayer = handler;
-      initTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-      const signedInit = await wallet.signTransaction(initTx);
-      const initSig = await connection.sendRawTransaction(signedInit.serialize());
-      await connection.confirmTransaction(initSig, "confirmed");
-
-      setSetupStep(`Wiring fuel and ${fmt(p.initialFund)} into the wallet…`);
-      const fundTx = new Transaction()
+        )
+        .add(initWalletIx)
         .add(
           SystemProgram.transfer({
             fromPubkey: handler,
@@ -775,11 +768,13 @@ export default function DemoPage() {
             BigInt(p.initialFund)
           )
         );
-      fundTx.feePayer = handler;
-      fundTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-      const signedFund = await wallet.signTransaction(fundTx);
-      const fundSig = await connection.sendRawTransaction(signedFund.serialize());
-      await connection.confirmTransaction(fundSig, "confirmed");
+      oneShotTx.feePayer = handler;
+      oneShotTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+      oneShotTx.partialSign(mintKp);
+      const signedOne = await wallet.signTransaction(oneShotTx);
+      const oneSig = await connection.sendRawTransaction(signedOne.serialize());
+      await connection.confirmTransaction(oneSig, "confirmed");
+      console.log("[saw] setup atomic tx confirmed", oneSig);
 
       const handle = await sawClient.loadWallet(walletPda);
       const newSetup: Setup = {
@@ -1863,7 +1858,7 @@ function SetupOverlay({ step, persona }: { step: string; persona: Persona }) {
       <p className="stamp mt-4 mb-2 flex items-center gap-2">
         Briefing {persona.name}
         <CreatorNote
-          text="Imagine collapsing these 3 sigs into 1 with session signers — gasless onboarding, no wallet popups for the first minute. The setup itself becomes invisible."
+          text="v1.2 collapses what used to be 3 Phantom signatures into 1 atomic on-chain transaction. v1.3 will pre-mint setup gas so even that signature can be optional — gasless onboarding via session signers."
           position="bottom-right"
         />
       </p>

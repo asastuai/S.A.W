@@ -46,7 +46,7 @@ export function SignInGate() {
         </div>
         <div className="bg-ink p-4">
           <div className="stamp mb-2">Step II</div>
-          <div className="text-bone/80 text-sm">Bring your LLM key (any of 4)</div>
+          <div className="text-bone/80 text-sm">Bring your LLM key (any of 8)</div>
         </div>
         <div className="bg-ink p-4">
           <div className="stamp mb-2">Step III</div>
