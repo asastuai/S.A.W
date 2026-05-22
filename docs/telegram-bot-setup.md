@@ -1,71 +1,94 @@
-# Telegram bot setup
+# Telegram bot — onboarding flow
 
-The TG bot scaffold is done. To activate, you need to:
+## How it looks to a user (this is the point)
 
-## 1. Create the bot (2 min)
+1. User signs in to /demo, picks a persona, completes setup
+2. In the header next to settings: button **`📱 connect telegram`**
+3. Click → web requests a one-time pair code from server → opens
+   `https://t.me/<saw_bot>?start=<code>` in a new tab
+4. Telegram launches the bot conversation; bot receives `/start <code>`
+5. Bot looks up the code (already pre-bound to this handler), creates
+   the permanent telegram_links row, replies **"✓ Linked. Mandame lo que quieras."**
+6. User chats normally. No paste, no manual code, no second login.
 
-1. Open Telegram → search **@BotFather**
-2. Send `/newbot`
-3. Pick a name (e.g. `SAW Agent`) and a username (must end in `bot`, e.g. `sawagentbot` or `saw_devnet_bot`)
-4. BotFather replies with the bot token: `123456789:ABC-DEF1234ghIklZyx57W2v1u123ew11`
-5. Save that token — you'll paste it to me
+Total clicks for the user: **1** (the button in the header).
 
-Optionally customize (also via BotFather):
-- `/setdescription` — "I'm your SAW agent. Talk to me about trades, yields, plans."
-- `/setabouttext` — "Personal AI agent on Solana"
-- `/setuserpic` — upload an image
-- `/setcommands` — paste:
-  ```
-  start - Connect this chat to your handler
-  status - Show your linked handler + agents
-  ```
+## What Juan does — ONE TIME, for the whole platform
 
-## 2. Generate a webhook secret (10 sec)
+The bot is platform-wide. Every user shares it. You only set it up once.
+
+### Step 1: BotFather (2 min)
+
+1. In Telegram → search **@BotFather**
+2. `/newbot` → name (e.g. `SAW Agent`) → username (must end in `bot`, e.g. `saw_agent_bot`)
+3. Save the token: `1234567:ABC-DEF…`
+4. Optionally: `/setdescription`, `/setabouttext`, `/setuserpic`
+5. Optionally: `/setcommands` and paste:
+   ```
+   start - Begin or re-link
+   status - Show linked handler + agents
+   ```
+
+### Step 2: Generate a webhook secret (10 sec)
+
+Run on your machine:
 
 ```
 openssl rand -hex 32
 ```
 
-Save the output. We'll use it as `TELEGRAM_WEBHOOK_SECRET` so only Telegram can hit our endpoint.
+Save the output.
 
-## 3. Paste both to me
+### Step 3: Tell me
 
-I'll add them to `.env.local` + Vercel + register the webhook with Telegram.
+Paste in one message:
 
-## 4. Then I run
+```
+TELEGRAM_BOT_TOKEN=<the_botfather_token>
+TELEGRAM_WEBHOOK_SECRET=<the_openssl_output>
+NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=saw_agent_bot
+```
+
+(Replace `saw_agent_bot` with whatever username you actually picked.)
+
+### Step 4: I run the activation
+
+I will:
+
+1. Add the 3 env vars to `.env.local` + Vercel production env
+2. Push migration `0005_telegram_handler_initiated.sql` for Supabase
+3. Register the webhook with Telegram via:
 
 ```
 curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://saw-gilt.vercel.app/api/telegram/webhook&secret_token=<SECRET>"
 ```
 
-That tells Telegram to POST every message to our endpoint.
+4. Smoke test from my own TG account.
 
-## 5. Smoke test
+## Architecture (1-paragraph)
 
-After webhook is set:
-1. Open your bot in Telegram, send `/start`
-2. Bot replies with a pair link → `saw-gilt.vercel.app/connect/telegram?code=XXXX`
-3. Click → sign in Privy → confirm link
-4. Back in TG, send `/status` — should show your linked handler + agents
-5. Send a message — bot routes through your default agent's LLM and replies
+`POST /api/telegram/init-pair` (handler-authed) writes a pair code with
+`handler_id` to `telegram_pair_codes`, returns a deep link. User clicks,
+Telegram opens, bot receives `/start <code>` in `lib/telegram.ts`. Bot
+looks up the code, confirms it's not expired or consumed, upserts a
+`telegram_links` row binding `chat_id → handler_id`, consumes the code.
+Subsequent text messages from that chat hit `bot.on("message:text")`,
+load the handler's first agent, decrypt the BYOK key, call the provider
+adapter, and reply with the LLM's text.
 
-## Architecture summary
+## v1 limits
 
-- TG message → `/api/telegram/webhook` → grammy handler in `lib/telegram.ts`
-- For chat messages: looks up handler by chat_id, finds their first agent, decrypts BYOK key, calls the provider adapter, replies in TG
-- Chat history is persisted in `chat_messages` so the web sees what was said in TG and vice versa
-- **No on-chain execution from TG** in v1 — bot is chat-only because the agent keypair lives in browser localStorage. For actions, bot tells the user to open the web
-
-## Limits + costs
-
-- Telegram bot: free, unlimited
-- Each chat message hits your BYOK LLM provider → counts against your quota
-- Vercel serverless function cold start ~1-2s on first TG message, then warm
-- Webhook secret check rejects unauthenticated calls — safe to leave public
+- Bot is chat-only. On-chain execution still needs the browser session
+  because the agent keypair lives in browser localStorage. The bot will
+  nudge the user toward the web for swaps / approvals.
+- One handler can link N chats (mobile + desktop both work).
+- One chat is bound to one handler (last wins on re-pair).
+- 15 minute TTL on pair codes.
 
 ## v1.3 future
 
-- On-chain dispatch from TG when we have Privy delegated signing or server-side agent keypair storage
-- Push notifications via TG for approval requests
+- On-chain dispatch from TG (requires server-side agent keypair via
+  Privy delegated signing or encrypted storage)
+- TG push notifications for approval requests
+- `/swap`, `/yield`, `/status` shortcut commands
 - Multi-agent switching: `/switch greedie`
-- Recipe shortcuts: `/swap 0.05 SOL USDC now`

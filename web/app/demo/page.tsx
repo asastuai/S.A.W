@@ -80,6 +80,7 @@ import { AgentSettingsModal } from "@/components/agent-settings-modal";
 import { WakesFeed } from "@/components/wakes-feed";
 import { FeeSummary } from "@/components/fee-summary";
 import { ProviderBadge } from "@/components/provider-badge";
+import { ConnectTelegramButton } from "@/components/connect-telegram-button";
 import { getTreasuryAddress } from "@/lib/treasury";
 import { Chat } from "@/components/chat";
 import { ScheduleView } from "@/components/schedule-view";
@@ -1436,6 +1437,7 @@ export default function DemoPage() {
               refreshKey={briefing?.schedule.filter((i) => i.status === "done").length ?? 0}
             />
           )}
+          <ConnectTelegramButton />
           <button
             onClick={() => setShowSettings(true)}
             className="text-xs uppercase tracking-widest border border-ash px-3 py-1.5 text-bone/60 hover:text-gold hover:border-gold transition"

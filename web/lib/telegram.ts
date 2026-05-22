@@ -40,23 +40,69 @@ function registerHandlers(bot: Bot) {
   bot.command("start", async (ctx) => {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
-    const link = await findLink(chatId);
-    if (link) {
+
+    // Already linked?
+    const existing = await findLink(chatId);
+    if (existing) {
       await ctx.reply(
-        `You're connected as @${link.username ?? "handler"}.\n\nSend me a message to talk to your agent.\nExecute via the web app: ${WEB_URL}/demo`
+        `✓ You're already linked.\n\nSend me anything to talk to your agent.\nFull execution via: ${WEB_URL}/demo`
       );
       return;
     }
-    // Generate pair code
-    const code = randomCode();
-    await supabaseAdmin().from("telegram_pair_codes").insert({
-      code,
-      chat_id: chatId,
-      username: ctx.from?.username ?? null,
-    });
-    const pairUrl = `${WEB_URL}/connect/telegram?code=${code}`;
+
+    // Deep-link with a pair code? Telegram passes ?start=<code>
+    // from t.me deep links as the first argument to /start.
+    const arg = ctx.match?.toString().trim();
+    if (arg) {
+      const db = supabaseAdmin();
+      const { data: pair } = await db
+        .from("telegram_pair_codes")
+        .select("handler_id, expires_at, consumed_at")
+        .eq("code", arg)
+        .maybeSingle();
+
+      if (!pair) {
+        await ctx.reply(
+          `Invalid pair code. Open ${WEB_URL}/demo → Connect Telegram for a fresh link.`
+        );
+        return;
+      }
+      if (pair.consumed_at) {
+        await ctx.reply(`That code was already used. Generate a new one in the web.`);
+        return;
+      }
+      if (new Date(pair.expires_at) < new Date()) {
+        await ctx.reply(`That code expired. Generate a new one in the web.`);
+        return;
+      }
+      if (!pair.handler_id) {
+        await ctx.reply(`Code missing handler. Reopen the deep link from /demo.`);
+        return;
+      }
+
+      await db.from("telegram_links").upsert(
+        {
+          handler_id: pair.handler_id,
+          chat_id: chatId,
+          username: ctx.from?.username ?? null,
+          last_seen_at: new Date().toISOString(),
+        },
+        { onConflict: "chat_id" }
+      );
+      await db
+        .from("telegram_pair_codes")
+        .update({ consumed_at: new Date().toISOString(), chat_id: chatId })
+        .eq("code", arg);
+
+      await ctx.reply(
+        `✓ Linked.\n\nMandame lo que quieras.\nEjecuciones on-chain: ${WEB_URL}/demo`
+      );
+      return;
+    }
+
+    // Bare /start → tell the user how to onboard
     await ctx.reply(
-      `Welcome to SAW.\n\nLink this chat to your wallet:\n${pairUrl}\n\n(15 min to complete)`
+      `Welcome to SAW.\n\nOpen ${WEB_URL}/demo and click "Connect Telegram" — that brings you back here with a one-click link.`
     );
   });
 
