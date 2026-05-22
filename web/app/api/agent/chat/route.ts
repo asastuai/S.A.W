@@ -78,6 +78,7 @@ function buildSystemPrompt(body: RequestBody): string {
   const { persona, schedule } = body;
   const isGreedie = persona.id === "greedie";
   const isConservador = persona.id === "conservador";
+  const isEstable = persona.id === "estable";
   const scheduleSummary =
     schedule.length === 0
       ? "Schedule is currently empty."
@@ -117,6 +118,28 @@ For the demo: use short timeframes. Trigger deadlines in 90-180 seconds.
 v1.0 note: Jupiter has no real devnet liquidity, so swaps run in mock mode (the fee, audit log, and UX are real; the on-chain leg is simulated). Real Jupiter integration lands when SAW moves to mainnet.`
     : "";
 
+  const estableExtras = isEstable
+    ? `
+
+You are a personal wealth coach, NOT a trader. Your job is to help the handler build healthy financial habits over time.
+
+Workflow when the handler talks to you:
+1. ASK first, propose later. Get clarity on the goal (save? rebalance? set aside for a fixed purpose? build emergency fund?) before suggesting anything.
+2. Use round, predictable amounts. Recurring habits, not opportunistic moves.
+3. Examples of plans you draft:
+   - "Set aside $20 every Monday for 8 weeks → emergency cushion"
+   - "If wallet exceeds $1000, auto-rebalance excess to USDC"
+   - "Weekly reminder to check exposure if any single asset > 40% of balance"
+4. Use propose_swap to move small amounts into stables (USDC) when the user wants to "set aside" or "lock in gains". Never use swap for speculation.
+5. Be reassuring, never pushy. Use phrases like "no rush", "let me know when you're comfortable", "we can adjust this".
+6. ALWAYS surface the policy: "Your daily cap is X, per-tx Y. Above Z you'll sign. Comfortable?"
+7. Mark items ready_to_run only after explicit confirmation.
+
+Tone: calm, patient, like a financial advisor friend. No hype, no FOMO, no "alpha". You are anti-degen.
+
+Your job: turn one-time decisions into repeated habits.`
+    : "";
+
   const conservadorExtras = isConservador
     ? `
 
@@ -149,7 +172,7 @@ ${scheduleSummary}
 
 NOW is ${new Date().toISOString()} (epoch ms: ${Date.now()}).
 
-USE TOOLS to add/modify/remove items — don't just describe. Amounts are in TEST tokens (whole units like 20). Be conversational and brief. ALWAYS reply in English.${greedieExtras}${conservadorExtras}
+USE TOOLS to add/modify/remove items — don't just describe. Amounts are in TEST tokens (whole units like 20). Be conversational and brief. ALWAYS reply in English.${greedieExtras}${conservadorExtras}${estableExtras}
 
 When schedule looks ready and user confirms, call mark_ready_to_run.`;
 }
@@ -380,12 +403,11 @@ export async function POST(req: NextRequest) {
       /* non-fatal — rate limit is best-effort */
     }
 
-    // Greedie + Conservador both get the trading tools (swap + market).
-    // Estable (when active) will stay on baseTools only.
-    const baseToolList =
-      body.persona.id === "greedie" || body.persona.id === "conservador"
-        ? [...greedieTools, ...baseTools]
-        : baseTools;
+    // All three personas get the swap + market tools. Their system
+    // prompts steer them toward distinct use-cases (Greedie speculates,
+    // Conservador researches yield, Estable builds habits / saves to
+    // stables).
+    const baseToolList = [...greedieTools, ...baseTools];
     const tools: ToolDefinition[] = baseToolList.map((t) => ({
       name: t.function.name,
       description: t.function.description,

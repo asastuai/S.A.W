@@ -69,14 +69,12 @@ export const PERSONAS: Persona[] = [
     policy: {
       dailyLimit: T(200),
       perTxLimit: T(50),
-      approvalThreshold: T(30),
+      approvalThreshold: T(10), // very low — almost everything queues for handler approval
       cooldownSeconds: 0,
     },
     initialFund: T(500),
-    greeting: "",
-    comingSoon: true,
-    comingSoonPreview:
-      "Will watch your wallet activity over time, recommend allocations, flag drifts, draft monthly retainers. Conversational guru, not a button-pusher.",
+    greeting:
+      "Estable. I'm not a trader — I'm a coach. Tell me what you're trying to do (save, balance, set aside, build a habit), how much you can spare, and how often. I'll draft a plan and check with you before each step.",
   },
 ];
 
