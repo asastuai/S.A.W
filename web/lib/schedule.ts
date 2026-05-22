@@ -105,28 +105,77 @@ export type Briefing = {
 };
 
 const STORAGE_PREFIX = "saw-demo-v1";
-const briefingKey = (handler: PublicKey) =>
+const briefingKey = (handler: PublicKey, personaId: string) =>
+  `${STORAGE_PREFIX}:briefing:${handler.toBase58()}:${personaId}`;
+const legacyBriefingKey = (handler: PublicKey) =>
   `${STORAGE_PREFIX}:briefing:${handler.toBase58()}`;
+const activePersonaKey = (handler: PublicKey) =>
+  `${STORAGE_PREFIX}:active-persona:${handler.toBase58()}`;
 
-export function loadBriefing(handler: PublicKey): Briefing | null {
+export function loadBriefing(
+  handler: PublicKey,
+  personaId: string
+): Briefing | null {
   if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(briefingKey(handler));
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as Briefing;
-  } catch (_) {
-    return null;
+  const raw = window.localStorage.getItem(briefingKey(handler, personaId));
+  if (raw) {
+    try {
+      return JSON.parse(raw) as Briefing;
+    } catch (_) {
+      return null;
+    }
   }
+  // Migrate legacy single-briefing key into the matching persona slot.
+  const legacy = window.localStorage.getItem(legacyBriefingKey(handler));
+  if (legacy) {
+    try {
+      const parsed = JSON.parse(legacy) as Briefing;
+      if (parsed.personaId === personaId) {
+        window.localStorage.setItem(
+          briefingKey(handler, personaId),
+          JSON.stringify(parsed)
+        );
+        window.localStorage.removeItem(legacyBriefingKey(handler));
+        return parsed;
+      }
+    } catch (_) {
+      /* ignore corrupt */
+    }
+  }
+  return null;
 }
 
 export function saveBriefing(handler: PublicKey, briefing: Briefing) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(briefingKey(handler), JSON.stringify(briefing));
+  if (!briefing.personaId) return;
+  window.localStorage.setItem(
+    briefingKey(handler, briefing.personaId),
+    JSON.stringify(briefing)
+  );
 }
 
-export function clearBriefing(handler: PublicKey) {
+export function clearBriefing(handler: PublicKey, personaId: string) {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(briefingKey(handler));
+  window.localStorage.removeItem(briefingKey(handler, personaId));
+}
+
+export function clearAllBriefings(handler: PublicKey, personaIds: string[]) {
+  if (typeof window === "undefined") return;
+  for (const id of personaIds) {
+    window.localStorage.removeItem(briefingKey(handler, id));
+  }
+  window.localStorage.removeItem(legacyBriefingKey(handler));
+  window.localStorage.removeItem(activePersonaKey(handler));
+}
+
+export function loadActivePersonaId(handler: PublicKey): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(activePersonaKey(handler));
+}
+
+export function saveActivePersonaId(handler: PublicKey, personaId: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(activePersonaKey(handler), personaId);
 }
 
 export function newItem(

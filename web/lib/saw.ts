@@ -92,7 +92,9 @@ export type StoredSetup = {
   recipientAta: string;
   mint: string;
   salt: number[];
-  personaId: string;
+  // Legacy single-persona field. Kept optional so older sessions still
+  // load; new multi-persona setups don't write it.
+  personaId?: string;
 };
 
 const setupKey = (handler: PublicKey) => `${STORAGE_PREFIX}:setup:${handler.toBase58()}`;
@@ -100,8 +102,7 @@ const setupKey = (handler: PublicKey) => `${STORAGE_PREFIX}:setup:${handler.toBa
 export function saveSetup(
   handler: PublicKey,
   setup: DemoSetup,
-  salt: Buffer,
-  personaId: string
+  salt: Buffer
 ) {
   if (typeof window === "undefined") return;
   const stored: StoredSetup = {
@@ -110,7 +111,6 @@ export function saveSetup(
     recipientAta: setup.recipientAta.toBase58(),
     mint: setup.mint.toBase58(),
     salt: Array.from(salt),
-    personaId,
   };
   window.localStorage.setItem(setupKey(handler), JSON.stringify(stored));
 }

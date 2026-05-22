@@ -49,14 +49,16 @@ import {
   Opportunity,
   ScheduleItem,
   ScheduleStatus,
-  clearBriefing,
+  clearAllBriefings,
   describeTrigger,
+  loadActivePersonaId,
   loadBriefing,
   newItem,
   newMessage,
   nextDueItem,
   nextUpcoming,
   pendingOpportunities,
+  saveActivePersonaId,
   saveBriefing,
 } from "@/lib/schedule";
 import type { MarketSnapshot } from "@/lib/market";
@@ -109,23 +111,90 @@ export default function DemoPage() {
   const wallet = useWallet();
   const { authenticated: privyAuthed, ready: privyReady, logout: privyLogout, getAccessToken } = usePrivy();
   const handlerState = useHandler();
-  const [persona, setPersona] = useState<Persona | null>(null);
-  const [dbAgentId, setDbAgentId] = useState<string | null>(null);
-  const [dbAgent, setDbAgent] = useState<{
+
+  type DbAgentMeta = {
     active: boolean;
     cron_cadence_minutes: number;
     next_wake_at: string | null;
     last_wake_at: string | null;
     active_hours_start: number | null;
     active_hours_end: number | null;
-  } | null>(null);
+  };
+
+  // Active persona is the one whose conversation/schedule is visible.
+  // The other 2 slots stay alive in localStorage + DB; tab switch swaps
+  // the active state in.
+  const [activePersonaId, setActivePersonaIdState] = useState<string | null>(
+    null
+  );
+  const persona = getPersona(activePersonaId);
+
+  // Per-persona DB metadata. Single state is for the active slot; the
+  // map persists the other slots across switches.
+  const [dbAgentIds, setDbAgentIds] = useState<Record<string, string>>({});
+  const [dbAgentsMap, setDbAgentsMap] = useState<
+    Record<string, DbAgentMeta>
+  >({});
+  const dbAgentId = activePersonaId ? dbAgentIds[activePersonaId] ?? null : null;
+  const dbAgent = activePersonaId
+    ? dbAgentsMap[activePersonaId] ?? null
+    : null;
+
+  function setDbAgentId(id: string | null) {
+    if (!activePersonaId) return;
+    setDbAgentIds((prev) => {
+      const next = { ...prev };
+      if (id) next[activePersonaId] = id;
+      else delete next[activePersonaId];
+      return next;
+    });
+  }
+
+  function setDbAgent(meta: DbAgentMeta | null) {
+    if (!activePersonaId) return;
+    setDbAgentsMap((prev) => {
+      const next = { ...prev };
+      if (meta) next[activePersonaId] = meta;
+      else delete next[activePersonaId];
+      return next;
+    });
+  }
   const [showSettings, setShowSettings] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [phase, setPhase] = useState<Phase>("pick");
   const [setupStep, setSetupStep] = useState<string>("");
   const [setup, setSetup] = useState<Setup | null>(null);
   const [handle, setHandle] = useState<WalletHandle | null>(null);
-  const [briefing, setBriefing] = useState<Briefing | null>(null);
+  // Per-persona briefings. `briefing` (derived) is the active slot;
+  // setBriefing writes into the map. Tab switch just changes
+  // activePersonaId — no data movement needed.
+  const [briefings, setBriefings] = useState<Record<string, Briefing>>({});
+  const briefing = activePersonaId ? briefings[activePersonaId] ?? null : null;
+  function setBriefing(
+    nextOrUpdater: Briefing | null | ((prev: Briefing | null) => Briefing | null)
+  ) {
+    if (!activePersonaId) return;
+    setBriefings((prev) => {
+      const current = prev[activePersonaId] ?? null;
+      const value =
+        typeof nextOrUpdater === "function"
+          ? (nextOrUpdater as (p: Briefing | null) => Briefing | null)(current)
+          : nextOrUpdater;
+      const next = { ...prev };
+      if (value) next[activePersonaId] = value;
+      else delete next[activePersonaId];
+      return next;
+    });
+  }
+
+  // Tab switch helper. Persists the new active persona to localStorage
+  // so the next visit lands on the same tab. Does not touch briefings —
+  // each persona's slot persists independently.
+  function switchPersona(id: string) {
+    if (id === activePersonaId) return;
+    setActivePersonaIdState(id);
+    if (handler) saveActivePersonaId(handler, id);
+  }
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [dailySpent, setDailySpent] = useState<number>(0);
   const [chatBusy, setChatBusy] = useState<boolean>(false);
@@ -575,24 +644,24 @@ export default function DemoPage() {
     };
   }, [persona?.id, phase]);
 
-  // Restore session
+  // Restore session — loads the shared setup + all persona slots that
+  // have a saved briefing. activePersonaId comes from localStorage
+  // (last-used tab), with legacy `stored.personaId` and "greedie" as
+  // fallbacks.
   useEffect(() => {
     if (!handler || !sawClient) return;
     const stored = loadSetup(handler);
     if (!stored) return;
 
+    let cancelled = false;
     (async () => {
       try {
         const walletPda = new PublicKey(stored.walletPda);
         const handle = await sawClient.loadWallet(walletPda);
         const agent = loadOrCreateAgent(handler);
         const recipient = loadOrCreateRecipient(handler);
-        const restored = getPersona(stored.personaId);
-        if (!restored) {
-          clearSetup(handler);
-          return;
-        }
-        setPersona(restored);
+        if (cancelled) return;
+
         setHandle(handle);
         setSetup({
           walletPda,
@@ -602,25 +671,43 @@ export default function DemoPage() {
           mint: new PublicKey(stored.mint),
           agent,
         });
-        const savedBriefing = loadBriefing(handler);
-        if (savedBriefing) {
-          // backward compat: ensure opportunities array exists
-          const normalized: Briefing = {
-            ...savedBriefing,
-            opportunities: savedBriefing.opportunities ?? [],
-          };
-          setBriefing(normalized);
-          setPhase(normalized.ready ? "live" : "briefing");
-        } else {
-          const fresh = freshBriefing(restored);
-          setBriefing(fresh);
-          saveBriefing(handler, fresh);
-          setPhase("briefing");
+
+        // Load briefings for all 3 slots that have data in localStorage
+        // (or migrate from the legacy single-slot key).
+        const restoredBriefings: Record<string, Briefing> = {};
+        for (const p of PERSONAS) {
+          const saved = loadBriefing(handler, p.id);
+          if (saved) {
+            restoredBriefings[p.id] = {
+              ...saved,
+              opportunities: saved.opportunities ?? [],
+            };
+          }
         }
+        // Seed any persona without a saved briefing so all 3 tabs land
+        // on a usable conversation immediately.
+        for (const p of PERSONAS) {
+          if (!restoredBriefings[p.id]) {
+            restoredBriefings[p.id] = freshBriefing(p);
+          }
+        }
+        if (cancelled) return;
+        setBriefings(restoredBriefings);
+
+        const savedActive = loadActivePersonaId(handler);
+        const fallback = stored.personaId ?? PERSONAS[0].id;
+        const initialActive =
+          (savedActive && PERSONAS.some((p) => p.id === savedActive)
+            ? savedActive
+            : null) ?? fallback;
+        setActivePersonaIdState(initialActive);
+        saveActivePersonaId(handler, initialActive);
+
+        const activeBriefing = restoredBriefings[initialActive];
+        setPhase(activeBriefing?.ready ? "live" : "briefing");
         await refreshState(handle, new PublicKey(stored.walletAta));
 
-        // 2.1: Fetch the db agent id for this persona — used by 2.2/2.3
-        // for chat + schedule sync. Best-effort, non-blocking.
+        // Best-effort: fetch all 3 dbAgent rows so each tab can sync.
         if (handlerState.status === "ready" && privyAuthed) {
           try {
             const token = await getAccessToken();
@@ -628,12 +715,24 @@ export default function DemoPage() {
               const res = await fetch("/api/agents", {
                 headers: { Authorization: `Bearer ${token}` },
               });
-              if (res.ok) {
+              if (res.ok && !cancelled) {
                 const { agents } = await res.json();
-                const mine = (agents ?? []).find(
-                  (a: any) => a.persona === restored.id
-                );
-                if (mine) setDbAgentId(mine.id);
+                const ids: Record<string, string> = {};
+                const metas: Record<string, DbAgentMeta> = {};
+                for (const a of agents ?? []) {
+                  if (!a?.persona) continue;
+                  ids[a.persona] = a.id;
+                  metas[a.persona] = {
+                    active: a.active,
+                    cron_cadence_minutes: a.cron_cadence_minutes,
+                    next_wake_at: a.next_wake_at,
+                    last_wake_at: a.last_wake_at,
+                    active_hours_start: a.active_hours_start,
+                    active_hours_end: a.active_hours_end,
+                  };
+                }
+                setDbAgentIds(ids);
+                setDbAgentsMap(metas);
               }
             }
           } catch (_) {
@@ -641,10 +740,17 @@ export default function DemoPage() {
           }
         }
       } catch (e: any) {
+        if (cancelled) return;
         clearSetup(handler);
-        clearBriefing(handler);
+        clearAllBriefings(
+          handler,
+          PERSONAS.map((p) => p.id)
+        );
       }
     })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handler?.toBase58()]);
 
@@ -672,7 +778,10 @@ export default function DemoPage() {
 
   async function bootstrap(p: Persona) {
     if (!sawClient || !handler || !wallet.signTransaction) return;
-    setPersona(p);
+    // Activate the persona the user picked. The other 2 slots get
+    // initialized below and become available via the tabs.
+    setActivePersonaIdState(p.id);
+    if (handler) saveActivePersonaId(handler, p.id);
     setPhase("setup");
     setError(null);
     try {
@@ -682,10 +791,27 @@ export default function DemoPage() {
       crypto.getRandomValues(salt);
       const saltBuf = Buffer.from(salt);
 
-      const policy = buildPolicy(p.policy);
+      // Multi-persona model: the on-chain policy is the maximum of
+      // the 3 personas (most permissive). Per-persona thresholds are
+      // enforced client-side so each tab keeps its own approval gate.
+      const sharedPolicy = {
+        dailyLimit: Math.max(...PERSONAS.map((x) => x.policy.dailyLimit)),
+        perTxLimit: Math.max(...PERSONAS.map((x) => x.policy.perTxLimit)),
+        approvalThreshold: Math.max(
+          ...PERSONAS.map((x) => x.policy.approvalThreshold)
+        ),
+        cooldownSeconds: 0,
+      };
+      const sharedInitialFund = PERSONAS.reduce(
+        (sum, x) => sum + x.initialFund,
+        0
+      );
+      const policy = buildPolicy(sharedPolicy);
       const [walletPda] = deriveWalletPda(handler, saltBuf);
 
-      setSetupStep(`Preparing ${p.name}'s wallet, policy, mint, and funding in one signature…`);
+      setSetupStep(
+        `Preparing your shared wallet, policy, mint, and funding in one signature…`
+      );
       const mintKp = Keypair.generate();
       const mintRent = await getMinimumBalanceForRentExemptMint(connection);
       const walletAta = getAssociatedTokenAddressSync(
@@ -767,7 +893,7 @@ export default function DemoPage() {
             mintKp.publicKey,
             walletAta,
             handler,
-            BigInt(p.initialFund)
+            BigInt(sharedInitialFund)
           )
         );
       oneShotTx.feePayer = handler;
@@ -789,54 +915,73 @@ export default function DemoPage() {
       };
       setHandle(handle);
       setSetup(newSetup);
-      saveSetup(handler, newSetup, saltBuf, p.id);
+      saveSetup(handler, newSetup, saltBuf);
 
-      // 2.1: Register the agent in Supabase so the worker + dashboard know
-      // it exists. Best-effort — if it fails (Privy not ready, network),
-      // demo keeps working from localStorage; we just lose multi-device.
+      // 2.1: Register all 3 agent personas in Supabase so the worker +
+      // dashboard know each one and the user can tab between them.
+      // Best-effort — if it fails (Privy not ready, network), demo
+      // keeps working from localStorage; we just lose multi-device.
       if (handlerState.status === "ready") {
         try {
           const token = await getAccessToken();
           if (token) {
-            const res = await fetch("/api/agents", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                persona: p.id,
-                agentPubkey: agent.publicKey.toBase58(),
-                walletPda: walletPda.toBase58(),
-                policyPda: derivePolicyPda(walletPda)[0].toBase58(),
-                queuePda: deriveQueuePda(walletPda)[0].toBase58(),
-                cronCadenceMinutes: 60,
-              }),
-            });
-            if (res.ok) {
-              const { agent: dbAgent } = await res.json();
-              setDbAgentId(dbAgent.id);
-              setDbAgent({
-                active: dbAgent.active,
-                cron_cadence_minutes: dbAgent.cron_cadence_minutes,
-                next_wake_at: dbAgent.next_wake_at,
-                last_wake_at: dbAgent.last_wake_at,
-                active_hours_start: dbAgent.active_hours_start,
-                active_hours_end: dbAgent.active_hours_end,
-              });
-              console.log("[saw] agent registered in DB", dbAgent.id);
-            } else {
-              console.warn("[saw] agent DB registration failed", await res.text());
+            const policyPdaStr = derivePolicyPda(walletPda)[0].toBase58();
+            const queuePdaStr = deriveQueuePda(walletPda)[0].toBase58();
+            const results = await Promise.all(
+              PERSONAS.map((px) =>
+                fetch("/api/agents", {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    persona: px.id,
+                    agentPubkey: agent.publicKey.toBase58(),
+                    walletPda: walletPda.toBase58(),
+                    policyPda: policyPdaStr,
+                    queuePda: queuePdaStr,
+                    cronCadenceMinutes: 60,
+                  }),
+                })
+                  .then((res) => (res.ok ? res.json() : null))
+                  .then((d) => (d ? { id: px.id, agent: d.agent } : null))
+                  .catch(() => null)
+              )
+            );
+            const ids: Record<string, string> = {};
+            const metas: Record<string, DbAgentMeta> = {};
+            for (const r of results) {
+              if (!r) continue;
+              ids[r.id] = r.agent.id;
+              metas[r.id] = {
+                active: r.agent.active,
+                cron_cadence_minutes: r.agent.cron_cadence_minutes,
+                next_wake_at: r.agent.next_wake_at,
+                last_wake_at: r.agent.last_wake_at,
+                active_hours_start: r.agent.active_hours_start,
+                active_hours_end: r.agent.active_hours_end,
+              };
             }
+            setDbAgentIds(ids);
+            setDbAgentsMap(metas);
+            console.log("[saw] agents registered", Object.keys(ids));
           }
         } catch (e) {
           console.warn("[saw] agent DB registration error", e);
         }
       }
 
-      const fresh = freshBriefing(p);
-      setBriefing(fresh);
-      saveBriefing(handler, fresh);
+      // Seed a fresh briefing for every persona slot so the tabs land
+      // on a usable conversation immediately.
+      const seedBriefings: Record<string, Briefing> = {};
+      for (const px of PERSONAS) {
+        const b = freshBriefing(px);
+        seedBriefings[px.id] = b;
+        saveBriefing(handler, b);
+      }
+      setBriefings(seedBriefings);
+
       setSetupStep("");
       setPhase("briefing");
       await refreshState(handle, walletAta);
@@ -1356,11 +1501,16 @@ export default function DemoPage() {
   function reset() {
     if (!handler) return;
     clearSetup(handler);
-    clearBriefing(handler);
+    clearAllBriefings(
+      handler,
+      PERSONAS.map((p) => p.id)
+    );
     setHandle(null);
     setSetup(null);
-    setPersona(null);
-    setBriefing(null);
+    setActivePersonaIdState(null);
+    setBriefings({});
+    setDbAgentIds({});
+    setDbAgentsMap({});
     setPendingApproval(null);
     setDailySpent(0);
     setWalletBalance(0);
@@ -1401,8 +1551,16 @@ export default function DemoPage() {
           )}
           {(phase === "briefing" || phase === "live") && (
             <button
-              onClick={reset}
+              onClick={() => {
+                if (
+                  confirm(
+                    "Reset everything? This clears all 3 agent conversations and the local setup."
+                  )
+                )
+                  reset();
+              }}
               className="text-xs uppercase tracking-widest text-bone/40 hover:text-rust"
+              title="Clear all 3 conversations + local setup (on-chain wallet stays)"
             >
               Burn the dossier
             </button>
@@ -1421,6 +1579,14 @@ export default function DemoPage() {
           </span>
         </p>
       </div>
+
+      {(phase === "briefing" || phase === "live") && activePersonaId && (
+        <PersonaTabs
+          activeId={activePersonaId}
+          briefings={briefings}
+          onSwitch={switchPersona}
+        />
+      )}
 
       {dbAgent && (phase === "briefing" || phase === "live") && (
         <div className="border-b border-ash px-4 sm:px-6 py-2 flex items-center justify-center gap-2 flex-wrap">
@@ -1578,6 +1744,64 @@ export default function DemoPage() {
 
       <OnboardingTour enabled={phase === "briefing" || phase === "live"} />
     </main>
+  );
+}
+
+function PersonaTabs({
+  activeId,
+  briefings,
+  onSwitch,
+}: {
+  activeId: string;
+  briefings: Record<string, Briefing>;
+  onSwitch: (id: string) => void;
+}) {
+  const accent: Record<string, string> = {
+    greedie: "text-rust border-rust",
+    conservador: "text-gold border-gold",
+    estable: "text-bone border-bone",
+  };
+  return (
+    <div className="border-b border-ash bg-ink/40">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-stretch overflow-x-auto">
+        {PERSONAS.map((p) => {
+          const b = briefings[p.id];
+          const queued = b?.schedule.filter((i) => i.status === "queued").length ?? 0;
+          const pendingOpps =
+            b?.opportunities.filter((o) => o.status === "pending").length ?? 0;
+          const active = p.id === activeId;
+          const accentCls = accent[p.id] ?? "text-bone border-bone";
+          return (
+            <button
+              key={p.id}
+              onClick={() => onSwitch(p.id)}
+              className={`flex items-center gap-2 px-4 sm:px-5 py-3 text-sm uppercase tracking-widest transition border-b-2 -mb-px whitespace-nowrap ${
+                active
+                  ? `${accentCls} bg-ink`
+                  : "border-transparent text-bone/40 hover:text-bone hover:bg-ink/60"
+              }`}
+              title={p.tagline}
+            >
+              <span className={`text-lg ${active ? "" : "opacity-60"}`}>
+                {p.glyph}
+              </span>
+              <span>{p.name}</span>
+              {(queued > 0 || pendingOpps > 0) && (
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 border ${
+                    active
+                      ? accentCls
+                      : "border-ash text-bone/50"
+                  }`}
+                >
+                  {queued + pendingOpps}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
