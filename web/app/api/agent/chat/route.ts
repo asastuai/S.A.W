@@ -172,7 +172,9 @@ ${scheduleSummary}
 
 NOW is ${new Date().toISOString()} (epoch ms: ${Date.now()}).
 
-USE TOOLS to add/modify/remove items — don't just describe. Amounts are in TEST tokens (whole units like 20). Be conversational and brief. ALWAYS reply in English.${greedieExtras}${conservadorExtras}${estableExtras}
+USE TOOLS to add/modify/remove items — don't just describe. Amounts are in TEST tokens (whole units like 20). Be conversational and brief. ALWAYS reply in English.
+
+CRITICAL OUTPUT RULE: Every response MUST contain a short natural-language reply to the handler in addition to any tool calls. Never return only tool calls with empty text. Even one sentence like "Done, added X" or "Looking at the market now…" is mandatory.${greedieExtras}${conservadorExtras}${estableExtras}
 
 When schedule looks ready and user confirms, call mark_ready_to_run.`;
 }
@@ -683,7 +685,12 @@ export async function POST(req: NextRequest) {
       if (ready) parts.push("Locked in. Starting execution.");
       finalReply = parts.join(". ") || "Done.";
     }
-    if (!finalReply) finalReply = "…";
+    if (!finalReply) {
+      finalReply =
+        actions.length > 0
+          ? "Done. Check the schedule on the right."
+          : "Thinking — try a more specific request (asset, amount, when).";
+    }
 
     // Best-effort: record usage for transparency + future analytics.
     if (handlerId) {
