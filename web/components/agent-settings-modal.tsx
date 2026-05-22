@@ -37,6 +37,7 @@ const PROFILE_PRESETS = [
 ];
 
 export function AgentSettingsModal({
+  initialActive,
   initialCadenceMinutes,
   initialActiveHoursStart,
   initialActiveHoursEnd,
@@ -44,10 +45,12 @@ export function AgentSettingsModal({
   onClose,
   saving,
 }: {
+  initialActive: boolean;
   initialCadenceMinutes: number;
   initialActiveHoursStart: number | null;
   initialActiveHoursEnd: number | null;
   onSave: (input: {
+    active: boolean;
     cronCadenceMinutes: number;
     activeHoursStart: number | null;
     activeHoursEnd: number | null;
@@ -55,6 +58,7 @@ export function AgentSettingsModal({
   onClose: () => void;
   saving: boolean;
 }) {
+  const [active, setActive] = useState(initialActive);
   const [cadence, setCadence] = useState(initialCadenceMinutes);
   const [hoursMode, setHoursMode] = useState<"24-7" | "custom">(
     initialActiveHoursStart !== null && initialActiveHoursEnd !== null
@@ -81,7 +85,39 @@ export function AgentSettingsModal({
           </button>
         </div>
 
-        <section className="mb-6">
+        <section className="mb-6 p-4 border border-bone/20">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs uppercase tracking-widest text-bone/50 mb-1">
+                Auto-wake
+              </div>
+              <div className="text-sm text-bone/80">
+                {active ? "On — agent wakes on cron + chats" : "Silent — agent only acts when you chat"}
+              </div>
+              <div className="text-[10px] text-bone/40 mt-1">
+                {active
+                  ? "Uses your LLM tokens on each wake."
+                  : "Zero API calls until you message the agent. Default for free-tier users."}
+              </div>
+            </div>
+            <button
+              onClick={() => setActive((a) => !a)}
+              disabled={saving}
+              className={`relative w-14 h-7 rounded-full border transition ${
+                active ? "border-gold bg-gold/20" : "border-bone/30 bg-smoke"
+              }`}
+              aria-label="Toggle auto-wake"
+            >
+              <span
+                className={`absolute top-0.5 w-5 h-5 rounded-full transition-all ${
+                  active ? "left-8 bg-gold" : "left-0.5 bg-bone/60"
+                }`}
+              />
+            </button>
+          </div>
+        </section>
+
+        <section className={`mb-6 ${!active ? "opacity-40 pointer-events-none" : ""}`}>
           <label className="text-xs uppercase tracking-widest text-bone/50 mb-3 block">
             Quick profile
           </label>
@@ -217,6 +253,7 @@ export function AgentSettingsModal({
           <button
             onClick={() =>
               onSave({
+                active,
                 cronCadenceMinutes: cadence,
                 activeHoursStart: hoursMode === "custom" ? start : null,
                 activeHoursEnd: hoursMode === "custom" ? end : null,

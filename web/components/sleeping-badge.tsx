@@ -9,14 +9,23 @@
  * Reads the live clock via `now` prop (the demo already ticks every second).
  */
 export function SleepingBadge({
+  active,
   nextWakeAt,
   cronCadenceMinutes,
   now,
 }: {
+  active: boolean;
   nextWakeAt: string | null;
   cronCadenceMinutes: number;
   now: number;
 }) {
+  if (!active) {
+    return (
+      <div className="inline-flex items-center gap-2 px-3 py-1.5 border border-bone/30 text-xs uppercase tracking-widest text-bone/60">
+        <span>🤫 silent · chat to wake</span>
+      </div>
+    );
+  }
   if (!nextWakeAt) {
     return (
       <div className="inline-flex items-center gap-2 px-3 py-1.5 border border-ash text-xs uppercase tracking-widest text-bone/40">

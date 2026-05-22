@@ -110,6 +110,7 @@ export default function DemoPage() {
   const [persona, setPersona] = useState<Persona | null>(null);
   const [dbAgentId, setDbAgentId] = useState<string | null>(null);
   const [dbAgent, setDbAgent] = useState<{
+    active: boolean;
     cron_cadence_minutes: number;
     next_wake_at: string | null;
     last_wake_at: string | null;
@@ -248,6 +249,7 @@ export default function DemoPage() {
         if (mine && !cancelled) {
           setDbAgentId(mine.id);
           setDbAgent({
+            active: mine.active,
             cron_cadence_minutes: mine.cron_cadence_minutes,
             next_wake_at: mine.next_wake_at,
             last_wake_at: mine.last_wake_at,
@@ -285,6 +287,7 @@ export default function DemoPage() {
         if (cancelled) return;
         if (agent) {
           setDbAgent({
+            active: agent.active,
             cron_cadence_minutes: agent.cron_cadence_minutes,
             next_wake_at: agent.next_wake_at,
             last_wake_at: agent.last_wake_at,
@@ -402,6 +405,9 @@ export default function DemoPage() {
     if (persona?.id !== "greedie" || !handler) return;
     if (phase !== "briefing" && phase !== "live") return;
     if (!apiKey) return;
+    // v1.2: only run the client-side scanner when the agent is opted in
+    // to auto-wake. Default is silent — no API calls until handler chats.
+    if (!dbAgent?.active) return;
 
     let cancelled = false;
 
@@ -814,6 +820,7 @@ export default function DemoPage() {
               const { agent: dbAgent } = await res.json();
               setDbAgentId(dbAgent.id);
               setDbAgent({
+                active: dbAgent.active,
                 cron_cadence_minutes: dbAgent.cron_cadence_minutes,
                 next_wake_at: dbAgent.next_wake_at,
                 last_wake_at: dbAgent.last_wake_at,
@@ -1404,6 +1411,7 @@ export default function DemoPage() {
       {dbAgent && (phase === "briefing" || phase === "live") && (
         <div className="border-b border-ash px-4 sm:px-6 py-2 flex items-center justify-center gap-2 flex-wrap">
           <SleepingBadge
+            active={dbAgent.active}
             nextWakeAt={dbAgent.next_wake_at}
             cronCadenceMinutes={dbAgent.cron_cadence_minutes}
             now={now}
@@ -1512,6 +1520,7 @@ export default function DemoPage() {
 
       {showSettings && dbAgent && dbAgentId && (
         <AgentSettingsModal
+          initialActive={dbAgent.active}
           initialCadenceMinutes={dbAgent.cron_cadence_minutes}
           initialActiveHoursStart={dbAgent.active_hours_start}
           initialActiveHoursEnd={dbAgent.active_hours_end}
@@ -1533,6 +1542,7 @@ export default function DemoPage() {
               if (!res.ok) throw new Error(`update failed: ${res.status}`);
               const { agent } = await res.json();
               setDbAgent({
+                active: agent.active,
                 cron_cadence_minutes: agent.cron_cadence_minutes,
                 next_wake_at: agent.next_wake_at,
                 last_wake_at: agent.last_wake_at,

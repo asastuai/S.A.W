@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AuthError, requireAuth } from "@/lib/auth";
 import { getHandlerByPrivy } from "@/lib/db/handlers";
-import { createAgent, listAgentsForHandler } from "@/lib/db/agents";
+import { createAgent, listAgentsForHandler, setAgentActive } from "@/lib/db/agents";
 import type { Persona } from "@/lib/db/types";
 
 export const runtime = "nodejs";
@@ -90,6 +90,15 @@ export async function POST(req: NextRequest) {
       byokKeyId: byokKeyId ?? null,
       cronCadenceMinutes,
     });
+
+    // v1.2: default agents to silent (no autonomous wakes) so users
+    // protect their free-tier LLM budget. Handler opts in via settings.
+    try {
+      await setAgentActive(agent.id, false);
+    } catch {
+      /* non-fatal */
+    }
+    (agent as any).active = false;
 
     return NextResponse.json({ agent });
   } catch (e: any) {
