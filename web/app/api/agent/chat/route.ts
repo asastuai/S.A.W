@@ -77,6 +77,7 @@ function fmt(n: number): string {
 function buildSystemPrompt(body: RequestBody): string {
   const { persona, schedule } = body;
   const isGreedie = persona.id === "greedie";
+  const isConservador = persona.id === "conservador";
   const scheduleSummary =
     schedule.length === 0
       ? "Schedule is currently empty."
@@ -116,6 +117,23 @@ For the demo: use short timeframes. Trigger deadlines in 90-180 seconds.
 v1.0 note: Jupiter has no real devnet liquidity, so swaps run in mock mode (the fee, audit log, and UX are real; the on-chain leg is simulated). Real Jupiter integration lands when SAW moves to mainnet.`
     : "";
 
+  const conservadorExtras = isConservador
+    ? `
+
+You are a yield researcher. Your job is to surface safe yield opportunities and never execute without the handler's explicit sign-off.
+
+Workflow when the handler asks about yield, savings, parking funds, "best APY", etc:
+1. ALWAYS state your risk floor first based on what they ask ("audited only, TVL > $10M, no leverage, no restaking").
+2. List 3-5 well-known Solana DeFi venues you'd consider. Use your training knowledge — examples: Kamino lending, MarginFi vaults, Marinade mSOL, Jito-SOL, Drift insurance fund, Sanctum LSTs, Lulo, Carrot, Save (formerly Solend) USDC.
+3. For each, note: APR estimate, TVL ballpark, audit status (e.g. "audited by OtterSec"), main risk vector.
+4. ALWAYS propose at least one item using propose_swap (in conservador's case, swap SOL for the LST or stablecoin involved). All items go through approval because Conservador's threshold is low — handler signs every move.
+5. Be conservative with sizes. Suggest 5-15% of stated capital per venue.
+
+Tone: measured, slightly skeptical, factual. No hype. "Boring is the alpha."
+
+IMPORTANT: never claim live APR numbers as fact. Phrase as "around X% as of recent data" or "historically Y%". Always remind the handler to verify on the venue's UI before signing.`
+    : "";
+
   return `You are ${persona.name}, a ${persona.role}.
 Mission: ${persona.mission}
 
@@ -131,7 +149,7 @@ ${scheduleSummary}
 
 NOW is ${new Date().toISOString()} (epoch ms: ${Date.now()}).
 
-USE TOOLS to add/modify/remove items — don't just describe. Amounts are in TEST tokens (whole units like 20). Be conversational and brief. ALWAYS reply in English.${greedieExtras}
+USE TOOLS to add/modify/remove items — don't just describe. Amounts are in TEST tokens (whole units like 20). Be conversational and brief. ALWAYS reply in English.${greedieExtras}${conservadorExtras}
 
 When schedule looks ready and user confirms, call mark_ready_to_run.`;
 }
@@ -362,8 +380,12 @@ export async function POST(req: NextRequest) {
       /* non-fatal — rate limit is best-effort */
     }
 
+    // Greedie + Conservador both get the trading tools (swap + market).
+    // Estable (when active) will stay on baseTools only.
     const baseToolList =
-      body.persona.id === "greedie" ? [...greedieTools, ...baseTools] : baseTools;
+      body.persona.id === "greedie" || body.persona.id === "conservador"
+        ? [...greedieTools, ...baseTools]
+        : baseTools;
     const tools: ToolDefinition[] = baseToolList.map((t) => ({
       name: t.function.name,
       description: t.function.description,

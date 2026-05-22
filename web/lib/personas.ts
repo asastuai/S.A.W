@@ -51,14 +51,12 @@ export const PERSONAS: Persona[] = [
     policy: {
       dailyLimit: T(300),
       perTxLimit: T(100),
-      approvalThreshold: T(50),
+      approvalThreshold: T(20), // low threshold = everything goes through handler approval
       cooldownSeconds: 0,
     },
     initialFund: T(500),
-    greeting: "",
-    comingSoon: true,
-    comingSoonPreview:
-      "Will scan Solana yield protocols in real time, rank by safety + APR, surface 5-10 curated picks. Triggers handler approval before any move.",
+    greeting:
+      "Conservador. I scan yield, rank by safety, and surface picks. I never move without your sign. Tell me how much to evaluate and your risk floor (APR / max-protocol-age / no-restaking, etc.).",
   },
   {
     id: "estable",

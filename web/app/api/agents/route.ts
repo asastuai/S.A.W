@@ -7,7 +7,7 @@ import type { Persona } from "@/lib/db/types";
 export const runtime = "nodejs";
 
 const ALLOWED_PERSONAS: Persona[] = ["greedie", "conservador", "estable"];
-const ACTIVE_PERSONAS: Persona[] = ["greedie"]; // v1
+const ACTIVE_PERSONAS: Persona[] = ["greedie", "conservador"]; // v1.2
 
 /**
  * GET /api/agents — list agents for the authenticated handler.
