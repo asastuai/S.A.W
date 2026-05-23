@@ -39,7 +39,14 @@ export async function getCredits(handlerId: string): Promise<CreditRow | null> {
 
 /**
  * Append credits to a handler's balance after a verified on-chain topup.
- * Idempotent on tx signature: same sig won't double-credit.
+ * Idempotent on tx signature: the unique constraint on
+ * llm_credit_topups.tx_signature blocks duplicate audit rows.
+ *
+ * M-3 fix: balance increment now goes through the `add_credits` Postgres
+ * function so Postgres serializes concurrent topups for the same handler.
+ * The previous read-then-write pattern lost credits when two distinct
+ * topups landed at the same millisecond.
+ *
  * Returns the new balance.
  */
 export async function addCreditsFromTopup(input: {
@@ -66,49 +73,34 @@ export async function addCreditsFromTopup(input: {
     throw new Error(`addCreditsFromTopup audit: ${topupErr.message}`);
   }
 
-  // 2) Upsert balance with manual increment (no atomic op in PostgREST,
-  //    so we read-then-write inside a single function; race risk is
-  //    minimal because tx_signature uniqueness blocks duplicates).
-  const existing = await getCredits(input.handlerId);
-  const newBalance = (existing?.balance_calls ?? 0) + input.callsCredited;
-  const newTotal = (existing?.total_paid_lamports ?? 0) + input.lamports;
-
-  const { error: upsertErr } = await db.from("llm_credits").upsert(
-    {
-      handler_id: input.handlerId,
-      balance_calls: newBalance,
-      total_paid_lamports: newTotal,
-      last_topup_at: new Date().toISOString(),
-      last_topup_tx: input.txSignature,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "handler_id" }
-  );
-  if (upsertErr) throw new Error(`addCreditsFromTopup upsert: ${upsertErr.message}`);
-
-  return newBalance;
+  // 2) Atomic increment via stored function (race-safe across handlers).
+  const { data, error } = await db.rpc("add_credits", {
+    p_handler_id: input.handlerId,
+    p_amount_calls: input.callsCredited,
+    p_lamports: input.lamports,
+    p_tx: input.txSignature,
+  });
+  if (error) throw new Error(`addCreditsFromTopup rpc: ${error.message}`);
+  return Number(data ?? 0);
 }
 
 /**
- * Atomic-ish decrement: spend one call. Returns the new balance.
- * Throws if no balance to spend (caller should check first).
+ * Atomic decrement: spend one call. Returns the new balance.
+ * Throws if no balance to spend.
+ *
+ * M-3 fix companion: previously a compare-and-set that could silently
+ * skip on contention (giving the user a free call). Now an atomic
+ * `update ... where balance > 0` via stored function — every call that
+ * actually went out costs exactly one credit.
  */
 export async function spendOneCall(handlerId: string): Promise<number> {
   const db = supabaseAdmin();
-  const existing = await getCredits(handlerId);
-  if (!existing || existing.balance_calls <= 0) {
-    throw new Error("no_credits");
+  const { data, error } = await db.rpc("spend_one_call", {
+    p_handler_id: handlerId,
+  });
+  if (error) {
+    if (error.message?.includes("no_credits")) throw new Error("no_credits");
+    throw new Error(`spendOneCall: ${error.message}`);
   }
-  const next = existing.balance_calls - 1;
-  const { error } = await db
-    .from("llm_credits")
-    .update({ balance_calls: next, updated_at: new Date().toISOString() })
-    .eq("handler_id", handlerId)
-    // Compare-and-set: only update if balance hasn't changed since we read.
-    // Race-safe enough for v1; a concurrent call would skip the decrement
-    // and the second LLM call still goes through but balance stays high
-    // (favoring the user, which is fine for a credit system).
-    .eq("balance_calls", existing.balance_calls);
-  if (error) throw new Error(`spendOneCall: ${error.message}`);
-  return next;
+  return Number(data ?? 0);
 }

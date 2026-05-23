@@ -13,8 +13,13 @@
 |---|---|---|---|
 | CRITICAL | 0 | 2 | 2 |
 | HIGH | 0 | 6 | 6 |
-| MEDIUM | 3 | 1 | 4 |
-| LOW | 5 | 1 | 7 |
+| MEDIUM | 0 | 4 | 4 |
+| LOW | 3 | 3 | 6 |
+
+Anchor-program fixes (M-1, M-2, L-1, L-4) land in source on commit
+`830b272` but require `anchor build && anchor deploy` + IDL regen
+before they're live on devnet. Credits-race fix (M-3) needs migration
+`0009_atomic_credits.sql` applied in Supabase before the deploy.
 
 Overall the protocol is in good shape. The Anchor programs follow Anchor idiom correctly: PDA-derived authority, signer constraints on owner-only ops, `require_keys_eq!` on cross-account references, `token::authority` constraint on source ATAs. The off-chain API uses Privy JWT auth on user-facing routes, a Bearer secret for cron, the Telegram webhook secret header check, and an internal HMAC-ish secret for bot → endpoint calls.
 
