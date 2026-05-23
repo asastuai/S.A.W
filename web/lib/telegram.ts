@@ -138,10 +138,13 @@ function registerHandlers(bot: Bot) {
       return;
     }
 
-    // Default to first agent (usually Greedie); future: /switch command
-    const agent = agents[0];
+    // Default to first agent with an attached LLM key (usually all 3
+    // share the same key after Connect Telegram). Future: /switch.
+    const agent = agents.find((a) => a.byok_key_id) ?? agents[0];
     if (!agent.byok_key_id) {
-      await ctx.reply(`Agent has no LLM key configured. Set one in: ${WEB_URL}/demo`);
+      await ctx.reply(
+        `Agent has no LLM key configured.\n\nOpen ${WEB_URL}/demo, set your API key, then click "Connect Telegram" again to attach it.`
+      );
       return;
     }
 

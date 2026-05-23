@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
+import { loadApiKey } from "@/lib/api-key";
 
 export function ConnectTelegramButton() {
   const { getAccessToken, authenticated } = usePrivy();
@@ -16,9 +17,17 @@ export function ConnectTelegramButton() {
     try {
       const token = await getAccessToken();
       if (!token) throw new Error("not authenticated");
+      // Send the BYOK key with the pair request so the bot can call
+      // the LLM on the user's behalf. The browser-only key is invisible
+      // to the server otherwise.
+      const apiKey = loadApiKey();
       const res = await fetch("/api/telegram/init-pair", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ apiKey: apiKey ?? undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "failed");

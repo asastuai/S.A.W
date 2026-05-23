@@ -3,19 +3,27 @@ import { AuthError, requireAuth } from "@/lib/auth";
 import { getHandlerByPrivy } from "@/lib/db/handlers";
 import { deleteByokKey, listByokKeysForHandler, storeByokKey } from "@/lib/db/byok";
 import type { Provider } from "@/lib/db/types";
+import { isValidShape } from "@/lib/api-key";
 
 export const runtime = "nodejs";
 
-const ALLOWED_PROVIDERS: Provider[] = ["groq"];
-// Future: ["groq", "openai", "anthropic", "gemini", "grok"]
+const ALLOWED_PROVIDERS: Provider[] = [
+  "groq",
+  "openai",
+  "anthropic",
+  "gemini",
+  "grok",
+  "deepseek",
+  "cerebras",
+  "kimi",
+];
 
 function validateProvider(p: string): p is Provider {
   return ALLOWED_PROVIDERS.includes(p as Provider);
 }
 
-function shapeLooksReasonable(provider: Provider, key: string): boolean {
-  if (provider === "groq") return key.startsWith("gsk_") && key.length > 20;
-  return key.length > 10;
+function shapeLooksReasonable(_provider: Provider, key: string): boolean {
+  return isValidShape(key);
 }
 
 /**
