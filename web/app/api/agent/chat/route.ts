@@ -904,17 +904,14 @@ export async function POST(req: NextRequest) {
             c.name === "get_market_price" || c.name === "get_yield_options"
         )
       ) {
-        const followup = await adapter.complete(
-          {
-            model: adapter.defaultModel,
-            messages,
-            tools: undefined,
-            toolChoice: undefined,
-            temperature: 0.4,
-            maxTokens: 300,
-          },
-          apiKey
-        );
+        const followup = await completeWithFallback({
+          model: adapter.defaultModel,
+          messages,
+          tools: undefined,
+          toolChoice: undefined,
+          temperature: 0.4,
+          maxTokens: 300,
+        });
         totalPromptTokens += followup.usage.promptTokens;
         totalCompletionTokens += followup.usage.completionTokens;
         finalReply = followup.content.trim();
