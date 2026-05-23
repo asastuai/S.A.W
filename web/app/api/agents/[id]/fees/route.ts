@@ -37,7 +37,6 @@ export async function POST(
 
     const body = (await req.json().catch(() => ({}))) as {
       kind?: FeeKind;
-      amountLamports?: number;
       swapInputLamports?: number;
       asset?: string;
       relatedTx?: string;
@@ -46,16 +45,30 @@ export async function POST(
       return NextResponse.json({ error: "invalid kind" }, { status: 400 });
     }
 
-    let amountLamports = body.amountLamports;
-    if (
-      body.kind === "swap" &&
-      amountLamports === undefined &&
-      typeof body.swapInputLamports === "number"
-    ) {
-      amountLamports = Number(previewSwapFeeLamports(BigInt(body.swapInputLamports)));
-    }
-    if (typeof amountLamports !== "number" || amountLamports < 0) {
-      return NextResponse.json({ error: "amountLamports required" }, { status: 400 });
+    // SECURITY: amountLamports is now SERVER-DERIVED, not client-supplied.
+    // Pre-fix the client could submit any value (fee=0 to escape, or a
+    // big number to inflate dashboard stats). For swap fees we recompute
+    // from swapInputLamports using the canonical 55-bps formula. For
+    // performance + AUM fees we don't accept client-driven records at
+    // all in v1 — those need server-side portfolio history to be safe.
+    let amountLamports: number;
+    if (body.kind === "swap") {
+      if (typeof body.swapInputLamports !== "number" || body.swapInputLamports <= 0) {
+        return NextResponse.json(
+          { error: "swapInputLamports (positive number) required for swap fees" },
+          { status: 400 }
+        );
+      }
+      amountLamports = Number(
+        previewSwapFeeLamports(BigInt(body.swapInputLamports))
+      );
+    } else {
+      // performance / aum — not yet self-serve. Block until server can
+      // compute the canonical value itself (P0.5 work).
+      return NextResponse.json(
+        { error: `fee kind '${body.kind}' is not yet self-recordable in v1` },
+        { status: 400 }
+      );
     }
 
     const entry = await recordFee({

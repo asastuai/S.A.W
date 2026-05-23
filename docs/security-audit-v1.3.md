@@ -12,7 +12,7 @@
 | Severity | Open | Fixed | Total |
 |---|---|---|---|
 | CRITICAL | 0 | 2 | 2 |
-| HIGH | 0 | 5 | 5 |
+| HIGH | 0 | 6 | 6 |
 | MEDIUM | 3 | 0 | 3 |
 | LOW | 5 | 0 | 5 |
 
@@ -89,6 +89,17 @@ Defense-in-depth: rotating `INTERNAL_API_SECRET` periodically remains a good pra
 **Impact:** The endpoint verified the on-chain tx hit the treasury for ≥ 0.01 SOL, but did NOT verify the signer was the authenticated handler's primary wallet. Tx signatures are public the moment they're broadcast. Attacker watches RPC, sees victim's 0.01 SOL → treasury tx, races their own POST /api/topup with victim's signature using their own Privy session. Whoever calls /api/topup first gets the 500 credits.
 
 **Fix:** Extract the tx's signer list (first N accounts where N = `numRequiredSignatures`) and verify the authenticated handler's `primary_wallet` is among them. Mismatch → 403. With C-2's wallet-claim immutability, the attacker can't simply re-bind their handler to victim's wallet either, so the chain is closed.
+
+### H-6 · `/api/agents/[id]/fees` POST trusted client-supplied amountLamports
+
+**Where:** `web/app/api/agents/[id]/fees/route.ts` POST
+**Impact:** The route accepted `amountLamports` directly from the request body. Two abuses:
+1. Fee evasion — client submits `kind=swap, amountLamports=0` (or just omits) → no fee recorded for what should have been a 55-bps swap charge. Direct money loss for SAW.
+2. Stat inflation — client submits `kind=performance, amountLamports=999999999` for a swap they didn't actually do → public /dashboard "total fees" tile shows fake numbers. Vanity attack on the protocol's metrics.
+
+**Fix:** `amountLamports` is now server-derived for every kind:
+- `kind=swap` → require `swapInputLamports>0`, compute via `previewSwapFeeLamports` (the canonical 55-bps formula). Client cannot override.
+- `kind=performance` / `kind=aum` → blocked entirely. Those need server-computed portfolio history; deferred to P0.5 work.
 
 ### H-5 · `/api/agents` POST rejected v1.3 operative bootstrap → silent UX break
 
