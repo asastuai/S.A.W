@@ -41,10 +41,44 @@ export function deriveRequestPda(
   );
 }
 
+/**
+ * Generate a 32-byte salt for wallet PDA derivation.
+ *
+ * SECURITY: must use a CSPRNG. The original implementation used
+ * Math.random() which is NOT cryptographically secure and is predictable
+ * across calls. While not directly exploitable today (the program
+ * requires the owner signature on initialize), low-entropy salts could
+ * enable PDA collision attacks or pre-image attacks if the wallet
+ * derivation logic ever changes. Always use crypto.getRandomValues
+ * (browser) or crypto.randomBytes (Node).
+ */
 export function randomSalt(): Buffer {
-  const salt = Buffer.alloc(32);
-  for (let i = 0; i < 32; i++) {
-    salt[i] = Math.floor(Math.random() * 256);
+  // Prefer Node's crypto.randomBytes when available; fall back to the
+  // Web Crypto API in browsers. Both are CSPRNG-backed.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const nodeCrypto: any =
+    typeof globalThis !== "undefined" &&
+    typeof (globalThis as any).process !== "undefined" &&
+    typeof require !== "undefined"
+      ? (() => {
+          try {
+            return require("crypto");
+          } catch {
+            return null;
+          }
+        })()
+      : null;
+  if (nodeCrypto?.randomBytes) {
+    return nodeCrypto.randomBytes(32) as Buffer;
   }
-  return salt;
+  const webCrypto =
+    typeof globalThis !== "undefined" && (globalThis as any).crypto;
+  if (webCrypto?.getRandomValues) {
+    const arr = new Uint8Array(32);
+    webCrypto.getRandomValues(arr);
+    return Buffer.from(arr);
+  }
+  throw new Error(
+    "randomSalt: no CSPRNG available (Node crypto.randomBytes or Web Crypto getRandomValues required)"
+  );
 }

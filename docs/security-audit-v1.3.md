@@ -11,7 +11,7 @@
 
 | Severity | Open | Fixed | Total |
 |---|---|---|---|
-| CRITICAL | 0 | 2 | 2 |
+| CRITICAL | 0 | 3 | 3 |
 | HIGH | 0 | 6 | 6 |
 | MEDIUM | 0 | 4 | 4 |
 | LOW | 3 | 3 | 6 |
@@ -28,6 +28,18 @@ The one HIGH was an internal-auth bypass amplifier: a leaked `INTERNAL_API_SECRE
 The MEDIUMs are about queue accounting and policy mutability under privileged change. The LOWs are minor (audit logging, defensive deny-list, observability).
 
 ---
+
+## CRITICAL (fixed in round 7 — SDK audit)
+
+### C-3 · SDK `randomSalt()` uses `Math.random()` — predictable PDA seeds
+
+**Where:** `sdk/src/pdas.ts` pre-fix
+**Discovered via:** code read of the SDK during the post-protocol audit pass.
+**Impact:** `randomSalt()` filled a 32-byte buffer with `Math.floor(Math.random() * 256)` — not a CSPRNG. Predictable across calls. The salt feeds `deriveWalletPda(owner, salt)`. Today the on-chain `initialize_wallet` requires the owner's signature so a predicted salt alone can't be used to claim someone else's PDA, but: (a) two clients generating the same salt would collide, (b) any future code path that doesn't require owner-signature on derivation (cron-side wallet provisioning, recovery flows, etc.) would inherit pre-image vulnerability, (c) it's the kind of finding a serious code reviewer flags before mainnet.
+
+**Severity:** CRITICAL because cryptographic primitives that should be CSPRNG never get a free pass. Even if not exploitable today, leaving `Math.random()` in production crypto code is a discipline failure.
+
+**Fix:** Use `crypto.randomBytes(32)` in Node and `crypto.getRandomValues` in the browser. Both are CSPRNG-backed. Falls back with a hard throw if neither is available — never silently degrades to Math.random again.
 
 ## CRITICAL (fixed in round 2)
 
