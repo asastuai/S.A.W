@@ -19,14 +19,7 @@ pub mod policy_registry {
         owner: Pubkey,
         params: PolicyParams,
     ) -> Result<()> {
-        require!(
-            params.recipient_allowlist.len() <= MAX_ALLOWLIST,
-            PolicyError::AllowlistTooLarge
-        );
-        require!(
-            params.token_allowlist.len() <= MAX_ALLOWLIST,
-            PolicyError::AllowlistTooLarge
-        );
+        validate_params(&params)?;
 
         let now = Clock::get()?.unix_timestamp;
         let policy = &mut ctx.accounts.policy;
@@ -51,14 +44,7 @@ pub mod policy_registry {
     }
 
     pub fn set_policy(ctx: Context<SetPolicy>, params: PolicyParams) -> Result<()> {
-        require!(
-            params.recipient_allowlist.len() <= MAX_ALLOWLIST,
-            PolicyError::AllowlistTooLarge
-        );
-        require!(
-            params.token_allowlist.len() <= MAX_ALLOWLIST,
-            PolicyError::AllowlistTooLarge
-        );
+        validate_params(&params)?;
 
         let policy = &mut ctx.accounts.policy;
         require_keys_eq!(ctx.accounts.owner.key(), policy.owner, PolicyError::NotOwner);
@@ -94,6 +80,50 @@ pub mod policy_registry {
         policy.last_tx_timestamp = now;
         Ok(())
     }
+
+    /// L-4 fix: when the wallet is emergency-withdrawn, the agent's
+    /// daily_spent counter still reflects pre-emergency activity. If the
+    /// owner refunds the wallet within the same day, the agent finds
+    /// itself artificially throttled until midnight. This zeros the
+    /// counter. Only callable by the wallet PDA (CPI from agent_wallet's
+    /// emergency_withdraw).
+    pub fn reset_daily_spent(ctx: Context<RecordSpend>) -> Result<()> {
+        let policy = &mut ctx.accounts.policy;
+        require_keys_eq!(
+            ctx.accounts.wallet.key(),
+            policy.wallet,
+            PolicyError::NotWallet
+        );
+        policy.daily_spent = 0;
+        policy.last_reset_timestamp = Clock::get()?.unix_timestamp;
+        Ok(())
+    }
+}
+
+/// M-2 fix: bound the params an owner can set so they can't soft-brick
+/// the wallet (cooldown=u64::MAX would freeze the agent indefinitely)
+/// while still allowing intentional pauses (empty allowlists).
+fn validate_params(params: &PolicyParams) -> Result<()> {
+    require!(
+        params.recipient_allowlist.len() <= MAX_ALLOWLIST,
+        PolicyError::AllowlistTooLarge
+    );
+    require!(
+        params.token_allowlist.len() <= MAX_ALLOWLIST,
+        PolicyError::AllowlistTooLarge
+    );
+    // Max cooldown of 7 days — beyond that is almost certainly a mistake.
+    const MAX_COOLDOWN_SECS: u64 = 7 * 24 * 60 * 60;
+    require!(
+        params.cooldown_seconds <= MAX_COOLDOWN_SECS,
+        PolicyError::CooldownTooLong
+    );
+    // daily_limit=0 only makes sense as "explicit pause" — require the
+    // recipient allowlist to also be empty so it reads as intentional.
+    if params.daily_limit == 0 && !params.recipient_allowlist.is_empty() {
+        return err!(PolicyError::InvalidDailyLimit);
+    }
+    Ok(())
 }
 
 #[derive(Accounts)]

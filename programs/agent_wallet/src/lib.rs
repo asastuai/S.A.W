@@ -78,6 +78,7 @@ pub mod agent_wallet {
         amount: u64,
         _memo: [u8; 32],
     ) -> Result<()> {
+        require!(amount > 0, WalletError::ZeroAmount);
         let wallet = &ctx.accounts.wallet;
         require!(wallet.agent_active, WalletError::AgentRevoked);
         require_keys_eq!(
@@ -158,6 +159,7 @@ pub mod agent_wallet {
         amount: u64,
         memo: [u8; 32],
     ) -> Result<()> {
+        require!(amount > 0, WalletError::ZeroAmount);
         let wallet = &ctx.accounts.wallet;
         require!(wallet.agent_active, WalletError::AgentRevoked);
         require_keys_eq!(

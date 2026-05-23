@@ -121,6 +121,30 @@ pub mod approval_queue {
         });
         Ok(())
     }
+
+    /// Mark an expired pending request as Denied and free its queue slot.
+    /// Permissionless cleanup — anyone can call. Fixes audit M-1.
+    pub fn prune_expired_request(ctx: Context<PruneExpired>) -> Result<()> {
+        let request = &mut ctx.accounts.request;
+        let queue = &mut ctx.accounts.queue;
+
+        require_keys_eq!(request.wallet, queue.wallet, ApprovalError::WrongWallet);
+        require!(
+            request.status == RequestStatus::Pending,
+            ApprovalError::NotPending
+        );
+        let now = Clock::get()?.unix_timestamp;
+        require!(now > request.expires_at, ApprovalError::NotExpired);
+
+        request.status = RequestStatus::Denied;
+        queue.pending_count = queue.pending_count.saturating_sub(1);
+
+        emit!(RequestDenied {
+            wallet: queue.wallet,
+            id: request.id,
+        });
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -176,6 +200,25 @@ pub struct TransitionRequest<'info> {
     )]
     pub request: Account<'info, RequestAccount>,
     pub wallet: Signer<'info>,
+}
+
+/// Permissionless context for prune_expired_request — no wallet signer
+/// required because the action (mark a verifiably-expired request as
+/// Denied) cannot harm the wallet owner; it only releases a stuck slot.
+#[derive(Accounts)]
+pub struct PruneExpired<'info> {
+    #[account(
+        mut,
+        seeds = [b"queue", queue.wallet.as_ref()],
+        bump = queue.bump
+    )]
+    pub queue: Account<'info, QueueState>,
+    #[account(
+        mut,
+        seeds = [b"request", request.wallet.as_ref(), &request.id.to_le_bytes()],
+        bump = request.bump
+    )]
+    pub request: Account<'info, RequestAccount>,
 }
 
 #[event]

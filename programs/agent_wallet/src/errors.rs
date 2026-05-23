@@ -24,4 +24,6 @@ pub enum WalletError {
     NotApproved,
     #[msg("Insufficient wallet balance")]
     InsufficientBalance,
+    #[msg("Amount must be greater than zero")]
+    ZeroAmount,
 }

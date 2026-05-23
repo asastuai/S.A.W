@@ -14,4 +14,6 @@ pub enum ApprovalError {
     NotOwner,
     #[msg("Request does not belong to this wallet")]
     WrongWallet,
+    #[msg("Request has not expired yet — cannot prune")]
+    NotExpired,
 }

@@ -20,4 +20,8 @@ pub enum PolicyError {
     AllowlistTooLarge,
     #[msg("Arithmetic overflow")]
     Overflow,
+    #[msg("cooldown_seconds exceeds maximum allowed (7 days)")]
+    CooldownTooLong,
+    #[msg("daily_limit must be > 0 unless the allowlist is empty (intentional pause)")]
+    InvalidDailyLimit,
 }
