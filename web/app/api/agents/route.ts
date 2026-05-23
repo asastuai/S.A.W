@@ -14,7 +14,7 @@ const ACTIVE_PERSONAS: Persona[] = ["greedie", "conservador", "estable"]; // v1.
  */
 export async function GET(req: NextRequest) {
   try {
-    const claims = requireAuth(req);
+    const claims = await requireAuth(req);
     const handler = await getHandlerByPrivy(claims.privy_user_id);
     if (!handler) return NextResponse.json({ agents: [] });
     const agents = await listAgentsForHandler(handler.id);
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const claims = requireAuth(req);
+    const claims = await requireAuth(req);
     const handler = await getHandlerByPrivy(claims.privy_user_id);
     if (!handler) {
       return NextResponse.json(

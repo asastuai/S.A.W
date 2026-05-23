@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 const ALLOWED_STATUSES: OpportunityStatus[] = ["accepted", "skipped", "expired"];
 
 async function ownAgentOr404(req: NextRequest, agentId: string) {
-  const claims = requireAuth(req);
+  const claims = await requireAuth(req);
   const handler = await getHandlerByPrivy(claims.privy_user_id);
   if (!handler) throw new HttpError(404, "handler not found");
   const owned = await listAgentsForHandler(handler.id);

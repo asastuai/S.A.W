@@ -11,7 +11,7 @@ export const runtime = "nodejs";
  */
 export async function GET(req: NextRequest) {
   try {
-    const claims = requireAuth(req);
+    const claims = await requireAuth(req);
     const existing = await getHandlerByPrivy(claims.privy_user_id);
     if (!existing) {
       return NextResponse.json({ handler: null }, { status: 404 });
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const claims = requireAuth(req);
+    const claims = await requireAuth(req);
     const body = (await req.json().catch(() => ({}))) as {
       primaryWallet?: string;
       email?: string;

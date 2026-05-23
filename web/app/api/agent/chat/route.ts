@@ -550,7 +550,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     } else {
       try {
-        const claims = extractPrivyClaims(req);
+        const claims = await extractPrivyClaims(req);
         if (claims) {
           const handler = await getHandlerByPrivy(claims.privy_user_id);
           if (handler) handlerId = handler.id;

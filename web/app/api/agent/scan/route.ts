@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
     // Optional rate limit (best-effort, requires Privy JWT + handler row)
     let handlerId: string | null = null;
     try {
-      const claims = extractPrivyClaims(req);
+      const claims = await extractPrivyClaims(req);
       if (claims) {
         const handler = await getHandlerByPrivy(claims.privy_user_id);
         if (handler) {

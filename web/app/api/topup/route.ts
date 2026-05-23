@@ -30,7 +30,7 @@ const RPC_URL =
  */
 export async function POST(req: NextRequest) {
   try {
-    const claims = requireAuth(req);
+    const claims = await requireAuth(req);
     const handler = await getHandlerByPrivy(claims.privy_user_id);
     if (!handler) {
       return NextResponse.json({ error: "handler not found" }, { status: 404 });
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
  */
 export async function GET(req: NextRequest) {
   try {
-    const claims = requireAuth(req);
+    const claims = await requireAuth(req);
     const handler = await getHandlerByPrivy(claims.privy_user_id);
     if (!handler) return NextResponse.json({ balance_calls: 0 });
     const credits = await getCredits(handler.id);

@@ -15,7 +15,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const claims = requireAuth(req);
+    const claims = await requireAuth(req);
     const handler = await getHandlerByPrivy(claims.privy_user_id);
     if (!handler) return NextResponse.json({ wakes: [] });
 

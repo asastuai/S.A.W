@@ -33,7 +33,7 @@ function shapeLooksReasonable(_provider: Provider, key: string): boolean {
  */
 export async function POST(req: NextRequest) {
   try {
-    const claims = requireAuth(req);
+    const claims = await requireAuth(req);
     const handler = await getHandlerByPrivy(claims.privy_user_id);
     if (!handler) {
       return NextResponse.json(
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
  */
 export async function GET(req: NextRequest) {
   try {
-    const claims = requireAuth(req);
+    const claims = await requireAuth(req);
     const handler = await getHandlerByPrivy(claims.privy_user_id);
     if (!handler) return NextResponse.json({ keys: [] });
 
@@ -113,7 +113,7 @@ export async function GET(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
   try {
-    const claims = requireAuth(req);
+    const claims = await requireAuth(req);
     const handler = await getHandlerByPrivy(claims.privy_user_id);
     if (!handler) return NextResponse.json({ ok: true });
 
