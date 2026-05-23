@@ -511,16 +511,43 @@ export async function POST(req: NextRequest) {
     // paid-credits fallback path. Either from a Privy JWT (browser
     // caller) or from an internal-auth header set by trusted server-side
     // callers like the Telegram bot (which can't carry a user JWT).
+    //
+    // SECURITY: when internal-auth is used we MUST verify the handler
+    // id exists in DB. Otherwise a leaked INTERNAL_API_SECRET would let
+    // an attacker spoof any handler id (including non-existent ones to
+    // waste credits, or existing ones to consume someone else's balance).
     let handlerId: string | null = null;
     const internalSecret = req.headers.get("x-internal-secret")?.trim();
     const expectedInternalSecret = (process.env.INTERNAL_API_SECRET ?? "").trim();
-    if (
-      expectedInternalSecret &&
-      internalSecret &&
-      internalSecret === expectedInternalSecret
-    ) {
+    const internalAuthAttempted =
+      internalSecret !== undefined && internalSecret !== "";
+    const internalAuthValid =
+      expectedInternalSecret !== "" &&
+      internalSecret !== undefined &&
+      internalSecret === expectedInternalSecret;
+    if (internalAuthValid) {
       const internalHandler = req.headers.get("x-handler-id")?.trim() || null;
-      if (internalHandler) handlerId = internalHandler;
+      if (internalHandler) {
+        // Validate that the handler actually exists. Cheap query, fails
+        // closed (returns 404) if the id is bogus.
+        const { supabaseAdmin } = await import("@/lib/supabase");
+        const { data: handlerRow } = await supabaseAdmin()
+          .from("handlers")
+          .select("id")
+          .eq("id", internalHandler)
+          .maybeSingle();
+        if (!handlerRow) {
+          return NextResponse.json(
+            { error: "unknown handler" },
+            { status: 404 }
+          );
+        }
+        handlerId = internalHandler;
+      }
+    } else if (internalAuthAttempted) {
+      // Bad secret submitted — reject hard so callers know auth failed
+      // instead of silently falling through to the anonymous-no-key path.
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     } else {
       try {
         const claims = extractPrivyClaims(req);
