@@ -16,14 +16,16 @@ async function fetchStats() {
     const db = supabaseAdmin();
     const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const [handlers, activeAgents, wakes7d, itemsDone, opps, fees] = await Promise.all([
-      db.from("handlers").select("id", { count: "exact", head: true }),
-      db.from("agents").select("id", { count: "exact", head: true }).eq("active", true),
-      db.from("agent_wakes").select("id", { count: "exact", head: true }).gte("woke_at", since7d),
-      db.from("scheduled_items").select("id", { count: "exact", head: true }).eq("status", "done"),
-      db.from("opportunities").select("id", { count: "exact", head: true }),
-      db.from("fee_ledger").select("amount_lamports, created_at"),
-    ]);
+    const [handlers, activeAgents, wakes7d, itemsDone, opps, fees, credits] =
+      await Promise.all([
+        db.from("handlers").select("id", { count: "exact", head: true }),
+        db.from("agents").select("id", { count: "exact", head: true }).eq("active", true),
+        db.from("agent_wakes").select("id", { count: "exact", head: true }).gte("woke_at", since7d),
+        db.from("scheduled_items").select("id", { count: "exact", head: true }).eq("status", "done"),
+        db.from("opportunities").select("id", { count: "exact", head: true }),
+        db.from("fee_ledger").select("amount_lamports, created_at"),
+        db.from("llm_credits").select("balance_calls, total_paid_lamports"),
+      ]);
     const totalFeeLamports = (fees.data ?? []).reduce(
       (acc: number, r: any) => acc + Number(r.amount_lamports ?? 0),
       0
@@ -31,6 +33,14 @@ async function fetchStats() {
     const fees24hLamports = (fees.data ?? [])
       .filter((r: any) => new Date(r.created_at) > new Date(since24h))
       .reduce((acc: number, r: any) => acc + Number(r.amount_lamports ?? 0), 0);
+    const creditsRemaining = (credits.data ?? []).reduce(
+      (acc: number, r: any) => acc + Number(r.balance_calls ?? 0),
+      0
+    );
+    const creditsTopupLamports = (credits.data ?? []).reduce(
+      (acc: number, r: any) => acc + Number(r.total_paid_lamports ?? 0),
+      0
+    );
     return {
       handlers: handlers.count ?? 0,
       activeAgents: activeAgents.count ?? 0,
@@ -39,6 +49,8 @@ async function fetchStats() {
       opportunitiesSurfaced: opps.count ?? 0,
       totalFeesLamports: totalFeeLamports,
       fees24hLamports,
+      creditsRemaining,
+      creditsTopupLamports,
       updatedAt: new Date().toISOString(),
     };
   } catch {
@@ -97,9 +109,9 @@ export default async function DashboardPage() {
               hint="unique sign-ins to date"
             />
             <Card
-              label="Active agents"
+              label="Active operatives"
               value={String(stats.activeAgents ?? 0)}
-              hint="currently enabled"
+              hint="auto-wake enabled"
             />
             <Card
               label="Wakes · 7d"
@@ -113,7 +125,7 @@ export default async function DashboardPage() {
             />
           </section>
 
-          <section className="grid sm:grid-cols-2 gap-4 mb-12">
+          <section className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
             <Card
               label="Opportunities surfaced"
               value={String(stats.opportunitiesSurfaced ?? 0)}
@@ -123,6 +135,16 @@ export default async function DashboardPage() {
               label="Total fees · all time"
               value={`${lamportsToSol(stats.totalFeesLamports ?? 0)} SOL`}
               hint={`${lamportsToSol(stats.fees24hLamports ?? 0)} SOL in last 24h`}
+            />
+            <Card
+              label="SAW credits sold"
+              value={`${lamportsToSol(stats.creditsTopupLamports ?? 0)} SOL`}
+              hint={`${stats.creditsRemaining ?? 0} calls still unused`}
+            />
+            <Card
+              label="Operatives"
+              value={String((stats as any).handlers ?? 0)}
+              hint="one per handler (v1.3)"
             />
           </section>
         </>

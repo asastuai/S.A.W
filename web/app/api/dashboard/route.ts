@@ -22,6 +22,7 @@ export async function GET() {
     itemsDone,
     oppsProposed,
     feesAll,
+    credits,
   ] = await Promise.all([
     db.from("handlers").select("id", { count: "exact", head: true }),
     db.from("agents").select("id", { count: "exact", head: true }).eq("active", true),
@@ -38,6 +39,7 @@ export async function GET() {
       .select("id", { count: "exact", head: true })
       .in("status", ["accepted", "skipped", "expired", "pending"]),
     db.from("fee_ledger").select("fee_kind, amount_lamports, created_at"),
+    db.from("llm_credits").select("balance_calls, total_paid_lamports"),
   ]);
 
   const totalFeeLamports = (feesAll.data ?? []).reduce(
@@ -48,6 +50,17 @@ export async function GET() {
     .filter((r) => new Date(r.created_at) > new Date(since24h))
     .reduce((acc, r) => acc + Number(r.amount_lamports ?? 0), 0);
 
+  // Aggregate SAW LLM credit stats: total credits across all handlers,
+  // total SOL paid in topups, total calls already consumed (= sold - remaining)
+  const totalCreditsRemaining = (credits.data ?? []).reduce(
+    (acc, r) => acc + Number(r.balance_calls ?? 0),
+    0
+  );
+  const totalTopupLamports = (credits.data ?? []).reduce(
+    (acc, r) => acc + Number(r.total_paid_lamports ?? 0),
+    0
+  );
+
   return NextResponse.json({
     handlers: handlers.count ?? 0,
     activeAgents: activeAgents.count ?? 0,
@@ -56,6 +69,8 @@ export async function GET() {
     opportunitiesSurfaced: oppsProposed.count ?? 0,
     totalFeesLamports: totalFeeLamports,
     fees24hLamports,
+    creditsRemaining: totalCreditsRemaining,
+    creditsTopupLamports: totalTopupLamports,
     updatedAt: new Date().toISOString(),
   });
 }
