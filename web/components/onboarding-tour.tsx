@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 
-const STORAGE_KEY = "saw-demo-v1:tour-seen";
+// v1.3 bumped the key so users who saw the v1.2 (3-persona) tour see
+// the new copy once. Old key removed on read.
+const STORAGE_KEY = "saw-demo-v1:tour-seen-v13";
+const LEGACY_KEYS = ["saw-demo-v1:tour-seen"];
 
 type Step = {
   stamp: string;
@@ -12,50 +15,51 @@ type Step = {
 
 const STEPS: Step[] = [
   {
-    stamp: "step 01 · how this works",
-    title: "Your Phantom. Their agent. Your policy.",
+    stamp: "step 01 · meet your operative",
+    title: "One agent. Full spectrum.",
     body: (
       <>
-        SAW gives each LLM persona an <em>agent wallet</em> derived from your
-        Phantom. The agent can move funds inside a policy you set — per-tx cap,
-        daily cap, threshold for approvals. You keep your keys; the agent
-        executes inside the lines.
+        SAW gave you a single <strong>Operative</strong> when you connected:
+        an LLM-driven agent that <em>trades</em>, <em>finds yield</em>, and
+        helps you <em>build saving habits</em> — all in one conversation. Pick
+        a codename for it in ⚙ settings whenever you want.
       </>
     ),
   },
   {
-    stamp: "step 02 · brief the agent",
-    title: "Chat with it like a person.",
+    stamp: "step 02 · brief it in plain language",
+    title: "Tell it what to do.",
     body: (
       <>
-        Type your intent in plain language — &ldquo;put 50 USDC-dev to work in
-        the safest pool you can find&rdquo; or &ldquo;buy SOL every Tuesday if
-        it&rsquo;s below $130.&rdquo; The agent will propose a schedule. Each
-        item shows up on the right, queued, awaiting trigger.
+        Type intent like &ldquo;poneme 100 USDC en el mejor APR de Solana&rdquo;
+        or &ldquo;buy SOL if it drops 3% in the next hour&rdquo; or &ldquo;quiero
+        ahorrar 20 USDC todos los lunes.&rdquo; The Operative reads the tape /
+        queries live yields / asks before proposing, and queues items on the
+        right.
       </>
     ),
   },
   {
-    stamp: "step 03 · approve, then execute",
-    title: "Hit ▶ execute now to send it on-chain.",
+    stamp: "step 03 · sign only what matters",
+    title: "Policy enforced on-chain.",
     body: (
       <>
-        Below each queued item is a <strong>▶ execute now</strong> button.
-        Click it and Phantom will pop up for the single signature that moves
-        the funds. Items inside policy auto-execute; items over threshold pause
-        for your approval.
+        Each queued item shows <strong>▶ execute now</strong>. Items inside
+        your policy auto-execute. Items over the approval threshold pause for
+        your single Phantom signature. Daily cap, per-tx cap, and threshold
+        all live on-chain — the agent operates inside the lines.
       </>
     ),
   },
   {
     stamp: "step 04 · chat from anywhere",
-    title: "Connect Telegram for chat away from this tab.",
+    title: "Connect Telegram in one click.",
     body: (
       <>
-        The <strong>📱 connect telegram</strong> button in the header pairs
-        your handler to the bot in one click. From then on, message the bot
-        and the same agent answers — with the same policy, the same memory.
-        On-chain execution still happens in this browser session.
+        Press <strong>📱 connect telegram</strong> in the header. The bot links
+        to your handler instantly — no codes, no pasting. From then on, message
+        the Operative from your phone and the same agent answers with the same
+        memory. On-chain signing still happens in this browser.
       </>
     ),
   },
@@ -69,6 +73,15 @@ export function OnboardingTour({ enabled }: { enabled: boolean }) {
     if (!enabled) return;
     if (typeof window === "undefined") return;
     if (window.localStorage.getItem(STORAGE_KEY)) return;
+    // Remove the v1.2 key so it doesn't linger in storage if the user
+    // dismissed the old tour; they're seeing v1.3 copy now anyway.
+    for (const legacy of LEGACY_KEYS) {
+      try {
+        window.localStorage.removeItem(legacy);
+      } catch {
+        /* ignore */
+      }
+    }
     setOpen(true);
   }, [enabled]);
 
