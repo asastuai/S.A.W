@@ -108,6 +108,21 @@ export async function PATCH(
       return NextResponse.json({ error: "invalid status" }, { status: 400 });
     }
 
+    // SECURITY: verify the item being updated actually belongs to the
+    // agent the caller owns. Without this check, any authenticated
+    // handler could PATCH another handler's items just by knowing the
+    // uuid (IDOR). The agent ownership check above is necessary but
+    // insufficient — we have to bind the item to that agent too.
+    const { supabaseAdmin } = await import("@/lib/supabase");
+    const { data: itemRow } = await supabaseAdmin()
+      .from("scheduled_items")
+      .select("agent_id")
+      .eq("id", itemId)
+      .maybeSingle();
+    if (!itemRow || itemRow.agent_id !== params.id) {
+      return NextResponse.json({ error: "item not found" }, { status: 404 });
+    }
+
     await updateScheduledItemStatus(itemId, body.status, {
       txSignature: body.txSignature,
       errorMessage: body.errorMessage,

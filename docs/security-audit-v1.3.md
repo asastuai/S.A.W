@@ -12,7 +12,7 @@
 | Severity | Open | Fixed | Total |
 |---|---|---|---|
 | CRITICAL | 0 | 0 | 0 |
-| HIGH | 0 | 1 | 1 |
+| HIGH | 0 | 3 | 3 |
 | MEDIUM | 2 | 0 | 2 |
 | LOW | 4 | 0 | 4 |
 
@@ -44,6 +44,23 @@ The MEDIUMs are about queue accounting and policy mutability under privileged ch
 2. If a secret is attempted but doesn't match the env var → return 401 immediately, no silent fallback.
 
 Defense-in-depth: rotating `INTERNAL_API_SECRET` periodically remains a good practice.
+
+### H-2 · IDOR on `PATCH /api/agents/[id]/schedule` — modify any handler's items
+
+**Where:** `web/app/api/agents/[id]/schedule/route.ts` PATCH
+**Impact:** The handler is auth'd and the `agentId` is verified to belong to them, but the `itemId` query parameter is then trusted blindly. `updateScheduledItemStatus(itemId, ...)` operates on the row directly without joining back to the agent. An attacker with any valid session who knows another handler's `itemId` uuid can:
+- Mark another handler's queued item as `done`, `failed`, `denied` — corrupting their UI + history
+- Inject an arbitrary `txSignature` or `errorMessage` into another handler's record
+- Coordinate timing attacks (mark "executing" right before they sign, causing UI race)
+
+**Fix:** Before calling `updateScheduledItemStatus`, query the item row and verify `item.agent_id === params.id`. Return 404 if not.
+
+### H-3 · IDOR on `PATCH /api/agents/[id]/opportunities` — same shape as H-2
+
+**Where:** `web/app/api/agents/[id]/opportunities/route.ts` PATCH
+**Impact:** Identical pattern to H-2 — `resolveOpportunity(oppId, status)` accepts any uuid, no agent binding. Attacker can `accept`/`skip`/`expire` opportunities belonging to other handlers.
+
+**Fix:** Same template — query `opportunities.agent_id` for the supplied uuid + reject if mismatched.
 
 ---
 

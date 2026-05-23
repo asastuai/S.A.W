@@ -96,6 +96,19 @@ export async function PATCH(
       return NextResponse.json({ error: "invalid status" }, { status: 400 });
     }
 
+    // SECURITY (same as schedule PATCH): bind oppId to params.id before
+    // mutating, otherwise an authenticated handler could resolve another
+    // handler's opportunity by knowing the uuid.
+    const { supabaseAdmin } = await import("@/lib/supabase");
+    const { data: oppRow } = await supabaseAdmin()
+      .from("opportunities")
+      .select("agent_id")
+      .eq("id", oppId)
+      .maybeSingle();
+    if (!oppRow || oppRow.agent_id !== params.id) {
+      return NextResponse.json({ error: "opportunity not found" }, { status: 404 });
+    }
+
     await resolveOpportunity(oppId, body.status);
     return NextResponse.json({ ok: true });
   } catch (e: any) {
