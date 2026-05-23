@@ -14,7 +14,7 @@
 | CRITICAL | 0 | 2 | 2 |
 | HIGH | 0 | 6 | 6 |
 | MEDIUM | 3 | 1 | 4 |
-| LOW | 4 | 1 | 6 |
+| LOW | 5 | 1 | 7 |
 
 Overall the protocol is in good shape. The Anchor programs follow Anchor idiom correctly: PDA-derived authority, signer constraints on owner-only ops, `require_keys_eq!` on cross-account references, `token::authority` constraint on source ATAs. The off-chain API uses Privy JWT auth on user-facing routes, a Bearer secret for cron, the Telegram webhook secret header check, and an internal HMAC-ish secret for bot → endpoint calls.
 
@@ -190,6 +190,18 @@ Defense-in-depth: rotating `INTERNAL_API_SECRET` periodically remains a good pra
 **Impact:** Telegram retries webhooks if our endpoint times out or returns 5xx. Each retry runs the full LLM call + appends 2 chat rows + spends 1 credit. A handful of retries could drain user credits or double-post messages.
 
 **Fix proposed:** Persist `update_id` in a small table (or a Supabase `processed_updates` set) on first hit; skip if seen. 30-line change including migration.
+
+### L-8 · Agent keypair lives in `localStorage` — XSS would drain it
+
+**Where:** `web/lib/saw.ts` `loadOrCreateAgent`
+**Impact:** The agent signing keypair (the one that authorizes `pay_direct` and `request_payment` on-chain) is stored in `window.localStorage` so the browser-side dispatcher can sign without a Phantom popup. Today there is no exploitable XSS surface in the app — `grep` for `dangerouslySetInnerHTML` or unescaped HTML returns zero hits, and the chat/schedule/opportunity renderers all pass user content through React's automatic escaping — so the keypair is safe at v1.3. The exposure is a future-tense risk: any future XSS bug would immediately escalate to "attacker drains the agent's authority over the wallet within the on-chain policy."
+
+**Severity rationale:** LOW today because the prerequisite (XSS) isn't there. Marked as a forced-priority item the moment a script injection surface appears anywhere in the app.
+
+**Mitigation paths (v1.5):**
+- Move the keypair to a web worker that exposes only `signTransaction` — XSS in the main thread can't read raw bytes.
+- Use Privy's embedded wallet for the agent signer (server-side controlled).
+- Or move to a Solana session signer (delegated authority via Anchor program) so the browser never holds raw key material.
 
 ### L-4 · `agent_wallet.emergency_withdraw` does not zero the policy daily_spent
 
