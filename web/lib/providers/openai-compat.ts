@@ -120,7 +120,10 @@ export const openaiAdapter = makeOpenAICompatAdapter({
 export const cerebrasAdapter = makeOpenAICompatAdapter({
   id: "cerebras" as any, // not yet in Provider union below — added in db/types
   baseURL: "https://api.cerebras.ai/v1",
-  defaultModel: "llama-3.3-70b",
+  // Cerebras dropped llama-3.3-70b from its catalog. Current options:
+  // llama3.1-8b, gpt-oss-120b, qwen-3-235b, zai-glm-4.7. gpt-oss-120b
+  // is the best for tool calling on this provider.
+  defaultModel: "gpt-oss-120b",
 });
 
 export const kimiAdapter = makeOpenAICompatAdapter({

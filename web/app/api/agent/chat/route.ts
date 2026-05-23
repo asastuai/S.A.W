@@ -655,6 +655,7 @@ export async function POST(req: NextRequest) {
             status === 503 ||
             status === 502 ||
             status === 504 ||
+            status === 404 || // model-not-found on one provider → try next
             status >= 500 ||
             lc.includes("rate") ||
             lc.includes("overload") ||
@@ -663,6 +664,8 @@ export async function POST(req: NextRequest) {
             lc.includes("timeout") ||
             lc.includes("etimedout") ||
             lc.includes("econnreset") ||
+            lc.includes("model_not_found") ||
+            lc.includes("does not exist") ||
             // Google SDK errors come as plain Error objects without status,
             // so fall back on the prefix string they always emit on retryables.
             lc.includes("[503 service unavailable]") ||
