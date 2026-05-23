@@ -1021,7 +1021,7 @@ export default function DemoPage() {
   // ── Chat handler ──
   async function sendChat(text: string) {
     if (!persona || !briefing || !handler) return;
-    if (!apiKey) {
+    if (!apiKey && sawCredits <= 0) {
       setShowApiKeyModal(true);
       return;
     }
@@ -1057,6 +1057,7 @@ export default function DemoPage() {
       });
       const data = (await res.json()) as {
         reply: string;
+        usingSawKey?: boolean;
         actions: Array<
           | { type: "add"; item: { vendor: string; amount: number; scheduledFor: number; reason: string } }
           | { type: "remove"; id: string }
@@ -1064,6 +1065,11 @@ export default function DemoPage() {
           | { type: "ready" }
         >;
       };
+
+      // Optimistic credit decrement so the badge updates immediately.
+      // The endpoint decrements server-side; this just mirrors it
+      // locally without an extra round-trip.
+      if (data.usingSawKey) setSawCredits((c) => Math.max(0, c - 1));
 
       let updated: Briefing = { ...optimistic };
       let ready = updated.ready;
