@@ -1686,21 +1686,21 @@ export default function DemoPage() {
               their own BYOK key nor SAW credits. Disappears the moment
               one of those is in place. */}
           {!apiKey && sawCredits === 0 && (
-            <div className="border border-rust/60 bg-rust/10 px-4 py-3 text-sm flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+            <div className="border border-gold/60 bg-gold/5 px-4 py-3 text-sm flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
               <div className="flex items-start gap-3">
-                <span className="text-rust text-lg leading-none">⚠</span>
+                <span className="text-gold text-lg leading-none">🧠</span>
                 <div>
-                  <div className="text-bone/90">
-                    Tu operative todavía no tiene cerebro.
+                  <div className="text-bone/90 font-medium">
+                    Wire up the operative's brain
                   </div>
                   <div className="text-[11px] text-bone/50 mt-1 leading-tight">
-                    Conectá una API key gratis (Groq, Gemini, etc.) o pagá 0.01 SOL → 500 calls. Sin esto el chat queda paused.
+                    Use your own LLM key — free at <span className="text-gold">console.groq.com</span> — or pay <span className="text-gold">0.01 SOL</span> and let SAW handle the LLM for 500 calls. Either way, the operative is ready to brief.
                   </div>
                 </div>
               </div>
               <button
                 onClick={() => setShowApiKeyModal(true)}
-                className="text-xs uppercase tracking-widest border border-rust text-rust hover:bg-rust hover:text-bone transition px-3 py-2 whitespace-nowrap"
+                className="text-xs uppercase tracking-widest border border-gold text-gold hover:bg-gold hover:text-ink transition px-3 py-2 whitespace-nowrap"
               >
                 Connect API key →
               </button>
