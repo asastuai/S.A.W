@@ -56,9 +56,10 @@ function Hero() {
       </h1>
       <p className="text-bone/70 text-lg max-w-2xl mb-12 leading-relaxed">
         SAW is the first agent-native consumer wallet on Solana. Custody,
-        policy, and oversight enforced on-chain. Bring your own LLM key
-        (Groq, Gemini, DeepSeek, Grok, OpenAI, Claude, Cerebras, Kimi).
-        Your agent operates with limits. Your handler signs the override.
+        policy, and oversight enforced on-chain. One operative that
+        trades, finds yield, and helps you save — your codename, your
+        rules. Bring your own LLM key, or pay <strong className="text-gold">0.01 SOL</strong> for 500 calls.
+        Your agent operates with limits. You sign the override.
       </p>
       <div className="flex flex-wrap gap-4 items-center">
         <Link
@@ -122,64 +123,65 @@ function HowItWorks() {
 }
 
 function Personas() {
-  const personas = [
+  const skills = [
     {
-      stamp: "Live",
       glyph: "▲",
-      name: "Greedie",
-      tag: "the degen trader",
+      title: "Trader",
       body:
-        "Watches SOL price, proposes dip buys and TWAPs, scans for opportunities every 5 minutes. Speaks in alpha, never in apologies.",
-      accent: "border-rust text-rust",
+        "Watches the tape and proposes swaps with dip / threshold / TWAP triggers. Reads market before suggesting. Speaks in alpha.",
     },
     {
-      stamp: "Live",
       glyph: "✦",
-      name: "Conservador",
-      tag: "the yield assistant",
+      title: "Yield researcher",
       body:
-        "Queries live Solana yields from DefiLlama, ranks pools by safety and APR, proposes 1-click stakes. No degenerate plays. Capital preservation first.",
-      accent: "border-gold text-gold",
+        "Queries Solana DeFi yield from DefiLlama live (Kamino, Jupiter Lend, Save, marginfi). Ranks by APR + TVL. Proposes 1-click stakes.",
     },
     {
-      stamp: "Live",
       glyph: "◆",
-      name: "Estable",
-      tag: "the disciplined coach",
+      title: "Coach",
       body:
-        "Helps you set weekly transfers, recurring bills, savings drips. Asks first, executes once approved. Anti-impulse, pro-habit.",
-      accent: "border-bone/40 text-bone",
+        "Helps you set recurring transfers, savings drips, rebalances. Asks before suggesting. Anti-impulse, pro-habit.",
     },
   ];
   return (
     <section className="px-6 py-24 border-t border-ash">
       <div className="max-w-5xl mx-auto">
         <h2 className="font-display text-4xl mb-4 tracking-tight">
-          The personas.
+          The operative.
         </h2>
-        <p className="text-bone/60 text-sm mb-16 max-w-2xl leading-relaxed">
-          Three LLM personas, each with a distinct policy and prompt. Pick
-          the one that fits your intent. Switch any time. They share the
-          same on-chain wallet but each holds its own threshold.
+        <p className="text-bone/60 text-sm mb-12 max-w-2xl leading-relaxed">
+          One agent per handler. You name it. Three capabilities baked in
+          — they share the same conversation, the same on-chain wallet,
+          the same policy. Switch context mid-chat: ask about a swap and
+          the agent reads the tape; ask about yield and it queries
+          DefiLlama; ask about savings and it asks before suggesting.
         </p>
+
+        <div className="border border-gold p-8 sm:p-10 mb-8 max-w-2xl">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-gold text-4xl">◉</span>
+            <span className="stamp">Live · v1.3</span>
+          </div>
+          <h3 className="font-display text-3xl mb-2 tracking-wide text-bone">
+            Operative
+          </h3>
+          <p className="text-bone/40 text-xs uppercase tracking-widest mb-4">
+            customizable codename · pick yours in settings
+          </p>
+          <p className="text-bone/70 text-sm leading-relaxed">
+            "Operative reporting. I trade, I research yield, I help you
+            build habits. What's the mission?"
+          </p>
+        </div>
+
         <div className="grid md:grid-cols-3 gap-px bg-ash">
-          {personas.map((p) => (
-            <div key={p.name} className="bg-ink p-8 flex flex-col">
-              <div className="flex items-center justify-between mb-6">
-                <span className={`text-3xl ${p.accent.split(" ")[1]}`}>
-                  {p.glyph}
-                </span>
-                <span className="stamp">{p.stamp}</span>
-              </div>
-              <h3 className="font-display text-2xl mb-1 tracking-wide">
-                {p.name}
-              </h3>
-              <p className="text-bone/40 text-xs uppercase tracking-widest mb-4">
-                {p.tag}
-              </p>
-              <p className="text-bone/60 text-sm leading-relaxed flex-1">
-                {p.body}
-              </p>
+          {skills.map((s) => (
+            <div key={s.title} className="bg-ink p-6">
+              <span className="text-gold text-2xl block mb-3">{s.glyph}</span>
+              <h4 className="font-display text-lg mb-2 tracking-wide">
+                {s.title}
+              </h4>
+              <p className="text-bone/60 text-sm leading-relaxed">{s.body}</p>
             </div>
           ))}
         </div>
@@ -191,6 +193,12 @@ function Personas() {
 function ShipLog() {
   const entries = [
     {
+      v: "v1.3",
+      title: "Unified Operative + pay-with-crypto",
+      body:
+        "Collapsed 3 personas into one agent that does it all (trade · yield · save). Customizable codename. Auto-bootstrap on wallet connect. Pay 0.01 SOL = 500 LLM calls — no API key needed for the curious.",
+    },
+    {
       v: "v1.2",
       title: "Telegram bridge + atomic setup",
       body:
@@ -198,7 +206,7 @@ function ShipLog() {
     },
     {
       v: "v1.1",
-      title: "Conservador goes live",
+      title: "Live yields + 1-click execute",
       body:
         "Live yield data from DefiLlama. Action-first prompt. Quick presets. ▶ execute-now button per queued item.",
     },

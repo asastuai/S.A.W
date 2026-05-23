@@ -42,15 +42,15 @@ export function SignInGate() {
       <div className="grid sm:grid-cols-3 gap-px bg-ash mt-6">
         <div className="bg-ink p-4">
           <div className="stamp mb-2">Step I</div>
-          <div className="text-bone/80 text-sm">Connect Phantom</div>
+          <div className="text-bone/80 text-sm">Connect Phantom · 1 signature</div>
         </div>
         <div className="bg-ink p-4">
           <div className="stamp mb-2">Step II</div>
-          <div className="text-bone/80 text-sm">Bring your LLM key (any of 8)</div>
+          <div className="text-bone/80 text-sm">Brief your Operative & watch it act</div>
         </div>
         <div className="bg-ink p-4">
           <div className="stamp mb-2">Step III</div>
-          <div className="text-bone/80 text-sm">Brief Greedie & watch it act</div>
+          <div className="text-bone/80 text-sm">Bring an LLM key or pay 0.01 SOL for credits</div>
         </div>
       </div>
     </div>
