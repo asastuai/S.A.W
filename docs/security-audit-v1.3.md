@@ -13,7 +13,7 @@
 |---|---|---|---|
 | CRITICAL | 0 | 2 | 2 |
 | HIGH | 0 | 6 | 6 |
-| MEDIUM | 3 | 0 | 3 |
+| MEDIUM | 3 | 1 | 4 |
 | LOW | 5 | 0 | 5 |
 
 Overall the protocol is in good shape. The Anchor programs follow Anchor idiom correctly: PDA-derived authority, signer constraints on owner-only ops, `require_keys_eq!` on cross-account references, `token::authority` constraint on source ATAs. The off-chain API uses Privy JWT auth on user-facing routes, a Bearer secret for cron, the Telegram webhook secret header check, and an internal HMAC-ish secret for bot → endpoint calls.
@@ -111,6 +111,17 @@ Defense-in-depth: rotating `INTERNAL_API_SECRET` periodically remains a good pra
 **Fix:** Added `operative` to both `ALLOWED_PERSONAS` and `ACTIVE_PERSONAS`. Legacy 3 stay listed for back-compat with v1.2 rows.
 
 ---
+
+## MEDIUM (fixed in round 4)
+
+### M-4 · Missing security headers (X-Frame-Options, etc.)
+
+**Where:** `web/next.config.mjs` pre-fix
+**Impact:** No `headers()` configuration → Next/Vercel served only the defaults. Specifically: no `X-Frame-Options` → attacker can embed saw-gilt.vercel.app in an iframe on a phishing site and overlay invisible UI to trick the handler into clicking "approve" on a real on-chain transaction (clickjacking). No `X-Content-Type-Options: nosniff` → IE/older browsers can MIME-sniff a JSON response as HTML and execute injected script.
+
+**Severity rationale:** MEDIUM because the clickjacking attack still needs a social-engineering vector (victim must visit the attacker page while logged in to SAW), and the MIME sniffing only affects legacy browsers. Worth fixing because the patch is one line.
+
+**Fix:** Added `headers()` block to `next.config.mjs` setting `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` locking down unused browser caps. `Strict-Transport-Security` already comes from Vercel.
 
 ## MEDIUM (open)
 
