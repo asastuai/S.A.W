@@ -63,8 +63,13 @@ function registerHandlers(bot: Bot) {
         // so a misconfigured migration doesn't black-hole the bot.
         console.warn(`[tg] dedup insert failed: ${error.message}`);
       }
-      // Best-effort prune of old rows (fire-and-forget).
-      db.rpc("prune_processed_updates").catch(() => {});
+      // Best-effort prune of old rows (fire-and-forget). The Postgrest
+      // builder is a thenable but does not expose `.catch` — use `.then`
+      // with a rejection handler instead.
+      db.rpc("prune_processed_updates").then(
+        () => {},
+        () => {},
+      );
     }
     await next();
   });
