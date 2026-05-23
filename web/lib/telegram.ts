@@ -39,6 +39,36 @@ export function webhookHandler() {
 }
 
 function registerHandlers(bot: Bot) {
+  // L-5 fix: dedupe by update_id. Telegram retries the webhook if our
+  // endpoint times out / errors, and each retry pre-fix re-ran the LLM
+  // call + appended chat rows + spent a credit. We insert the update_id
+  // into telegram_processed_updates (unique PK on update_id); a duplicate
+  // throws unique-violation and we short-circuit. Rows older than 24h are
+  // pruned opportunistically.
+  bot.use(async (ctx, next) => {
+    const updateId = ctx.update?.update_id;
+    const chatId = ctx.chat?.id ?? 0;
+    if (typeof updateId === "number") {
+      const db = supabaseAdmin();
+      const { error } = await db
+        .from("telegram_processed_updates")
+        .insert({ update_id: updateId, chat_id: chatId });
+      if (error) {
+        if (error.code === "23505") {
+          // duplicate update — Telegram retry. Skip silently.
+          console.log(`[tg] dedup skip update_id=${updateId}`);
+          return;
+        }
+        // Non-fatal: if the table is missing or DB hiccups, log + proceed
+        // so a misconfigured migration doesn't black-hole the bot.
+        console.warn(`[tg] dedup insert failed: ${error.message}`);
+      }
+      // Best-effort prune of old rows (fire-and-forget).
+      db.rpc("prune_processed_updates").catch(() => {});
+    }
+    await next();
+  });
+
   bot.command("start", async (ctx) => {
     const chatId = ctx.chat?.id;
     if (!chatId) return;

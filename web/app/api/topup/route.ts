@@ -153,10 +153,38 @@ export async function POST(req: NextRequest) {
  */
 export async function GET(req: NextRequest) {
   try {
-    const claims = await requireAuth(req);
-    const handler = await getHandlerByPrivy(claims.privy_user_id);
-    if (!handler) return NextResponse.json({ balance_calls: 0 });
-    const credits = await getCredits(handler.id);
+    // L-3: accept either Privy JWT (browser) OR internal-auth (bot)
+    // for parity with /api/agent/chat. With internal-auth the bot can
+    // surface a real balance instead of "Not authenticated" stub.
+    let handlerId: string | null = null;
+    const internalSecret = req.headers.get("x-internal-secret")?.trim();
+    const expectedInternalSecret = (process.env.INTERNAL_API_SECRET ?? "").trim();
+    if (
+      expectedInternalSecret &&
+      internalSecret &&
+      internalSecret === expectedInternalSecret
+    ) {
+      const internalHandler = req.headers.get("x-handler-id")?.trim() || null;
+      if (internalHandler) {
+        const { supabaseAdmin } = await import("@/lib/supabase");
+        const { data: row } = await supabaseAdmin()
+          .from("handlers")
+          .select("id")
+          .eq("id", internalHandler)
+          .maybeSingle();
+        if (!row) {
+          return NextResponse.json({ error: "unknown handler" }, { status: 404 });
+        }
+        handlerId = internalHandler;
+      }
+    } else {
+      const claims = await requireAuth(req);
+      const handler = await getHandlerByPrivy(claims.privy_user_id);
+      if (handler) handlerId = handler.id;
+    }
+    if (!handlerId) return NextResponse.json({ balance_calls: 0 });
+
+    const credits = await getCredits(handlerId);
     return NextResponse.json({
       balance_calls: credits?.balance_calls ?? 0,
       total_paid_lamports: credits?.total_paid_lamports ?? 0,

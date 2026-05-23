@@ -150,12 +150,28 @@ export async function POST(req: NextRequest) {
     const userKey = req.headers.get("x-user-api-key")?.trim() || "";
     const apiKey = userKey || process.env.GROQ_API_KEY || "";
     if (!apiKey) {
-      return NextResponse.json({ opportunities: [] });
+      // L-2 fix: was silently returning {opportunities:[]} which hid
+      // misconfiguration from callers. Now an explicit message tells
+      // the client to attach a BYOK key or SAW credits.
+      return NextResponse.json(
+        {
+          opportunities: [],
+          error:
+            "no LLM key — attach x-user-api-key header or top up SAW credits",
+        },
+        { status: 401 }
+      );
     }
 
     const provider = detectProvider(apiKey);
     if (provider === "unknown" || !isProviderImplemented(provider as any)) {
-      return NextResponse.json({ opportunities: [] });
+      return NextResponse.json(
+        {
+          opportunities: [],
+          error: `unsupported provider for key prefix (${provider})`,
+        },
+        { status: 400 }
+      );
     }
     const adapter = getProviderAdapter(provider as any);
 
