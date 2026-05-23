@@ -99,11 +99,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Optionally verify the sender belongs to the handler. We trust the
-    // Privy JWT for handler identity; the tx signer just has to be the
-    // primary wallet on the handler row. Skip strict check for v1 — any
-    // funded tx that credits the treasury counts as a topup for this
-    // authenticated handler.
+    // SECURITY: verify the tx was signed by the authenticated handler's
+    // primary wallet. Without this check, anyone watching the mempool
+    // could front-run another user's topup tx by claiming it with their
+    // own Privy session before the original sender hits /api/topup.
+    // The tx signer is the first account in accountKeys with the signer
+    // flag (typically index 0 for a system-program transfer).
+    const signerKeys: string[] = [];
+    const header = tx.transaction.message.header;
+    const numSigners = header.numRequiredSignatures ?? 0;
+    for (let i = 0; i < numSigners; i++) {
+      signerKeys.push(accountKeys[i]?.toBase58?.() ?? "");
+    }
+    if (!signerKeys.includes(handler.primary_wallet)) {
+      return NextResponse.json(
+        {
+          error:
+            "tx was not signed by your wallet — cannot claim someone else's topup",
+        },
+        { status: 403 }
+      );
+    }
 
     const callsCredited = lamportsToCalls(delta);
     const newBalance = await addCreditsFromTopup({

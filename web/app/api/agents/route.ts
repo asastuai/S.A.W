@@ -6,8 +6,12 @@ import type { Persona } from "@/lib/db/types";
 
 export const runtime = "nodejs";
 
-const ALLOWED_PERSONAS: Persona[] = ["greedie", "conservador", "estable"];
-const ACTIVE_PERSONAS: Persona[] = ["greedie", "conservador", "estable"]; // v1.2
+// v1.3 unified-agent model: operative is the only canonical persona for
+// new setups. The 3 legacy values stay in the union for back-compat with
+// rows created under v1.2 (they're not handed out anymore but old rows
+// keep working — the bot/chat resolve them by id, not by string match).
+const ALLOWED_PERSONAS: Persona[] = ["operative", "greedie", "conservador", "estable"];
+const ACTIVE_PERSONAS: Persona[] = ["operative", "greedie", "conservador", "estable"];
 
 /**
  * GET /api/agents — list agents for the authenticated handler.

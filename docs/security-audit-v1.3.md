@@ -11,8 +11,8 @@
 
 | Severity | Open | Fixed | Total |
 |---|---|---|---|
-| CRITICAL | 0 | 0 | 0 |
-| HIGH | 0 | 3 | 3 |
+| CRITICAL | 0 | 2 | 2 |
+| HIGH | 0 | 5 | 5 |
 | MEDIUM | 2 | 0 | 2 |
 | LOW | 4 | 0 | 4 |
 
@@ -24,7 +24,27 @@ The MEDIUMs are about queue accounting and policy mutability under privileged ch
 
 ---
 
-## HIGH (fixed)
+## CRITICAL (fixed in round 2)
+
+### C-1 · Privy JWT verified by nobody — full account takeover
+
+**Where:** `web/lib/auth.ts` pre-fix
+**Discovered via:** code read (the file itself admitted it in a TODO)
+**Impact:** `extractPrivyClaims` did `JSON.parse(base64decode(token.split(".")[1]))` with **no signature check**. The endpoint trusted the `sub` claim verbatim. Any attacker could forge a JWT with `alg=none` + arbitrary `sub` and impersonate ANY handler. All Privy-protected endpoints were vulnerable: agent settings, chat history, schedule, opportunities, BYOK keys, Telegram pair, topup, handler/me. Total ATO of the platform.
+
+**Fix:** Use `jose.createRemoteJWKSet` against Privy's public JWKS (`https://auth.privy.io/api/v1/apps/<APP_ID>/jwks.json`) + `jwtVerify` with `issuer=privy.io` and `audience=<APP_ID>`. Any verification failure → null → endpoint responds 401. `requireAuth` and `extractPrivyClaims` became async — all 16 call sites updated.
+
+### C-2 · `POST /api/handler/me` lets attacker claim victim's wallet
+
+**Where:** `web/app/api/handler/me/route.ts` pre-fix
+**Discovered via:** chained with H-1 internal-auth fix
+**Impact:** The body's `primaryWallet` field was trusted with no ownership proof. An attacker with their own Privy account could POST `{ primaryWallet: <victim wallet pubkey> }` and the handler row's `primary_wallet` would update silently. Combined with the new topup signer-check (H-4 below), this gave attackers a way to claim victim topups: victim signs and broadcasts a 0.01 SOL → treasury tx, attacker submits the public sig to /api/topup with their own Privy session, the signer check passes because `attacker.handler.primary_wallet == victim.wallet`. Attacker walks away with the credits.
+
+**Fix:** Two-rule mitigation in `POST /api/handler/me`:
+1. If the wallet is already claimed by a different `privy_user_id` → 403.
+2. If the authenticated handler already has a `primary_wallet` set and the new value differs → 403 (no silent re-binding).
+
+Wallet recovery flow (proper SIWS or Privy-side proof) is documented as v1.5 work. For v1.3 the rule is "first claim wins, immutable thereafter".
 
 ### H-1 · Internal-auth amplifies a leaked SECRET to arbitrary-handler spoof
 
@@ -61,6 +81,23 @@ Defense-in-depth: rotating `INTERNAL_API_SECRET` periodically remains a good pra
 **Impact:** Identical pattern to H-2 — `resolveOpportunity(oppId, status)` accepts any uuid, no agent binding. Attacker can `accept`/`skip`/`expire` opportunities belonging to other handlers.
 
 **Fix:** Same template — query `opportunities.agent_id` for the supplied uuid + reject if mismatched.
+
+### H-4 · Topup front-running — any user could claim any other user's topup tx
+
+**Where:** `web/app/api/topup/route.ts`
+**Discovered via:** code read of the comment that admitted it ("Skip strict check for v1 — any funded tx that credits the treasury counts as a topup for this authenticated handler.")
+**Impact:** The endpoint verified the on-chain tx hit the treasury for ≥ 0.01 SOL, but did NOT verify the signer was the authenticated handler's primary wallet. Tx signatures are public the moment they're broadcast. Attacker watches RPC, sees victim's 0.01 SOL → treasury tx, races their own POST /api/topup with victim's signature using their own Privy session. Whoever calls /api/topup first gets the 500 credits.
+
+**Fix:** Extract the tx's signer list (first N accounts where N = `numRequiredSignatures`) and verify the authenticated handler's `primary_wallet` is among them. Mismatch → 403. With C-2's wallet-claim immutability, the attacker can't simply re-bind their handler to victim's wallet either, so the chain is closed.
+
+### H-5 · `/api/agents` POST rejected v1.3 operative bootstrap → silent UX break
+
+**Where:** `web/app/api/agents/route.ts`
+**Impact:** `ALLOWED_PERSONAS` was still `["greedie","conservador","estable"]` even though v1.3 only creates `operative`. New users in production were silently being denied an agent row in the DB. The browser's localStorage worked around it (chat ran client-side with BYOK), but: TG bot saw `agents.length === 0` and replied "No agents yet. Create one in the web", and any future sync (cron wakes, dashboard, opportunities) operated on zero rows.
+
+**Severity:** functional HIGH (not adversarial), but visible to every new user.
+
+**Fix:** Added `operative` to both `ALLOWED_PERSONAS` and `ACTIVE_PERSONAS`. Legacy 3 stay listed for back-compat with v1.2 rows.
 
 ---
 
