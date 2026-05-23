@@ -13,8 +13,8 @@
 |---|---|---|---|
 | CRITICAL | 0 | 2 | 2 |
 | HIGH | 0 | 5 | 5 |
-| MEDIUM | 2 | 0 | 2 |
-| LOW | 4 | 0 | 4 |
+| MEDIUM | 3 | 0 | 3 |
+| LOW | 5 | 0 | 5 |
 
 Overall the protocol is in good shape. The Anchor programs follow Anchor idiom correctly: PDA-derived authority, signer constraints on owner-only ops, `require_keys_eq!` on cross-account references, `token::authority` constraint on source ATAs. The off-chain API uses Privy JWT auth on user-facing routes, a Bearer secret for cron, the Telegram webhook secret header check, and an internal HMAC-ish secret for bot → endpoint calls.
 
@@ -114,6 +114,15 @@ Defense-in-depth: rotating `INTERNAL_API_SECRET` periodically remains a good pra
 
 **Severity rationale:** Not exploitable for fund loss; a hostile agent can DoS its own queue (the agent is presumably trusted because the owner set it). Recovery is a single `deny_request` per expired item. Functional bug, not security.
 
+### M-3 · `addCreditsFromTopup` race on concurrent topups (same handler)
+
+**Where:** `web/lib/db/credits.ts` `addCreditsFromTopup`
+**Impact:** Function does `getCredits` → compute new balance → `upsert` in three steps. If the same handler submits two distinct topup txs concurrently (different tx_signatures), both calls pass the audit insert (different sigs, both unique), both read the old balance, both upsert the same `old + 500`. The user paid for 1000 calls but receives 500. Lost credits.
+
+**Severity rationale:** Not adversarial — user only damages themselves. Frequency is low (deliberately concurrent topups by a single user are rare). But it's real money lost.
+
+**Fix proposed:** Add a Postgres function `add_credits(handler_id, amount, lamports, sig)` that does `INSERT ... ON CONFLICT DO UPDATE SET balance_calls = llm_credits.balance_calls + EXCLUDED.balance_calls` atomically. Call via `db.rpc("add_credits", {...})`. Migration 0009 + 5-line credits.ts swap. Held back from this round because it needs a DB migration the user has to run by hand.
+
 ### M-2 · `policy_registry.set_policy` lets the owner brick the wallet
 
 **Where:** `programs/policy_registry/src/lib.rs`
@@ -143,6 +152,13 @@ Defense-in-depth: rotating `INTERNAL_API_SECRET` periodically remains a good pra
 
 **Where:** `web/app/api/topup/route.ts` GET handler
 **Impact:** None directly; just noting that the bot can't introspect a handler's balance via this endpoint (must use the internal-auth chat endpoint or hit Supabase directly). Could add an internal-auth GET path for parity with the chat endpoint if useful.
+
+### L-5 · Telegram bot does not dedup `update_id`
+
+**Where:** `web/lib/telegram.ts` `bot.on("message:text")`
+**Impact:** Telegram retries webhooks if our endpoint times out or returns 5xx. Each retry runs the full LLM call + appends 2 chat rows + spends 1 credit. A handful of retries could drain user credits or double-post messages.
+
+**Fix proposed:** Persist `update_id` in a small table (or a Supabase `processed_updates` set) on first hit; skip if seen. 30-line change including migration.
 
 ### L-4 · `agent_wallet.emergency_withdraw` does not zero the policy daily_spent
 
