@@ -116,9 +116,40 @@ function registerHandlers(bot: Bot) {
     }
     const agents = await listAgentsForHandler(link.handler_id);
     await ctx.reply(
-      `Linked: @${link.username ?? "?"}\nAgents: ${agents.length}\n` +
-        agents.map((a) => `· ${a.persona} (${a.active ? "auto-wake" : "silent"})`).join("\n")
+      `Linked: @${link.username ?? "?"}\n` +
+        `Talking to: ${link.active_persona ?? "greedie"}\n` +
+        `Agents: ${agents.length}\n` +
+        agents
+          .map(
+            (a) =>
+              `${a.persona === (link.active_persona ?? "greedie") ? "▶ " : "· "}${a.persona} (${a.active ? "auto-wake" : "silent"})`
+          )
+          .join("\n") +
+        `\n\nSwitch with /switch greedie | conservador | estable`
     );
+  });
+
+  bot.command("switch", async (ctx) => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    const link = await findLink(chatId);
+    if (!link) {
+      await ctx.reply("Not linked. Send /start to begin.");
+      return;
+    }
+    const arg = ctx.match?.toString().trim().toLowerCase();
+    const valid = ["greedie", "conservador", "estable"] as const;
+    if (!arg || !valid.includes(arg as any)) {
+      await ctx.reply(
+        `Pick one: /switch greedie | conservador | estable\n\nCurrent: ${link.active_persona ?? "greedie"}`
+      );
+      return;
+    }
+    await supabaseAdmin()
+      .from("telegram_links")
+      .update({ active_persona: arg })
+      .eq("chat_id", chatId);
+    await ctx.reply(`Now talking to ${arg}. Mandame lo que necesites.`);
   });
 
   bot.on("message:text", async (ctx) => {
@@ -138,9 +169,15 @@ function registerHandlers(bot: Bot) {
       return;
     }
 
-    // Default to first agent with an attached LLM key (usually all 3
-    // share the same key after Connect Telegram). Future: /switch.
-    const agent = agents.find((a) => a.byok_key_id) ?? agents[0];
+    // Active persona from the link (defaults to greedie). Falls back
+    // to the first agent that has a key attached if the active one
+    // isn't found (eg. a stale link from before multi-persona).
+    const wantPersona = link.active_persona ?? "greedie";
+    const agent =
+      agents.find((a) => a.persona === wantPersona && a.byok_key_id) ??
+      agents.find((a) => a.byok_key_id) ??
+      agents[0];
+
     if (!agent.byok_key_id) {
       await ctx.reply(
         `Agent has no LLM key configured.\n\nOpen ${WEB_URL}/demo, set your API key, then click "Connect Telegram" again to attach it.`
@@ -169,7 +206,7 @@ function registerHandlers(bot: Bot) {
     const messages: ProviderMessage[] = [
       {
         role: "system",
-        content: `You are ${agent.persona}, the user's SAW agent. Be brief and conversational. Don't propose schedule items from here — for actions, tell the user to open ${WEB_URL}/demo. This is a chat-only quick check-in interface.`,
+        content: personaSystemPrompt(agent.persona, WEB_URL),
       },
       ...history.map(
         (m): ProviderMessage => ({
@@ -205,10 +242,47 @@ function registerHandlers(bot: Bot) {
 async function findLink(chatId: number) {
   const { data } = await supabaseAdmin()
     .from("telegram_links")
-    .select("handler_id, username")
+    .select("handler_id, username, active_persona")
     .eq("chat_id", chatId)
     .maybeSingle();
   return data;
+}
+
+function personaSystemPrompt(persona: string, webUrl: string): string {
+  const shared =
+    `You are a conversational assistant. Keep replies short — 1 to 3 sentences ` +
+    `unless the user asks for detail. Respond in the same language the user wrote in. ` +
+    `Greet greetings, answer questions, hold context. Don't end every reply with ` +
+    `"open ${webUrl}/demo" — only mention it when the user asks to actually execute, ` +
+    `swap, stake, or sign something on-chain. This is a chat surface, not a wizard.`;
+
+  if (persona === "greedie") {
+    return (
+      shared +
+      ` Persona: Greedie — a fast-thinking on-chain trader. Watch tape, prices, ` +
+      `momentum, dips. Speak in alpha, never apologize. When the user asks about ` +
+      `prices, opportunities, or trades, you can talk through it conversationally; ` +
+      `you only need to point to the web app for actual signing.`
+    );
+  }
+  if (persona === "conservador") {
+    return (
+      shared +
+      ` Persona: Conservador — a yield researcher. Capital preservation first. ` +
+      `When the user asks about putting money to work, talk about Solana DeFi yield ` +
+      `(Kamino, Jupiter Lend, Save, marginfi, lulo, drift, etc.) and ranges of APR. ` +
+      `Be specific. Only redirect to ${webUrl}/demo when ready to actually stake.`
+    );
+  }
+  if (persona === "estable") {
+    return (
+      shared +
+      ` Persona: Estable — a calm wealth coach, not a trader. Focus on habits, ` +
+      `recurring transfers, balance, saving, anti-impulse. Ask before suggesting. ` +
+      `When the user wants to schedule something concrete, point to ${webUrl}/demo.`
+    );
+  }
+  return shared;
 }
 
 function randomCode(): string {
