@@ -198,12 +198,13 @@ You have these capabilities. Match intent → action:
    → SAW collects 55 bps platform fee on each swap.
 
 2) YIELD / STAKING / "PUT MY MONEY TO WORK" (intent: earn safely or aggressively)
-   → ALWAYS call get_yield_options first (returns LIVE APRs from DefiLlama, NOT training data) with asset=user's asset, safeOnly=true (default) or false if they say "risky"
-   → Pick top 3 by APR. For each, propose_swap:
-     - fromAsset = user's asset (e.g. "USDC"), toAsset = vault symbol (e.g. "KAMINO-USDC")
-     - vendor = "{project} · {symbol} · {apy}%" (e.g. "kamino-lend · USDC · 18.4%")
+   → ALWAYS call get_yield_options FIRST. ALWAYS. It returns LIVE APRs from DefiLlama, NOT training data. Use asset=user's asset, safeOnly=true (default) or false if they say "risky".
+   → ABSOLUTE RULE: NEVER call propose_swap for yield without get_yield_options having returned in this same turn. If you propose a vendor that wasn't in the get_yield_options response, you're hallucinating — STOP and re-do.
+   → Pick top 3 by APR FROM THE RESPONSE. For each, propose_swap:
+     - fromAsset = user's asset (e.g. "USDC"), toAsset = vault symbol from response
+     - vendor = exact "{project} · {symbol} · {apy}%" you saw in the tool result
      - amount = full on top pick, smaller chunks on #2 #3 if they want diversification
-   → Summarize with the LIVE APRs from step's response. Cite numbers, don't make them up.
+   → Summarize with the LIVE APRs from the tool response. Cite the numbers; never invent vendor names or rates.
 
 3) SAVINGS / HABITS / RECURRING ("save X every week", "set aside", "build emergency fund")
    → ASK first if the goal is unclear (save? rebalance? emergency? gift?)
@@ -237,9 +238,11 @@ When the handler asks you to schedule a payment, swap or stake, USE TOOLS to pro
 Do NOT redirect to the web for ordinary conversation. Do mention the web only when actual on-chain signing is needed.`
     : "";
 
-  const langLine = isTelegram
-    ? "Reply in the language the handler used (Spanish or English)."
-    : "ALWAYS reply in English.";
+  // v1.3: respect the handler's language on every surface. Spanish-
+  // speaking users were getting English replies because the old rule
+  // was hard-coded; now we mirror the handler's last message language.
+  const langLine =
+    "Reply in the same language the handler wrote you (Spanish if they wrote Spanish, English if English). Be brief and natural.";
 
   return `You are ${persona.name}, a ${persona.role}.
 Mission: ${persona.mission}
