@@ -37,10 +37,21 @@ export async function PATCH(
       cronCadenceMinutes?: number;
       activeHoursStart?: number | null;
       activeHoursEnd?: number | null;
+      agentName?: string;
     };
 
     if (typeof body.active === "boolean") {
       await setAgentActive(params.id, body.active);
+    }
+
+    if (typeof body.agentName === "string") {
+      const trimmed = body.agentName.trim().slice(0, 24);
+      if (trimmed.length > 0) {
+        await supabaseAdmin()
+          .from("agents")
+          .update({ agent_name: trimmed })
+          .eq("id", params.id);
+      }
     }
 
     if (

@@ -120,6 +120,7 @@ export default function DemoPage() {
     last_wake_at: string | null;
     active_hours_start: number | null;
     active_hours_end: number | null;
+    agent_name?: string | null;
   };
 
   // Active persona is the one whose conversation/schedule is visible.
@@ -128,7 +129,7 @@ export default function DemoPage() {
   const [activePersonaId, setActivePersonaIdState] = useState<string | null>(
     null
   );
-  const persona = getPersona(activePersonaId);
+  const basePersona = getPersona(activePersonaId);
 
   // Per-persona DB metadata. Single state is for the active slot; the
   // map persists the other slots across switches.
@@ -139,6 +140,13 @@ export default function DemoPage() {
   const dbAgentId = activePersonaId ? dbAgentIds[activePersonaId] ?? null : null;
   const dbAgent = activePersonaId
     ? dbAgentsMap[activePersonaId] ?? null
+    : null;
+
+  // Effective persona: base preset + user-chosen codename from DB.
+  // If user hasn't customized, falls back to the preset's default name
+  // ("Operative"). This is what gets passed to the LLM and rendered.
+  const persona = basePersona
+    ? { ...basePersona, name: dbAgent?.agent_name?.trim() || basePersona.name }
     : null;
 
   function setDbAgentId(id: string | null) {
@@ -390,6 +398,7 @@ export default function DemoPage() {
             last_wake_at: agent.last_wake_at,
             active_hours_start: agent.active_hours_start,
             active_hours_end: agent.active_hours_end,
+            agent_name: agent.agent_name,
           });
         }
 
@@ -755,6 +764,7 @@ export default function DemoPage() {
                     last_wake_at: a.last_wake_at,
                     active_hours_start: a.active_hours_start,
                     active_hours_end: a.active_hours_end,
+                    agent_name: a.agent_name,
                   };
                 }
                 setDbAgentIds(ids);
@@ -817,21 +827,12 @@ export default function DemoPage() {
       crypto.getRandomValues(salt);
       const saltBuf = Buffer.from(salt);
 
-      // Multi-persona model: the on-chain policy is the maximum of
-      // the 3 personas (most permissive). Per-persona thresholds are
-      // enforced client-side so each tab keeps its own approval gate.
-      const sharedPolicy = {
-        dailyLimit: Math.max(...PERSONAS.map((x) => x.policy.dailyLimit)),
-        perTxLimit: Math.max(...PERSONAS.map((x) => x.policy.perTxLimit)),
-        approvalThreshold: Math.max(
-          ...PERSONAS.map((x) => x.policy.approvalThreshold)
-        ),
-        cooldownSeconds: 0,
-      };
-      const sharedInitialFund = PERSONAS.reduce(
-        (sum, x) => sum + x.initialFund,
-        0
-      );
+      // v1.3 unified-agent model: 1 operative, the policy comes
+      // straight from its definition (the old "max of 3" was a workaround
+      // for the multi-persona phase). User can edit the codename later.
+      const operative = PERSONAS.find((x) => x.id === "operative") ?? PERSONAS[0];
+      const sharedPolicy = operative.policy;
+      const sharedInitialFund = operative.initialFund;
       const policy = buildPolicy(sharedPolicy);
       const [walletPda] = deriveWalletPda(handler, saltBuf);
 
@@ -953,60 +954,50 @@ export default function DemoPage() {
           if (token) {
             const policyPdaStr = derivePolicyPda(walletPda)[0].toBase58();
             const queuePdaStr = deriveQueuePda(walletPda)[0].toBase58();
-            const results = await Promise.all(
-              PERSONAS.map((px) =>
-                fetch("/api/agents", {
-                  method: "POST",
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    persona: px.id,
-                    agentPubkey: agent.publicKey.toBase58(),
-                    walletPda: walletPda.toBase58(),
-                    policyPda: policyPdaStr,
-                    queuePda: queuePdaStr,
-                    cronCadenceMinutes: 60,
-                  }),
-                })
-                  .then((res) => (res.ok ? res.json() : null))
-                  .then((d) => (d ? { id: px.id, agent: d.agent } : null))
-                  .catch(() => null)
-              )
-            );
-            const ids: Record<string, string> = {};
-            const metas: Record<string, DbAgentMeta> = {};
-            for (const r of results) {
-              if (!r) continue;
-              ids[r.id] = r.agent.id;
-              metas[r.id] = {
-                active: r.agent.active,
-                cron_cadence_minutes: r.agent.cron_cadence_minutes,
-                next_wake_at: r.agent.next_wake_at,
-                last_wake_at: r.agent.last_wake_at,
-                active_hours_start: r.agent.active_hours_start,
-                active_hours_end: r.agent.active_hours_end,
-              };
+            // v1.3: register only the operative. Old multi-persona setups
+            // stay in DB unchanged but new ones get a single row.
+            const res = await fetch("/api/agents", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                persona: "operative",
+                agentPubkey: agent.publicKey.toBase58(),
+                walletPda: walletPda.toBase58(),
+                policyPda: policyPdaStr,
+                queuePda: queuePdaStr,
+                cronCadenceMinutes: 60,
+              }),
+            });
+            if (res.ok) {
+              const { agent: ag } = await res.json();
+              setDbAgentIds({ operative: ag.id });
+              setDbAgentsMap({
+                operative: {
+                  active: ag.active,
+                  cron_cadence_minutes: ag.cron_cadence_minutes,
+                  next_wake_at: ag.next_wake_at,
+                  last_wake_at: ag.last_wake_at,
+                  active_hours_start: ag.active_hours_start,
+                  active_hours_end: ag.active_hours_end,
+                  agent_name: ag.agent_name,
+                },
+              });
+              console.log("[saw] operative registered", ag.id);
             }
-            setDbAgentIds(ids);
-            setDbAgentsMap(metas);
-            console.log("[saw] agents registered", Object.keys(ids));
           }
         } catch (e) {
           console.warn("[saw] agent DB registration error", e);
         }
       }
 
-      // Seed a fresh briefing for every persona slot so the tabs land
-      // on a usable conversation immediately.
-      const seedBriefings: Record<string, Briefing> = {};
-      for (const px of PERSONAS) {
-        const b = freshBriefing(px);
-        seedBriefings[px.id] = b;
-        saveBriefing(handler, b);
-      }
-      setBriefings(seedBriefings);
+      // Seed a single fresh briefing for the operative slot.
+      const op = PERSONAS.find((x) => x.id === "operative") ?? PERSONAS[0];
+      const seedBriefing = freshBriefing(op);
+      saveBriefing(handler, seedBriefing);
+      setBriefings({ operative: seedBriefing });
 
       setSetupStep("");
       setPhase("briefing");
@@ -1612,13 +1603,19 @@ export default function DemoPage() {
         </p>
       </div>
 
-      {(phase === "briefing" || phase === "live") && activePersonaId && (
-        <PersonaTabs
-          activeId={activePersonaId}
-          briefings={briefings}
-          onSwitch={switchPersona}
-        />
-      )}
+      {/* Persona tabs were the v1.2 multi-agent switcher. v1.3 collapses
+          to a single operative so the bar is hidden when there's only one
+          briefing slot. The component stays in the tree for the rare
+          legacy session that still has 3 slots in localStorage. */}
+      {(phase === "briefing" || phase === "live") &&
+        activePersonaId &&
+        Object.keys(briefings).length > 1 && (
+          <PersonaTabs
+            activeId={activePersonaId}
+            briefings={briefings}
+            onSwitch={switchPersona}
+          />
+        )}
 
       {(phase === "briefing" || phase === "live") && (
         <div className="px-4 sm:px-6 py-2 max-w-7xl mx-auto w-full">
@@ -1748,6 +1745,7 @@ export default function DemoPage() {
           initialCadenceMinutes={dbAgent.cron_cadence_minutes}
           initialActiveHoursStart={dbAgent.active_hours_start}
           initialActiveHoursEnd={dbAgent.active_hours_end}
+          initialAgentName={dbAgent.agent_name ?? basePersona?.name ?? "Operative"}
           saving={savingSettings}
           onClose={() => setShowSettings(false)}
           onSave={async (input) => {
@@ -1772,6 +1770,7 @@ export default function DemoPage() {
                 last_wake_at: agent.last_wake_at,
                 active_hours_start: agent.active_hours_start,
                 active_hours_end: agent.active_hours_end,
+                agent_name: agent.agent_name,
               });
               setShowSettings(false);
             } catch (e: any) {
@@ -2026,26 +2025,27 @@ function PersonaPicker({
   return (
     <div>
       <p className="stamp mb-6 flex items-center gap-2">
-        Choose your operative
+        Meet your operative
         <CreatorNote
-          text="Imagine 10+ personas plus a custom builder. Each one is a different policy preset over the same wallet primitive — same on-chain rails, different personalities."
+          text="v1.3 collapses the 3 personas into 1 operative that handles trade, yield, and savings in one conversation. You can rename it from settings — Lobo, Sasha, Cipher, whatever."
           position="bottom-right"
         />
       </p>
       <h2 className="font-display text-5xl mb-4 tracking-tight">
-        Pick the agent.<br />Brief them.
+        Brief the operative.
       </h2>
       <p className="text-bone/60 max-w-2xl mb-12 leading-relaxed">
-        Each operative comes with a mission and an on-chain policy. You'll talk
-        to them in plain English to build today's plan.
+        One agent, full spectrum: trades, finds yield, helps you save. Same
+        on-chain wallet, same policy, all the skills in one place. Rename it
+        whenever you want.
       </p>
       {error && (
         <div className="mb-8 border border-rust text-rust p-4 text-sm">
           Setup failed: {error}
         </div>
       )}
-      <div className="grid md:grid-cols-3 gap-6">
-        {PERSONAS.map((p) => {
+      <div className="grid md:grid-cols-1 gap-6 max-w-md mx-auto">
+        {PERSONAS.filter((p) => p.id === "operative").map((p) => {
           const locked = !!p.comingSoon;
           return (
             <button

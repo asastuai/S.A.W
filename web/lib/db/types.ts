@@ -15,7 +15,7 @@ export type Provider =
   | "deepseek"
   | "cerebras"
   | "kimi";
-export type Persona = "greedie" | "conservador" | "estable";
+export type Persona = "operative" | "greedie" | "conservador" | "estable";
 export type TriggerKind = "time" | "dip" | "below" | "above";
 export type ActionType = "pay" | "swap";
 export type ScheduledStatus =
@@ -61,6 +61,7 @@ export interface Agent {
   id: string;
   handler_id: string;
   persona: Persona;
+  agent_name: string;
   agent_pubkey: string;
   wallet_pda: string;
   policy_pda: string;

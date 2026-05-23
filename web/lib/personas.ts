@@ -1,7 +1,7 @@
 import { DEMO_DECIMALS } from "./saw";
 
 export type Persona = {
-  id: "greedie" | "conservador" | "estable";
+  id: "operative" | "greedie" | "conservador" | "estable";
   name: string;
   role: string;
   glyph: string;
@@ -21,7 +21,30 @@ export type Persona = {
 
 const T = (n: number) => n * 10 ** DEMO_DECIMALS;
 
+// v1.3: collapsed 3 personas into a single Operative that handles
+// trading, yield research, and savings habits in one conversation.
+// The user can rename their codename in settings — Operative is the
+// default. The 3 old personas are kept for back-compat (legacy DB
+// rows) but new setups only create the operative.
 export const PERSONAS: Persona[] = [
+  {
+    id: "operative",
+    name: "Operative",
+    role: "Personal Operative",
+    glyph: "◉",
+    mission:
+      "Your full-spectrum agent: reads the tape, finds yield, builds saving habits. One conversation, all the skills.",
+    tagline: "One handler, one operative, every move.",
+    policy: {
+      dailyLimit: T(500),
+      perTxLimit: T(120),
+      approvalThreshold: T(80),
+      cooldownSeconds: 0,
+    },
+    initialFund: T(2000),
+    greeting:
+      "Operative reporting. I trade, I research yield, I help you build habits. What's the mission?",
+  },
   {
     id: "greedie",
     name: "Greedie",

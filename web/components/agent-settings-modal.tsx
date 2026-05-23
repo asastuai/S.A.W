@@ -36,11 +36,34 @@ const PROFILE_PRESETS = [
   },
 ];
 
+const RANDOM_CODENAMES = [
+  "Operative",
+  "Cipher",
+  "Halcón",
+  "Sasha",
+  "Ace",
+  "Vega",
+  "Lobo",
+  "Argo",
+  "Onyx",
+  "Sol",
+  "Echo",
+  "Agent 7",
+  "Agent 47",
+  "Phantom-X",
+  "Specter",
+];
+
+function randomCodename(): string {
+  return RANDOM_CODENAMES[Math.floor(Math.random() * RANDOM_CODENAMES.length)];
+}
+
 export function AgentSettingsModal({
   initialActive,
   initialCadenceMinutes,
   initialActiveHoursStart,
   initialActiveHoursEnd,
+  initialAgentName,
   onSave,
   onClose,
   saving,
@@ -49,11 +72,13 @@ export function AgentSettingsModal({
   initialCadenceMinutes: number;
   initialActiveHoursStart: number | null;
   initialActiveHoursEnd: number | null;
+  initialAgentName?: string;
   onSave: (input: {
     active: boolean;
     cronCadenceMinutes: number;
     activeHoursStart: number | null;
     activeHoursEnd: number | null;
+    agentName?: string;
   }) => Promise<void>;
   onClose: () => void;
   saving: boolean;
@@ -67,14 +92,15 @@ export function AgentSettingsModal({
   );
   const [start, setStart] = useState(initialActiveHoursStart ?? 9);
   const [end, setEnd] = useState(initialActiveHoursEnd ?? 18);
+  const [agentName, setAgentName] = useState(initialAgentName ?? "Operative");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 backdrop-blur-sm animate-fade-in p-4">
-      <div className="w-full max-w-md bg-ink border border-gold p-6 sm:p-8 animate-slide-up">
+      <div className="w-full max-w-md bg-ink border border-gold p-6 sm:p-8 animate-slide-up max-h-[90vh] overflow-y-auto">
         <div className="flex items-start justify-between mb-6">
           <div>
             <p className="stamp mb-2">Agent settings</p>
-            <h2 className="font-display text-2xl">Cron + active hours</h2>
+            <h2 className="font-display text-2xl">Codename, cron, hours</h2>
           </div>
           <button
             onClick={onClose}
@@ -84,6 +110,35 @@ export function AgentSettingsModal({
             ×
           </button>
         </div>
+
+        <section className="mb-6 p-4 border border-gold/30 bg-gold/5">
+          <label className="text-xs uppercase tracking-widest text-gold mb-2 block">
+            Codename
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={agentName}
+              onChange={(e) => setAgentName(e.target.value.slice(0, 24))}
+              disabled={saving}
+              maxLength={24}
+              className="flex-1 bg-ink border border-ash px-3 py-2 text-bone font-display text-lg focus:border-gold outline-none"
+              placeholder="Operative"
+            />
+            <button
+              onClick={() => setAgentName(randomCodename())}
+              disabled={saving}
+              className="text-xs uppercase tracking-widest border border-ash text-bone/60 hover:text-gold hover:border-gold px-3 py-2 whitespace-nowrap"
+              title="Pick a random codename"
+              type="button"
+            >
+              🎲 random
+            </button>
+          </div>
+          <div className="text-[10px] text-bone/40 mt-2 leading-tight">
+            What your agent calls itself in chat. You're the handler; pick any name.
+          </div>
+        </section>
 
         <section className="mb-6 p-4 border border-bone/20">
           <div className="flex items-center justify-between">
@@ -257,6 +312,7 @@ export function AgentSettingsModal({
                 cronCadenceMinutes: cadence,
                 activeHoursStart: hoursMode === "custom" ? start : null,
                 activeHoursEnd: hoursMode === "custom" ? end : null,
+                agentName: agentName.trim() || "Operative",
               })
             }
             disabled={saving}

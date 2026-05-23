@@ -172,24 +172,28 @@ function registerHandlers(bot: Bot) {
     }
 
     // Auto-routing: heuristic keyword scan picks the persona best suited
-    // for the message. If it differs from the current active_persona, we
-    // hand off explicitly so the user always knows who's talking.
-    const currentPersona = link.active_persona ?? "greedie";
-    const detected = detectIntentPersona(text);
+    // v1.3 unified-agent model: there's only one operative per handler,
+    // so the auto-routing handoff is only relevant for legacy multi-
+    // persona setups (3 rows). When the handler has a single agent we
+    // skip the routing entirely and talk to whoever's there.
+    const currentPersona = link.active_persona ?? "operative";
     let wantPersona = currentPersona;
     let handoffNote = "";
-    if (detected && detected !== currentPersona) {
-      const fromName = getPersona(currentPersona)?.name ?? currentPersona;
-      const toName = getPersona(detected)?.name ?? detected;
-      const reason = handoffReason(detected);
-      handoffNote =
-        `🔁 ${fromName} → ${toName}.\n` +
-        `Eso entra como ${reason}. Te lo paso a ${toName}, ya lo agarra.\n\n`;
-      wantPersona = detected;
-      await supabaseAdmin()
-        .from("telegram_links")
-        .update({ active_persona: detected })
-        .eq("chat_id", chatId);
+    if (agents.length > 1) {
+      const detected = detectIntentPersona(text);
+      if (detected && detected !== currentPersona) {
+        const fromName = getPersona(currentPersona)?.name ?? currentPersona;
+        const toName = getPersona(detected)?.name ?? detected;
+        const reason = handoffReason(detected);
+        handoffNote =
+          `🔁 ${fromName} → ${toName}.\n` +
+          `Eso entra como ${reason}. Te lo paso a ${toName}, ya lo agarra.\n\n`;
+        wantPersona = detected;
+        await supabaseAdmin()
+          .from("telegram_links")
+          .update({ active_persona: detected })
+          .eq("chat_id", chatId);
+      }
     }
 
     const agent =
@@ -261,7 +265,10 @@ function registerHandlers(bot: Bot) {
         body: JSON.stringify({
           persona: {
             id: personaDef.id,
-            name: personaDef.name,
+            // Use the user's custom codename from agents.agent_name if set,
+            // falling back to the preset name. The LLM addresses itself
+            // by this name to the user.
+            name: (agent as any).agent_name?.trim() || personaDef.name,
             role: personaDef.role,
             mission: personaDef.mission,
             policy: personaDef.policy,
