@@ -45,11 +45,18 @@ export async function PATCH(
     }
 
     if (typeof body.agentName === "string") {
-      const trimmed = body.agentName.trim().slice(0, 24);
-      if (trimmed.length > 0) {
+      // Sanitize: the codename is interpolated into the LLM system prompt,
+      // so disallow chars that could break out of the prompt context
+      // (quotes, backticks, newlines, control chars). Keep letters, digits,
+      // spaces, hyphens, underscores, periods. Cap at 24 chars.
+      const sanitized = body.agentName
+        .replace(/[^\p{L}\p{N}\s\-_.]/gu, "")
+        .trim()
+        .slice(0, 24);
+      if (sanitized.length > 0) {
         await supabaseAdmin()
           .from("agents")
-          .update({ agent_name: trimmed })
+          .update({ agent_name: sanitized })
           .eq("id", params.id);
       }
     }
