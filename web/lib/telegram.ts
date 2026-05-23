@@ -117,41 +117,29 @@ function registerHandlers(bot: Bot) {
       return;
     }
     const agents = await listAgentsForHandler(link.handler_id);
-    await ctx.reply(
-      `Linked: @${link.username ?? "?"}\n` +
-        `Talking to: ${link.active_persona ?? "greedie"}\n` +
-        `Agents: ${agents.length}\n` +
-        agents
-          .map(
-            (a) =>
-              `${a.persona === (link.active_persona ?? "greedie") ? "▶ " : "· "}${a.persona} (${a.active ? "auto-wake" : "silent"})`
-          )
-          .join("\n") +
-        `\n\nSwitch with /switch greedie | conservador | estable`
-    );
-  });
-
-  bot.command("switch", async (ctx) => {
-    const chatId = ctx.chat?.id;
-    if (!chatId) return;
-    const link = await findLink(chatId);
-    if (!link) {
-      await ctx.reply("Not linked. Send /start to begin.");
-      return;
-    }
-    const arg = ctx.match?.toString().trim().toLowerCase();
-    const valid = ["greedie", "conservador", "estable"] as const;
-    if (!arg || !valid.includes(arg as any)) {
+    const active = agents[0];
+    if (!active) {
       await ctx.reply(
-        `Pick one: /switch greedie | conservador | estable\n\nCurrent: ${link.active_persona ?? "greedie"}`
+        `Linked: @${link.username ?? "?"}\n\nNo operative yet. Open ${WEB_URL}/demo to create one.`
       );
       return;
     }
-    await supabaseAdmin()
-      .from("telegram_links")
-      .update({ active_persona: arg })
-      .eq("chat_id", chatId);
-    await ctx.reply(`Now talking to ${arg}. Mandame lo que necesites.`);
+    const codename = (active as any).agent_name?.trim() || "Operative";
+    await ctx.reply(
+      `Linked: @${link.username ?? "?"}\n` +
+        `Operative: ${codename} (${active.active ? "auto-wake" : "silent"})\n` +
+        `Wake cadence: every ${active.cron_cadence_minutes ?? 60} min\n\n` +
+        `Manage from ${WEB_URL}/demo`
+    );
+  });
+
+  // /switch was the v1.2 multi-persona toggle. v1.3 collapses to one
+  // operative, so the command is a stub that points users back to the
+  // settings modal for codename changes.
+  bot.command("switch", async (ctx) => {
+    await ctx.reply(
+      `v1.3 has one operative per handler. Rename it from ⚙ settings in ${WEB_URL}/demo (the Codename field).`
+    );
   });
 
   bot.on("message:text", async (ctx) => {

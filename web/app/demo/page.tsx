@@ -707,34 +707,41 @@ export default function DemoPage() {
           agent,
         });
 
-        // Load briefings for all 3 slots that have data in localStorage
-        // (or migrate from the legacy single-slot key).
+        // v1.3 unified-agent model: restore only the operative briefing.
+        // Legacy sessions with greedie/conservador/estable briefings get
+        // wiped here so the tabs UI doesn't appear and the user lands
+        // straight into the Operative conversation.
+        const legacyIds = ["greedie", "conservador", "estable"];
+        const hasLegacyOnly = legacyIds.some((id) =>
+          loadBriefing(handler, id)
+        ) && !loadBriefing(handler, "operative");
+        if (hasLegacyOnly) {
+          console.log("[saw] wiping legacy briefings (greedie/conservador/estable)");
+          for (const id of legacyIds) {
+            try {
+              // Direct removal of just the legacy keys (keeps operative
+              // briefing if it happens to coexist).
+              window.localStorage.removeItem(
+                `saw-demo-v1:briefing:${handler.toBase58()}:${id}`
+              );
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+
         const restoredBriefings: Record<string, Briefing> = {};
-        for (const p of PERSONAS) {
-          const saved = loadBriefing(handler, p.id);
-          if (saved) {
-            restoredBriefings[p.id] = {
-              ...saved,
-              opportunities: saved.opportunities ?? [],
-            };
-          }
-        }
-        // Seed any persona without a saved briefing so all 3 tabs land
-        // on a usable conversation immediately.
-        for (const p of PERSONAS) {
-          if (!restoredBriefings[p.id]) {
-            restoredBriefings[p.id] = freshBriefing(p);
-          }
-        }
+        const operativePersona =
+          PERSONAS.find((p) => p.id === "operative") ?? PERSONAS[0];
+        const savedOp = loadBriefing(handler, operativePersona.id);
+        restoredBriefings[operativePersona.id] = savedOp
+          ? { ...savedOp, opportunities: savedOp.opportunities ?? [] }
+          : freshBriefing(operativePersona);
+
         if (cancelled) return;
         setBriefings(restoredBriefings);
 
-        const savedActive = loadActivePersonaId(handler);
-        const fallback = stored.personaId ?? PERSONAS[0].id;
-        const initialActive =
-          (savedActive && PERSONAS.some((p) => p.id === savedActive)
-            ? savedActive
-            : null) ?? fallback;
+        const initialActive = operativePersona.id;
         setActivePersonaIdState(initialActive);
         saveActivePersonaId(handler, initialActive);
 
@@ -742,7 +749,10 @@ export default function DemoPage() {
         setPhase(activeBriefing?.ready ? "live" : "briefing");
         await refreshState(handle, new PublicKey(stored.walletAta));
 
-        // Best-effort: fetch all 3 dbAgent rows so each tab can sync.
+        // Hydrate the operative dbAgent row. If a legacy session has
+        // greedie/conservador/estable rows but no operative one, mint
+        // the operative row on the fly with the existing setup pubkeys
+        // so the chat sync works from message #1.
         if (handlerState.status === "ready" && privyAuthed) {
           try {
             const token = await getAccessToken();
@@ -752,23 +762,49 @@ export default function DemoPage() {
               });
               if (res.ok && !cancelled) {
                 const { agents } = await res.json();
-                const ids: Record<string, string> = {};
-                const metas: Record<string, DbAgentMeta> = {};
-                for (const a of agents ?? []) {
-                  if (!a?.persona) continue;
-                  ids[a.persona] = a.id;
-                  metas[a.persona] = {
-                    active: a.active,
-                    cron_cadence_minutes: a.cron_cadence_minutes,
-                    next_wake_at: a.next_wake_at,
-                    last_wake_at: a.last_wake_at,
-                    active_hours_start: a.active_hours_start,
-                    active_hours_end: a.active_hours_end,
-                    agent_name: a.agent_name,
-                  };
+                let opRow = (agents ?? []).find(
+                  (a: any) => a?.persona === "operative"
+                );
+                if (!opRow) {
+                  // Legacy: no operative row yet. Create one with the
+                  // current setup's pubkeys.
+                  const wp = new PublicKey(stored.walletPda);
+                  const policyPdaStr = derivePolicyPda(wp)[0].toBase58();
+                  const queuePdaStr = deriveQueuePda(wp)[0].toBase58();
+                  const createRes = await fetch("/api/agents", {
+                    method: "POST",
+                    headers: {
+                      Authorization: `Bearer ${token}`,
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      persona: "operative",
+                      agentPubkey: agent.publicKey.toBase58(),
+                      walletPda: stored.walletPda,
+                      policyPda: policyPdaStr,
+                      queuePda: queuePdaStr,
+                      cronCadenceMinutes: 60,
+                    }),
+                  });
+                  if (createRes.ok) {
+                    opRow = (await createRes.json()).agent;
+                    console.log("[saw] legacy session: minted operative", opRow?.id);
+                  }
                 }
-                setDbAgentIds(ids);
-                setDbAgentsMap(metas);
+                if (opRow && !cancelled) {
+                  setDbAgentIds({ operative: opRow.id });
+                  setDbAgentsMap({
+                    operative: {
+                      active: opRow.active,
+                      cron_cadence_minutes: opRow.cron_cadence_minutes,
+                      next_wake_at: opRow.next_wake_at,
+                      last_wake_at: opRow.last_wake_at,
+                      active_hours_start: opRow.active_hours_start,
+                      active_hours_end: opRow.active_hours_end,
+                      agent_name: opRow.agent_name,
+                    },
+                  });
+                }
               }
             }
           } catch (_) {
@@ -799,6 +835,27 @@ export default function DemoPage() {
       ready: false,
     };
   }
+
+  // v1.3 auto-bootstrap: as soon as the wallet connects, dispatch the
+  // setup atomic tx for the Operative. No persona picker, no API-key
+  // gate — those choices move into the briefing room once the agent
+  // exists. The session-restore effect runs first; this only fires when
+  // there's no setup yet AND we're still in the "pick" phase.
+  const bootstrapTriggeredRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (bootstrapTriggeredRef.current) return;
+    if (!wallet.connected || !sawClient || !handler) return;
+    if (phase !== "pick") return;
+    if (setup) return;
+    // If localStorage has a saved setup, the session-restore effect
+    // will hydrate it. Don't double-bootstrap.
+    if (loadSetup(handler)) return;
+    const op = PERSONAS.find((p) => p.id === "operative");
+    if (!op) return;
+    bootstrapTriggeredRef.current = true;
+    bootstrap(op);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallet.connected, sawClient, handler?.toBase58(), phase, setup]);
 
   async function refreshState(h: WalletHandle, walletAta: PublicKey) {
     try {
@@ -1006,6 +1063,10 @@ export default function DemoPage() {
       setError(e.message ?? String(e));
       setPhase("pick");
       setSetupStep("");
+      // Clear the auto-trigger guard so the user can retry by reloading
+      // or reconnecting their wallet. Without this they'd be stuck if
+      // they rejected the Phantom signature.
+      bootstrapTriggeredRef.current = false;
     }
   }
 
@@ -1542,6 +1603,8 @@ export default function DemoPage() {
     setMascotPose("idle");
     setMarketSnap(null);
     setScanning(false);
+    // Allow the auto-bootstrap to re-trigger after a manual reset.
+    bootstrapTriggeredRef.current = false;
   }
 
   const upcoming = briefing ? nextUpcoming(briefing.schedule) : null;
@@ -1618,7 +1681,31 @@ export default function DemoPage() {
         )}
 
       {(phase === "briefing" || phase === "live") && (
-        <div className="px-4 sm:px-6 py-2 max-w-7xl mx-auto w-full">
+        <div className="px-4 sm:px-6 py-2 max-w-7xl mx-auto w-full space-y-2">
+          {/* "Connect a brain" CTA — only when the user has neither
+              their own BYOK key nor SAW credits. Disappears the moment
+              one of those is in place. */}
+          {!apiKey && sawCredits === 0 && (
+            <div className="border border-rust/60 bg-rust/10 px-4 py-3 text-sm flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+              <div className="flex items-start gap-3">
+                <span className="text-rust text-lg leading-none">⚠</span>
+                <div>
+                  <div className="text-bone/90">
+                    Tu operative todavía no tiene cerebro.
+                  </div>
+                  <div className="text-[11px] text-bone/50 mt-1 leading-tight">
+                    Conectá una API key gratis (Groq, Gemini, etc.) o pagá 0.01 SOL → 500 calls. Sin esto el chat queda paused.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowApiKeyModal(true)}
+                className="text-xs uppercase tracking-widest border border-rust text-rust hover:bg-rust hover:text-bone transition px-3 py-2 whitespace-nowrap"
+              >
+                Connect API key →
+              </button>
+            </div>
+          )}
           <TopupCard hasApiKey={!!apiKey} onCreditAdded={setSawCredits} />
         </div>
       )}
@@ -1664,13 +1751,10 @@ export default function DemoPage() {
           <HandlerError message={handlerState.error} />
         ) : !wallet.connected ? (
           <Idle />
-        ) : !apiKey && sawCredits === 0 ? (
-          <AgentGate
-            onOpen={() => setShowApiKeyModal(true)}
-            onCreditAdded={setSawCredits}
-          />
         ) : phase === "pick" ? (
-          <PersonaPicker onPick={bootstrap} error={error} />
+          // Auto-bootstrap fires on wallet.connected; this is the
+          // ~1s flash before the setup tx is offered.
+          <LoadingHandler />
         ) : phase === "setup" ? (
           <SetupOverlay step={setupStep} persona={persona!} />
         ) : phase === "briefing" && persona && briefing ? (
