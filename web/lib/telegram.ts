@@ -142,6 +142,61 @@ function registerHandlers(bot: Bot) {
     );
   });
 
+  bot.command("help", async (ctx) => {
+    await ctx.reply(
+      `*Your Operative — what you can ask*\n\n` +
+        `*Trade*\n` +
+        `· "buy SOL if it drops 2%"\n` +
+        `· "swap 0.5 SOL for USDC now"\n` +
+        `· "leeme la cinta de SOL"\n\n` +
+        `*Yield*\n` +
+        `· "poneme 100 USDC en el mejor APR de Solana"\n` +
+        `· "best stable yield right now"\n\n` +
+        `*Savings*\n` +
+        `· "quiero ahorrar 20 USDC todos los lunes"\n` +
+        `· "set aside 50 USDC for emergencies"\n\n` +
+        `*Status*\n` +
+        `· /status — operative + cron + cadence\n` +
+        `· /balance — credits + wallet\n` +
+        `· /help — this list\n\n` +
+        `On-chain signing happens at ${WEB_URL}/demo.`,
+      { parse_mode: "Markdown" as any }
+    );
+  });
+
+  bot.command("balance", async (ctx) => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    const link = await findLink(chatId);
+    if (!link) {
+      await ctx.reply("Not linked. Send /start to begin.");
+      return;
+    }
+    try {
+      const { getCredits } = await import("@/lib/db/credits");
+      const credits = await getCredits(link.handler_id);
+      const balance = credits?.balance_calls ?? 0;
+      const totalPaidSol =
+        Number(credits?.total_paid_lamports ?? 0) / 1_000_000_000;
+      const agents = await listAgentsForHandler(link.handler_id);
+      const codename =
+        (agents[0] as any)?.agent_name?.trim() ||
+        agents[0]?.persona ||
+        "Operative";
+      await ctx.reply(
+        `*${codename}*\n\n` +
+          `SAW credits: *${balance}* calls left\n` +
+          `Total topped up: ${totalPaidSol.toFixed(3)} SOL\n\n` +
+          (balance === 0
+            ? `Out of credits. Top up at ${WEB_URL}/demo to keep using SAW's LLM.`
+            : `Each chat message costs 1 credit.`),
+        { parse_mode: "Markdown" as any }
+      );
+    } catch (e: any) {
+      await ctx.reply(`Couldn't fetch balance: ${e.message ?? String(e)}`);
+    }
+  });
+
   bot.on("message:text", async (ctx) => {
     const chatId = ctx.chat?.id;
     const text = ctx.message?.text?.trim();
