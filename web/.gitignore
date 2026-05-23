@@ -1,1 +1,5 @@
 .vercel
+
+# Test output
+test-results/
+playwright-report/
