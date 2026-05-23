@@ -1,20 +1,22 @@
 /**
  * Telegram bot helpers.
  *
- * v1: chat-only bot — the bot receives messages, routes them through
- * /api/agent/chat, and replies with the agent's reply + a link to the
- * web app for execution. Actual on-chain dispatch still requires the
- * browser session (agent keypair lives in localStorage).
+ * v1.2: bot delegates to /api/agent/chat via internal auth — inherits
+ * the full tool suite (propose_swap, get_market_price, get_yield_options,
+ * get_wallet_state, etc.) without duplicating it. Schedule actions
+ * returned by the LLM are applied server-side (insert into DB). Actual
+ * on-chain signing still happens in the browser session because the
+ * agent keypair lives in localStorage.
  */
 
-import { Bot, webhookCallback, type Context } from "grammy";
+import { Bot, webhookCallback } from "grammy";
 import { supabaseAdmin } from "@/lib/supabase";
-import { detectProvider } from "@/lib/api-key";
-import { getProviderAdapter, isProviderImplemented } from "@/lib/providers";
 import { getDecryptedByokKey } from "@/lib/db/byok";
 import { listAgentsForHandler } from "@/lib/db/agents";
 import { listChatMessages, appendChatMessage } from "@/lib/db/chat";
-import type { ChatMessage as ProviderMessage } from "@/lib/providers";
+import { listScheduleForAgent, createScheduledItem, removeScheduledItem } from "@/lib/db/schedule";
+import { PERSONAS, getPersona } from "@/lib/personas";
+import { DEMO_DECIMALS } from "@/lib/saw";
 
 const WEB_URL = process.env.NEXT_PUBLIC_APP_URL || "https://saw-gilt.vercel.app";
 
@@ -192,50 +194,133 @@ function registerHandlers(bot: Bot) {
       await ctx.reply("Couldn't decrypt your LLM key. Re-add via the web.");
       return;
     }
-    const provider = detectProvider(key.plaintext);
-    if (!isProviderImplemented(provider as any)) {
-      await ctx.reply(`Provider ${provider} not yet supported.`);
+
+    const internalSecret = process.env.INTERNAL_API_SECRET;
+    if (!internalSecret) {
+      await ctx.reply(
+        "Server missing INTERNAL_API_SECRET. The bot needs this to talk to the agent endpoint."
+      );
       return;
     }
-    const adapter = getProviderAdapter(provider as any);
 
     await ctx.replyWithChatAction("typing");
 
-    // Load last 10 messages from DB to keep context
-    const history = await listChatMessages(agent.id, 10);
-    const messages: ProviderMessage[] = [
-      {
-        role: "system",
-        content: personaSystemPrompt(agent.persona, WEB_URL),
-      },
-      ...history.map(
-        (m): ProviderMessage => ({
-          role: m.role === "agent" ? "assistant" : m.role === "system" ? "system" : "user",
-          content: m.content,
-        })
-      ),
-      { role: "user", content: text },
-    ];
+    // Load context: last 12 chat messages + current schedule for the
+    // active persona, so the agent has full briefing context.
+    const [history, schedule] = await Promise.all([
+      listChatMessages(agent.id, 12),
+      listScheduleForAgent(agent.id),
+    ]);
+    const personaDef = getPersona(agent.persona) ?? PERSONAS[0];
+    const queuedItems = schedule
+      .filter((s) => s.status === "queued")
+      .slice(0, 8)
+      .map((s) => ({
+        id: s.id,
+        vendor: s.vendor ?? "",
+        amount: Number(s.amount),
+        scheduledFor: new Date(s.scheduled_for).getTime(),
+        reason: s.reason ?? "",
+        status: s.status,
+      }));
 
+    // Reuse the web's /api/agent/chat endpoint via internal auth so the
+    // bot inherits all the LLM tools (propose_swap, get_market_price,
+    // get_yield_options, get_wallet_state, etc.) without duplicating
+    // the logic here. Returns { reply, actions }.
+    let reply = "";
+    let actions: Array<any> = [];
     try {
-      const response = await adapter.complete(
-        {
-          model: adapter.defaultModel,
-          messages,
-          temperature: 0.6,
-          maxTokens: 400,
+      const res = await fetch(`${WEB_URL}/api/agent/chat`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-user-api-key": key.plaintext,
+          "x-internal-secret": internalSecret,
+          "x-handler-id": link.handler_id,
+          "x-telegram-voice": "1",
         },
-        key.plaintext
-      );
-      const reply = response.content.trim() || "…";
-
-      await appendChatMessage(agent.id, "user", text);
-      await appendChatMessage(agent.id, "agent", reply);
-
-      await ctx.reply(reply);
+        body: JSON.stringify({
+          persona: {
+            id: personaDef.id,
+            name: personaDef.name,
+            role: personaDef.role,
+            mission: personaDef.mission,
+            policy: personaDef.policy,
+            walletBalance: 0, // server can't read on-chain balance for TG; LLM treats as unknown
+          },
+          schedule: queuedItems,
+          conversation: history.map((m) => ({
+            role: m.role === "agent" ? "agent" : m.role === "system" ? "system" : "user",
+            content: m.content,
+          })),
+          newMessage: text,
+          surface: "telegram",
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
+      }
+      const data = await res.json();
+      reply = String(data.reply ?? "").trim();
+      actions = Array.isArray(data.actions) ? data.actions : [];
     } catch (e: any) {
-      await ctx.reply(`LLM error: ${e.message ?? String(e)}`);
+      await ctx.reply(`Agent error: ${e.message ?? String(e)}`);
+      return;
     }
+
+    // Apply actions server-side so the schedule item exists in DB by
+    // the time the user opens the web for on-chain signing.
+    const appliedSummary: string[] = [];
+    for (const action of actions) {
+      try {
+        if (action.type === "add") {
+          const item = action.item ?? {};
+          const trig = item.trigger ?? { kind: "time" };
+          const createdRow = await createScheduledItem({
+            agentId: agent.id,
+            actionType: "pay",
+            vendor: String(item.vendor ?? ""),
+            amount: Number(item.amount ?? 0),
+            asset: "USDC-dev",
+            reason: String(item.reason ?? ""),
+            scheduledFor: new Date(Number(item.scheduledFor ?? Date.now())),
+            trigger: {
+              kind: trig.kind,
+              basisPrice: trig.basisPrice,
+              dropPct: trig.dropPct,
+              targetPrice: trig.price,
+              deadline: trig.deadline ? new Date(trig.deadline) : undefined,
+            },
+          });
+          appliedSummary.push(
+            `+ ${(Number(createdRow.amount) / 10 ** DEMO_DECIMALS).toFixed(2)} USDC-dev → ${createdRow.vendor ?? "?"}`
+          );
+        } else if (action.type === "remove") {
+          await removeScheduledItem(String(action.id));
+          appliedSummary.push(`- removed item`);
+        }
+        // "modify" and "ready" are no-ops from TG for now.
+      } catch (e: any) {
+        appliedSummary.push(`! error applying ${action.type}: ${e.message ?? String(e)}`);
+      }
+    }
+
+    // Persist the conversation turn.
+    await appendChatMessage(agent.id, "user", text);
+    if (reply) await appendChatMessage(agent.id, "agent", reply);
+
+    const finalText = [
+      reply || "Listo.",
+      appliedSummary.length > 0
+        ? `\n\n📋 Dossier updated:\n${appliedSummary.join("\n")}\n\nSign on-chain at ${WEB_URL}/demo when ready.`
+        : "",
+    ]
+      .join("")
+      .trim();
+
+    await ctx.reply(finalText);
   });
 }
 
@@ -246,43 +331,6 @@ async function findLink(chatId: number) {
     .eq("chat_id", chatId)
     .maybeSingle();
   return data;
-}
-
-function personaSystemPrompt(persona: string, webUrl: string): string {
-  const shared =
-    `You are a conversational assistant. Keep replies short — 1 to 3 sentences ` +
-    `unless the user asks for detail. Respond in the same language the user wrote in. ` +
-    `Greet greetings, answer questions, hold context. Don't end every reply with ` +
-    `"open ${webUrl}/demo" — only mention it when the user asks to actually execute, ` +
-    `swap, stake, or sign something on-chain. This is a chat surface, not a wizard.`;
-
-  if (persona === "greedie") {
-    return (
-      shared +
-      ` Persona: Greedie — a fast-thinking on-chain trader. Watch tape, prices, ` +
-      `momentum, dips. Speak in alpha, never apologize. When the user asks about ` +
-      `prices, opportunities, or trades, you can talk through it conversationally; ` +
-      `you only need to point to the web app for actual signing.`
-    );
-  }
-  if (persona === "conservador") {
-    return (
-      shared +
-      ` Persona: Conservador — a yield researcher. Capital preservation first. ` +
-      `When the user asks about putting money to work, talk about Solana DeFi yield ` +
-      `(Kamino, Jupiter Lend, Save, marginfi, lulo, drift, etc.) and ranges of APR. ` +
-      `Be specific. Only redirect to ${webUrl}/demo when ready to actually stake.`
-    );
-  }
-  if (persona === "estable") {
-    return (
-      shared +
-      ` Persona: Estable — a calm wealth coach, not a trader. Focus on habits, ` +
-      `recurring transfers, balance, saving, anti-impulse. Ask before suggesting. ` +
-      `When the user wants to schedule something concrete, point to ${webUrl}/demo.`
-    );
-  }
-  return shared;
 }
 
 function randomCode(): string {

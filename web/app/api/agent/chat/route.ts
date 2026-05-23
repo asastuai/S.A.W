@@ -44,6 +44,7 @@ type RequestBody = {
   schedule: ScheduleItemLite[];
   conversation: ChatMessage[];
   newMessage: string;
+  surface?: "web" | "telegram";
 };
 
 type Trigger =
@@ -179,6 +180,21 @@ What you NEVER do:
 Tone: measured, decisive, factual. "Boring is the alpha" — but boring doesn't mean slow.`
     : "";
 
+  const isTelegram = body.surface === "telegram";
+  const surfaceLayer = isTelegram
+    ? `
+
+SURFACE: Telegram. You're talking through the handler's secure operative channel — short, brisk, on-mission. Treat the handler like a senior contact in a dossier: codename basis, no fluff, no sales lines. Drop language like "operative", "the dossier", "the brief", "handler" naturally; never break character. Respond in the language the handler uses (Spanish or English). Keep replies tight: 1-3 sentences for chitchat, longer ONLY when delivering intel (yield rankings, market reads, schedule confirmations).
+
+When the handler asks you to schedule a payment, swap or stake, USE TOOLS to propose it. The dossier syncs to the handler's web station; they sign there. After tool calls, summarize in one line: "Filed for ${persona.name}: 100 USDC-dev → Lucas. Standing by for your sign-off at the station."
+
+Do NOT redirect to the web for ordinary conversation. Do mention the web only when actual on-chain signing is needed.`
+    : "";
+
+  const langLine = isTelegram
+    ? "Reply in the language the handler used (Spanish or English)."
+    : "ALWAYS reply in English.";
+
   return `You are ${persona.name}, a ${persona.role}.
 Mission: ${persona.mission}
 
@@ -194,9 +210,9 @@ ${scheduleSummary}
 
 NOW is ${new Date().toISOString()} (epoch ms: ${Date.now()}).
 
-USE TOOLS to add/modify/remove items — don't just describe. Amounts are in USDC-dev tokens (the agent's wallet holds USDC-dev as a stand-in for USDC on devnet, whole units like 20). Be conversational and brief. ALWAYS reply in English.
+USE TOOLS to add/modify/remove items — don't just describe. Amounts are in USDC-dev tokens (the agent's wallet holds USDC-dev as a stand-in for USDC on devnet, whole units like 20). Be conversational and brief. ${langLine}
 
-CRITICAL OUTPUT RULE: Every response MUST contain a short natural-language reply to the handler in addition to any tool calls. Never return only tool calls with empty text. Even one sentence like "Done, added X" or "Looking at the market now…" is mandatory.${greedieExtras}${conservadorExtras}${estableExtras}
+CRITICAL OUTPUT RULE: Every response MUST contain a short natural-language reply to the handler in addition to any tool calls. Never return only tool calls with empty text. Even one sentence like "Done, added X" or "Looking at the market now…" is mandatory.${greedieExtras}${conservadorExtras}${estableExtras}${surfaceLayer}
 
 When schedule looks ready and user confirms, call mark_ready_to_run.`;
 }
@@ -454,29 +470,42 @@ export async function POST(req: NextRequest) {
     }
     const adapter = getProviderAdapter(provider as any);
 
-    // Optional rate limit: only enforced if the caller sent a Privy JWT
-    // and the handler exists in DB. Anonymous requests pass through.
+    // Resolve handlerId either from a Privy JWT (browser caller) or from
+    // an internal-auth header set by trusted server-side callers like the
+    // Telegram bot (which can't carry a user JWT). Internal auth requires
+    // both INTERNAL_API_SECRET to match and a valid x-handler-id header.
     let handlerId: string | null = null;
-    try {
-      const claims = extractPrivyClaims(req);
-      if (claims) {
-        const handler = await getHandlerByPrivy(claims.privy_user_id);
-        if (handler) {
-          handlerId = handler.id;
-          const rl = await llmRateLimitReached(handler.id);
-          if (rl.reached) {
-            return NextResponse.json(
-              {
-                reply: `Daily LLM call cap reached (${rl.used}/${rl.limit}). Resets in 24h. Switch your BYOK provider or upgrade tier when ready.`,
-                actions: [],
-              },
-              { status: 429 }
-            );
-          }
+    const internalSecret = req.headers.get("x-internal-secret")?.trim();
+    const expectedInternalSecret = (process.env.INTERNAL_API_SECRET ?? "").trim();
+    if (
+      expectedInternalSecret &&
+      internalSecret &&
+      internalSecret === expectedInternalSecret
+    ) {
+      const internalHandler = req.headers.get("x-handler-id")?.trim() || null;
+      if (internalHandler) handlerId = internalHandler;
+    } else {
+      try {
+        const claims = extractPrivyClaims(req);
+        if (claims) {
+          const handler = await getHandlerByPrivy(claims.privy_user_id);
+          if (handler) handlerId = handler.id;
         }
+      } catch {
+        /* non-fatal — rate limit is best-effort */
       }
-    } catch {
-      /* non-fatal — rate limit is best-effort */
+    }
+    if (handlerId) {
+      const rl = await llmRateLimitReached(handlerId);
+      if (rl.reached) {
+        return NextResponse.json(
+          {
+            reply: `Daily LLM call cap reached (${rl.used}/${rl.limit}). Resets in 24h. Switch your BYOK provider or upgrade tier when ready.`,
+            actions: [],
+          },
+          { status: 429 }
+        );
+      }
     }
 
     // All three personas get the swap + market tools. Their system
