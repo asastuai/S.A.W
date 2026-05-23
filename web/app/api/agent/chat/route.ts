@@ -484,35 +484,56 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Key resolution order:
-    //   1. User-provided BYOK key (x-user-api-key) — free for SAW
-    //   2. SAW server-side key (SAW_LLM_KEY env, Gemini) — costs SAW;
-    //      only used when the handler has positive credit balance
-    //   3. Legacy GROQ_API_KEY env (owner localhost dev only)
-    let apiKey = userKey;
+    // Key resolution. The endpoint may call the LLM multiple times per
+    // request (tool-call loop), so we resolve a CHAIN of keys to try
+    // in order. When one fails with a transient error (5xx, rate-limit,
+    // overloaded) the next one in the chain takes over for that call.
+    //
+    //   1. User-provided BYOK key — single, no fallback (their key,
+    //      their problem if it errors)
+    //   2. SAW server-side keys — SAW_LLM_KEY → SAW_LLM_KEY_2 →
+    //      SAW_LLM_KEY_3. Only used when the handler has credits.
+    //   3. Legacy GROQ_API_KEY — single, dev-only fallback
+    type AdapterEntry = { key: string; provider: Provider; adapter: ReturnType<typeof getProviderAdapter> };
+    const chain: AdapterEntry[] = [];
+
+    const buildEntry = (rawKey: string | undefined): AdapterEntry | null => {
+      const k = rawKey?.trim();
+      if (!k) return null;
+      const p = detectProvider(k);
+      if (p === "unknown" || !isProviderImplemented(p as any)) return null;
+      return { key: k, provider: p as Provider, adapter: getProviderAdapter(p as any) };
+    };
+
     let usingSawKey = false;
-    if (!apiKey && handlerId && process.env.SAW_LLM_KEY) {
+    if (userKey) {
+      const e = buildEntry(userKey);
+      if (e) chain.push(e);
+    } else if (handlerId) {
       const { getCredits } = await import("@/lib/db/credits");
       const credits = await getCredits(handlerId);
       if (credits && credits.balance_calls > 0) {
-        apiKey = process.env.SAW_LLM_KEY.trim();
-        usingSawKey = true;
+        for (const envName of ["SAW_LLM_KEY", "SAW_LLM_KEY_2", "SAW_LLM_KEY_3"]) {
+          const e = buildEntry(process.env[envName]);
+          if (e) chain.push(e);
+        }
+        if (chain.length > 0) usingSawKey = true;
       }
     }
-    if (!apiKey) apiKey = process.env.GROQ_API_KEY?.trim() || "";
+    if (chain.length === 0) {
+      const fallback = buildEntry(process.env.GROQ_API_KEY);
+      if (fallback) chain.push(fallback);
+    }
 
-    if (!apiKey) {
+    if (chain.length === 0) {
       return NextResponse.json(noKeyReply(Boolean(handlerId)));
     }
 
-    const provider = detectProvider(apiKey);
-    if (provider === "unknown" || !isProviderImplemented(provider as any)) {
-      return NextResponse.json({
-        reply: `Unsupported API key format. Try Groq (gsk_...), Gemini (AIza...), DeepSeek (sk-...), or Grok (xai-...).`,
-        actions: [],
-      });
-    }
-    const adapter = getProviderAdapter(provider as any);
+    // Defensive: first entry is the "primary" — its provider is what
+    // we record in llm_usage. The fallback chain is internal.
+    const primary = chain[0];
+    const provider = primary.provider;
+    const adapter = primary.adapter;
 
     if (handlerId) {
       const rl = await llmRateLimitReached(handlerId);
@@ -556,18 +577,57 @@ export async function POST(req: NextRequest) {
     let totalCompletionTokens = 0;
     const requestStart = Date.now();
 
+    // Wrap adapter.complete with sequential fallback across the chain.
+    // Transient failures (rate limit, 5xx, overloaded, network) on one
+    // entry fall through to the next. Non-transient failures (bad
+    // request, auth) surface immediately so we don't burn the whole
+    // chain on a real bug.
+    async function completeWithFallback(opts: Parameters<typeof primary.adapter.complete>[0]) {
+      let lastErr: any = null;
+      for (let i = 0; i < chain.length; i++) {
+        const entry = chain[i];
+        try {
+          const resp = await entry.adapter.complete(
+            { ...opts, model: entry.adapter.defaultModel },
+            entry.key
+          );
+          if (i > 0) {
+            console.warn(`[chat] fallback success on chain[${i}] (${entry.provider}) after errors on prior keys`);
+          }
+          return resp;
+        } catch (e: any) {
+          lastErr = e;
+          const msg = String(e?.message || e || "").toLowerCase();
+          const status = (e?.status ?? e?.statusCode ?? 0) as number;
+          const transient =
+            status === 429 ||
+            status === 503 ||
+            status === 502 ||
+            status === 504 ||
+            status >= 500 ||
+            msg.includes("rate") ||
+            msg.includes("overload") ||
+            msg.includes("high demand") ||
+            msg.includes("unavailable") ||
+            msg.includes("timeout") ||
+            msg.includes("etimedout") ||
+            msg.includes("econnreset");
+          if (!transient || i === chain.length - 1) throw e;
+          console.warn(`[chat] chain[${i}] (${entry.provider}) failed transiently, falling back: ${msg.slice(0, 100)}`);
+        }
+      }
+      throw lastErr ?? new Error("LLM chain exhausted");
+    }
+
     for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
-      const response = await adapter.complete(
-        {
-          model: adapter.defaultModel,
-          messages,
-          tools,
-          toolChoice: "auto",
-          temperature: 0.5,
-          maxTokens: 900,
-        },
-        apiKey
-      );
+      const response = await completeWithFallback({
+        model: adapter.defaultModel,
+        messages,
+        tools,
+        toolChoice: "auto",
+        temperature: 0.5,
+        maxTokens: 900,
+      });
       totalPromptTokens += response.usage.promptTokens;
       totalCompletionTokens += response.usage.completionTokens;
 
