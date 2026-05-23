@@ -440,10 +440,11 @@ const greedieTools = [
   },
 ];
 
-function noKeyReply(): { reply: string; actions: AgentAction[] } {
+function noKeyReply(canTopUp: boolean): { reply: string; actions: AgentAction[] } {
   return {
-    reply:
-      "I need a brain to think. Click ⚙ Configure agent above and paste your free Groq API key — takes a minute at console.groq.com/keys.",
+    reply: canTopUp
+      ? "Sin API key y sin créditos. Pagá 0.01 SOL en el demo (botón Top up) para que SAW use su LLM por vos — 500 calls."
+      : "I need a brain to think. Click ⚙ Configure agent above and paste your free Groq API key — takes a minute at console.groq.com/keys. O pagá 0.01 SOL en el demo (botón Top up) y SAW pone el LLM por vos.",
     actions: [],
   };
 }
@@ -456,24 +457,11 @@ export async function POST(req: NextRequest) {
     }
 
     const userKey = req.headers.get("x-user-api-key")?.trim() || "";
-    const apiKey = userKey || process.env.GROQ_API_KEY || "";
-    if (!apiKey) {
-      return NextResponse.json(noKeyReply());
-    }
 
-    const provider = detectProvider(apiKey);
-    if (provider === "unknown" || !isProviderImplemented(provider as any)) {
-      return NextResponse.json({
-        reply: `Unsupported API key format. Try Groq (gsk_...), Gemini (AIza...), DeepSeek (sk-...), or Grok (xai-...).`,
-        actions: [],
-      });
-    }
-    const adapter = getProviderAdapter(provider as any);
-
-    // Resolve handlerId either from a Privy JWT (browser caller) or from
-    // an internal-auth header set by trusted server-side callers like the
-    // Telegram bot (which can't carry a user JWT). Internal auth requires
-    // both INTERNAL_API_SECRET to match and a valid x-handler-id header.
+    // Resolve handlerId first — both for rate limiting and for the
+    // paid-credits fallback path. Either from a Privy JWT (browser
+    // caller) or from an internal-auth header set by trusted server-side
+    // callers like the Telegram bot (which can't carry a user JWT).
     let handlerId: string | null = null;
     const internalSecret = req.headers.get("x-internal-secret")?.trim();
     const expectedInternalSecret = (process.env.INTERNAL_API_SECRET ?? "").trim();
@@ -495,6 +483,37 @@ export async function POST(req: NextRequest) {
         /* non-fatal — rate limit is best-effort */
       }
     }
+
+    // Key resolution order:
+    //   1. User-provided BYOK key (x-user-api-key) — free for SAW
+    //   2. SAW server-side key (SAW_LLM_KEY env, Gemini) — costs SAW;
+    //      only used when the handler has positive credit balance
+    //   3. Legacy GROQ_API_KEY env (owner localhost dev only)
+    let apiKey = userKey;
+    let usingSawKey = false;
+    if (!apiKey && handlerId && process.env.SAW_LLM_KEY) {
+      const { getCredits } = await import("@/lib/db/credits");
+      const credits = await getCredits(handlerId);
+      if (credits && credits.balance_calls > 0) {
+        apiKey = process.env.SAW_LLM_KEY.trim();
+        usingSawKey = true;
+      }
+    }
+    if (!apiKey) apiKey = process.env.GROQ_API_KEY?.trim() || "";
+
+    if (!apiKey) {
+      return NextResponse.json(noKeyReply(Boolean(handlerId)));
+    }
+
+    const provider = detectProvider(apiKey);
+    if (provider === "unknown" || !isProviderImplemented(provider as any)) {
+      return NextResponse.json({
+        reply: `Unsupported API key format. Try Groq (gsk_...), Gemini (AIza...), DeepSeek (sk-...), or Grok (xai-...).`,
+        actions: [],
+      });
+    }
+    const adapter = getProviderAdapter(provider as any);
+
     if (handlerId) {
       const rl = await llmRateLimitReached(handlerId);
       if (rl.reached) {
@@ -875,9 +894,21 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         console.warn("[chat] llm_usage record failed", e);
       }
+
+      // Spend one credit if we used SAW's key. Best-effort — if the
+      // spend fails we still return the reply (user shouldn't be
+      // penalized for our DB hiccup), but it logs so we can reconcile.
+      if (usingSawKey) {
+        try {
+          const { spendOneCall } = await import("@/lib/db/credits");
+          await spendOneCall(handlerId);
+        } catch (e) {
+          console.warn("[chat] credit decrement failed", e);
+        }
+      }
     }
 
-    return NextResponse.json({ reply: finalReply, actions });
+    return NextResponse.json({ reply: finalReply, actions, usingSawKey });
   } catch (e: any) {
     return NextResponse.json(
       { reply: `LLM error: ${e.message ?? String(e)}`, actions: [] },

@@ -197,19 +197,19 @@ function registerHandlers(bot: Bot) {
       agents.find((a) => a.byok_key_id) ??
       agents[0];
 
-    if (!agent.byok_key_id) {
-      await ctx.reply(
-        `Agent has no LLM key configured.\n\nOpen ${WEB_URL}/demo, set your API key, then click "Connect Telegram" again to attach it.`
-      );
-      return;
-    }
-
-    let key;
-    try {
-      key = await getDecryptedByokKey(agent.byok_key_id);
-    } catch {
-      await ctx.reply("Couldn't decrypt your LLM key. Re-add via the web.");
-      return;
+    // Key resolution: if the agent has a BYOK key attached, decrypt
+    // and use it. Otherwise let the endpoint fall back to SAW's key
+    // (paid via credits) — no key in the request triggers the credit
+    // path on the server.
+    let plaintextKey: string | undefined;
+    if (agent.byok_key_id) {
+      try {
+        const key = await getDecryptedByokKey(agent.byok_key_id);
+        plaintextKey = key.plaintext;
+      } catch {
+        await ctx.reply("Couldn't decrypt your LLM key. Re-add via the web.");
+        return;
+      }
     }
 
     const internalSecret = process.env.INTERNAL_API_SECRET;
@@ -248,15 +248,16 @@ function registerHandlers(bot: Bot) {
     let reply = "";
     let actions: Array<any> = [];
     try {
+      const headers: Record<string, string> = {
+        "content-type": "application/json",
+        "x-internal-secret": internalSecret,
+        "x-handler-id": link.handler_id,
+        "x-telegram-voice": "1",
+      };
+      if (plaintextKey) headers["x-user-api-key"] = plaintextKey;
       const res = await fetch(`${WEB_URL}/api/agent/chat`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-user-api-key": key.plaintext,
-          "x-internal-secret": internalSecret,
-          "x-handler-id": link.handler_id,
-          "x-telegram-voice": "1",
-        },
+        headers,
         body: JSON.stringify({
           persona: {
             id: personaDef.id,

@@ -84,6 +84,7 @@ import { FeeSummary } from "@/components/fee-summary";
 import { ProviderBadge } from "@/components/provider-badge";
 import { ConnectTelegramButton } from "@/components/connect-telegram-button";
 import { OnboardingTour } from "@/components/onboarding-tour";
+import { TopupCard } from "@/components/topup-card";
 import { getTreasuryAddress } from "@/lib/treasury";
 import { Chat } from "@/components/chat";
 import { ScheduleView } from "@/components/schedule-view";
@@ -212,6 +213,7 @@ export default function DemoPage() {
   const [scanning, setScanning] = useState<boolean>(false);
   const [apiKey, setApiKeyState] = useState<string | null>(null);
   const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
+  const [sawCredits, setSawCredits] = useState<number>(0);
   const executingRef = useRef<boolean>(false);
   const briefingRef = useRef<Briefing | null>(null);
 
@@ -219,6 +221,30 @@ export default function DemoPage() {
   useEffect(() => {
     setApiKeyState(loadApiKey());
   }, []);
+
+  // Fetch SAW credit balance once Privy is ready. Used to bypass the
+  // AgentGate when the handler has paid credits but no BYOK key.
+  useEffect(() => {
+    if (!privyAuthed) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token) return;
+        const res = await fetch("/api/topup", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setSawCredits(data.balance_calls ?? 0);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [privyAuthed, getAccessToken]);
 
   // 2.3: Fire-and-forget DB sync helper.
   // Local state is the working copy; DB is the authoritative store synced
@@ -1588,6 +1614,12 @@ export default function DemoPage() {
         />
       )}
 
+      {(phase === "briefing" || phase === "live") && (
+        <div className="px-4 sm:px-6 py-2 max-w-7xl mx-auto w-full">
+          <TopupCard hasApiKey={!!apiKey} onCreditAdded={setSawCredits} />
+        </div>
+      )}
+
       {dbAgent && (phase === "briefing" || phase === "live") && (
         <div className="border-b border-ash px-4 sm:px-6 py-2 flex items-center justify-center gap-2 flex-wrap">
           <SleepingBadge
@@ -1629,8 +1661,11 @@ export default function DemoPage() {
           <HandlerError message={handlerState.error} />
         ) : !wallet.connected ? (
           <Idle />
-        ) : !apiKey ? (
-          <AgentGate onOpen={() => setShowApiKeyModal(true)} />
+        ) : !apiKey && sawCredits === 0 ? (
+          <AgentGate
+            onOpen={() => setShowApiKeyModal(true)}
+            onCreditAdded={setSawCredits}
+          />
         ) : phase === "pick" ? (
           <PersonaPicker onPick={bootstrap} error={error} />
         ) : phase === "setup" ? (
@@ -1881,7 +1916,13 @@ function Idle() {
   );
 }
 
-function AgentGate({ onOpen }: { onOpen: () => void }) {
+function AgentGate({
+  onOpen,
+  onCreditAdded,
+}: {
+  onOpen: () => void;
+  onCreditAdded?: (n: number) => void;
+}) {
   const providers = [
     { id: "groq", name: "Groq", note: "Free · fast", active: true },
     { id: "gemini", name: "Gemini", note: "Flash-Lite · cheap", active: true },
@@ -1941,7 +1982,7 @@ function AgentGate({ onOpen }: { onOpen: () => void }) {
         ))}
       </div>
 
-      <p className="text-xs text-bone/50 max-w-md mx-auto leading-relaxed">
+      <p className="text-xs text-bone/50 max-w-md mx-auto leading-relaxed mb-8">
         Click <span className="text-gold">Groq</span> to start. Get a free key at{" "}
         <a
           href="https://console.groq.com/keys"
@@ -1953,6 +1994,18 @@ function AgentGate({ onOpen }: { onOpen: () => void }) {
         </a>{" "}
         — 1 minute, no card required. Other providers coming soon.
       </p>
+
+      <div className="border-t border-ash pt-6 mt-2">
+        <p className="text-[10px] uppercase tracking-widest text-bone/40 mb-3">
+          Or skip the API key
+        </p>
+        <p className="text-xs text-bone/60 mb-4 max-w-md mx-auto leading-relaxed">
+          Don't want to mess with API keys? Pay <strong className="text-gold">0.01 SOL</strong> and
+          SAW puts an LLM behind your agent for the next <strong className="text-gold">500 calls</strong>.
+          One signature, no setup.
+        </p>
+        <TopupCard hasApiKey={false} onCreditAdded={onCreditAdded} />
+      </div>
     </div>
   );
 }
