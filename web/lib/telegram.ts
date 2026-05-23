@@ -171,10 +171,27 @@ function registerHandlers(bot: Bot) {
       return;
     }
 
-    // Active persona from the link (defaults to greedie). Falls back
-    // to the first agent that has a key attached if the active one
-    // isn't found (eg. a stale link from before multi-persona).
-    const wantPersona = link.active_persona ?? "greedie";
+    // Auto-routing: heuristic keyword scan picks the persona best suited
+    // for the message. If it differs from the current active_persona, we
+    // hand off explicitly so the user always knows who's talking.
+    const currentPersona = link.active_persona ?? "greedie";
+    const detected = detectIntentPersona(text);
+    let wantPersona = currentPersona;
+    let handoffNote = "";
+    if (detected && detected !== currentPersona) {
+      const fromName = getPersona(currentPersona)?.name ?? currentPersona;
+      const toName = getPersona(detected)?.name ?? detected;
+      const reason = handoffReason(detected);
+      handoffNote =
+        `🔁 ${fromName} → ${toName}.\n` +
+        `Eso entra como ${reason}. Te lo paso a ${toName}, ya lo agarra.\n\n`;
+      wantPersona = detected;
+      await supabaseAdmin()
+        .from("telegram_links")
+        .update({ active_persona: detected })
+        .eq("chat_id", chatId);
+    }
+
     const agent =
       agents.find((a) => a.persona === wantPersona && a.byok_key_id) ??
       agents.find((a) => a.byok_key_id) ??
@@ -312,6 +329,7 @@ function registerHandlers(bot: Bot) {
     if (reply) await appendChatMessage(agent.id, "agent", reply);
 
     const finalText = [
+      handoffNote,
       reply || "Listo.",
       appliedSummary.length > 0
         ? `\n\n📋 Dossier updated:\n${appliedSummary.join("\n")}\n\nSign on-chain at ${WEB_URL}/demo when ready.`
@@ -322,6 +340,66 @@ function registerHandlers(bot: Bot) {
 
     await ctx.reply(finalText);
   });
+}
+
+// Lightweight keyword-based intent router. Returns the persona best
+// suited for the message, or null when ambiguous / casual (in which
+// case the current active persona stays). Zero-cost, runs in <1ms.
+// Words intentionally include both English and Spanish; if a keyword
+// appears for multiple personas, the persona with the most hits wins;
+// ties resolve in order greedie > conservador > estable (the most
+// "action-oriented" person breaks the tie since the user is asking
+// for something concrete).
+function detectIntentPersona(
+  text: string
+): "greedie" | "conservador" | "estable" | null {
+  const t = text.toLowerCase();
+
+  const greedieHints = [
+    "swap", "buy", "sell", "trade", "trader",
+    "compra", "vende", "venta", "vender",
+    "price", "precio", "pump", "dump", "moon",
+    "alpha", "momentum", "tape", "candle", "vela",
+    "long", "short", "leverage", "perp",
+    "sol", "bonk", "jup", "btc", "eth",
+    "dip", "rip", "ath", "atl",
+  ];
+
+  const conservadorHints = [
+    "yield", "apr", "apy", "stake", "staking", "lend", "lending",
+    "pool", "vault", "farm", "harvest",
+    "kamino", "marginfi", "lulo", "drift", "jupiter lend", "save",
+    "rendimiento", "rendir", "interes", "interés",
+    "deposit", "deposito", "depósito", "depositar",
+  ];
+
+  const estableHints = [
+    "save", "savings", "ahorrar", "ahorro", "ahorrá",
+    "habit", "hábito", "habito", "weekly", "monthly", "every week",
+    "every month", "todas las semanas", "todos los meses",
+    "budget", "presupuesto",
+    "coach", "consejo", "plan", "rebalance", "rebalancear",
+    "set aside", "guardar", "apartar",
+  ];
+
+  const hits = (list: string[]) =>
+    list.reduce((n, w) => (t.includes(w) ? n + 1 : n), 0);
+
+  const g = hits(greedieHints);
+  const c = hits(conservadorHints);
+  const e = hits(estableHints);
+
+  if (g === 0 && c === 0 && e === 0) return null;
+  const max = Math.max(g, c, e);
+  if (g === max) return "greedie";
+  if (c === max) return "conservador";
+  return "estable";
+}
+
+function handoffReason(p: "greedie" | "conservador" | "estable"): string {
+  if (p === "greedie") return "trade / market read (degen desk)";
+  if (p === "conservador") return "yield / staking (research desk)";
+  return "savings / habit (coach desk)";
 }
 
 async function findLink(chatId: number) {
