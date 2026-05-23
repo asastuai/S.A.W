@@ -583,7 +583,8 @@ export async function POST(req: NextRequest) {
     // request, auth) surface immediately so we don't burn the whole
     // chain on a real bug.
     async function completeWithFallback(opts: Parameters<typeof primary.adapter.complete>[0]) {
-      let lastErr: any = null;
+      const attempted: string[] = [];
+      console.log(`[chat] LLM chain has ${chain.length} provider(s): ${chain.map((c) => c.provider).join(", ")}`);
       for (let i = 0; i < chain.length; i++) {
         const entry = chain[i];
         try {
@@ -592,31 +593,42 @@ export async function POST(req: NextRequest) {
             entry.key
           );
           if (i > 0) {
-            console.warn(`[chat] fallback success on chain[${i}] (${entry.provider}) after errors on prior keys`);
+            console.warn(`[chat] fallback success on chain[${i}] (${entry.provider})`);
           }
           return resp;
         } catch (e: any) {
-          lastErr = e;
-          const msg = String(e?.message || e || "").toLowerCase();
+          const msg = String(e?.message || e || "");
           const status = (e?.status ?? e?.statusCode ?? 0) as number;
+          attempted.push(`${entry.provider}(${status || "?"}): ${msg.slice(0, 120)}`);
+          const lc = msg.toLowerCase();
           const transient =
             status === 429 ||
             status === 503 ||
             status === 502 ||
             status === 504 ||
             status >= 500 ||
-            msg.includes("rate") ||
-            msg.includes("overload") ||
-            msg.includes("high demand") ||
-            msg.includes("unavailable") ||
-            msg.includes("timeout") ||
-            msg.includes("etimedout") ||
-            msg.includes("econnreset");
-          if (!transient || i === chain.length - 1) throw e;
-          console.warn(`[chat] chain[${i}] (${entry.provider}) failed transiently, falling back: ${msg.slice(0, 100)}`);
+            lc.includes("rate") ||
+            lc.includes("overload") ||
+            lc.includes("high demand") ||
+            lc.includes("unavailable") ||
+            lc.includes("timeout") ||
+            lc.includes("etimedout") ||
+            lc.includes("econnreset") ||
+            // Google SDK errors come as plain Error objects without status,
+            // so fall back on the prefix string they always emit on retryables.
+            lc.includes("[503 service unavailable]") ||
+            lc.includes("[429");
+          console.warn(`[chat] chain[${i}] ${entry.provider} failed (transient=${transient}): ${msg.slice(0, 200)}`);
+          if (!transient || i === chain.length - 1) {
+            // Wrap with full attempt log so the response surfaces it to the user.
+            const combined = new Error(
+              `LLM chain exhausted (${attempted.length} attempt(s)):\n${attempted.join("\n")}`
+            );
+            throw combined;
+          }
         }
       }
-      throw lastErr ?? new Error("LLM chain exhausted");
+      throw new Error("LLM chain unreachable (empty)");
     }
 
     for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
