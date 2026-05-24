@@ -1,4 +1,4 @@
-# Loom script — SAW v1.2 walkthrough
+# Loom script — SAW v1.3 walkthrough
 
 Two versions. Both written to be read aloud in your voice — no edits needed.
 
@@ -11,51 +11,54 @@ Two versions. Both written to be read aloud in your voice — no edits needed.
 - Tab 2: `saw-gilt.vercel.app/demo` in incognito (signed out)
 - Tab 3: `saw-gilt.vercel.app/dashboard`
 - Tab 4: `saw-gilt.vercel.app/treasury`
+- Tab 5: Telegram open at `@Secretagentwallet_bot`
 
 ---
 
 **[0:00 — Tab 1, landing]**
 
-> Quick walkthrough of SAW.
-> Secret Agent Wallet on Solana. The missing wallet layer for AI agents.
+> Quick walk-through of SAW.
+> Secret Agent Wallet on Solana. One operative, full spectrum.
 >
-> Today you either give your agent your seed phrase — and lose everything to one prompt injection — or you sign every transaction yourself, which defeats the point of having an agent.
+> Today you either give your agent your seed phrase — and lose everything to one prompt injection — or you sign every transaction yourself, which kills the point of having an agent.
 >
-> SAW is the layer in between. Programmable on-chain limits the agent operates inside. The handler signs only the override.
+> SAW is the layer in between. Programmable on-chain limits the agent operates inside. You sign only the override.
 
-**[0:20 — click "Run the dossier", Tab 2 demo]**
+**[0:18 — click "Run the dossier", Tab 2 demo]**
 
 > Here's the demo. I sign in with Phantom — one click. The agent picks me up.
 >
-> I bring my own LLM key. Today I support eight providers — Groq, Gemini, DeepSeek, Grok, OpenAI, Claude, Cerebras, Kimi. Auto-detected from the key prefix. SAW pays zero LLM cost.
+> You'll notice: I never had to pick an agent type, never had to pick a model, never had to paste an API key. The setup just runs.
 
-**[0:35 — pick Greedie + 3 sigs glossed over]**
+**[0:30 — single Phantom signature for atomic setup]**
 
-> I pick Greedie, a degen trader persona. Three signatures, one-time setup. Done.
+> One signature. Behind the scenes that one tx mints my devnet USDC, creates my agent wallet, sets up the on-chain policy and approval queue, and funds the agent's keypair with gas. Done.
 
-**[0:45 — show the briefing room with the badges]**
+**[0:40 — briefing room]**
 
-> Notice the badges up top: sleeping mode by default — the agent costs me nothing until I chat. When I'm ready, I toggle auto-wake and pick a cadence.
+> I'm now talking to my Operative. You can rename it — Lobo, Cipher, whatever. Default is just "Operative."
 >
-> I tell Greedie: swap zero-point-zero-five SOL for USDC if it dips one percent.
+> One conversation, three skills: it can read the tape and propose swaps, it can pull live yields from DefiLlama, and it can help me build saving habits. No specialist hand-off, no switching personas.
+
+**[1:00 — I say: "poneme 100 USDC en el mejor APR de Solana"]**
+
+> Watch this. I tell the Operative — in plain Spanish — "put 100 USDC into the best Solana APR you can find."
 >
-> Greedie pulls live market, decides a strategy, schedules the swap, waits for the trigger. When it fires, it executes — autonomously — under my on-chain policy.
+> It calls DefiLlama live, picks the top three pools by APR, and schedules the swap. Right side of the screen. Waiting for me to sign on-chain.
 
-**[1:10 — switch to Tab 4 treasury]**
+**[1:20 — Tab 5, Telegram]**
 
-> Every swap pays a fifty-five-basis-point fee. Cheaper than Phantom Swap, more expensive than Jupiter UI. Sits in the middle.
+> Same operative, on my phone. I paired Telegram in one click from the header.
 >
-> Treasury is fully public. Live address. Every fee landing here is verifiable in any explorer.
+> "How much do I have to put in?" — answers me with my actual balance. Same memory, same codename, same policy. From anywhere.
 
-**[1:20 — switch to Tab 3 dashboard]**
+**[1:35 — close]**
 
-> Public dashboard pulls from Supabase. Handlers, active agents, wakes, executions, fees. Updates every minute. Anonymized.
-
-**[1:30 — close]**
-
-> Repo's at github.com/asastuai/S.A.W. Devnet today, mainnet after audit.
+> Pay-with-crypto if you don't want to bring your own LLM key — 0.01 SOL gets you 500 calls. Or use Groq's free tier. Your choice.
 >
-> I built this solo. Looking for feedback, design partners, or anyone building agent infra on Solana.
+> Repo: github.com/asastuai/S.A.W. Devnet today, mainnet after audit.
+>
+> Built solo. Looking for design partners or anyone building agent infra on Solana.
 
 ---
 
@@ -63,15 +66,17 @@ Two versions. Both written to be read aloud in your voice — no edits needed.
 
 Same opening, but slow down on:
 
-1. **Architecture deep-dive (1 min)**: three Anchor programs (agent_wallet, policy_registry, approval_queue). Open `docs/architecture.md` and walk the mermaid diagram. Mention RLS at every table, Privy JWT bridge, Trigger.dev cron alternative via cron-job.org.
+1. **Architecture (1 min)**: three Anchor programs (agent_wallet, policy_registry, approval_queue). Open `docs/architecture.md` and walk the mermaid diagram. Mention RLS at every Supabase table, Privy JWT verification against the live JWKS, the cron polling cron-job.org against `/api/cron/wake-due-agents` with a Bearer secret.
 
-2. **Fee model (1 min)**: open `docs/fee-model.md`. Explain why 55 bps + 5% performance + 1% AUM. Walk the math: 500 active users = ~$14k/month revenue. Show the dashboard live numbers.
+2. **Security posture (1 min)**: open `docs/security-audit-v1.3.md`. Show: 3 CRITICAL + 6 HIGH + 4 MEDIUM closed in the v1.3 audit. Walk one fix — pick the JWT verification swap from "no signature check" to `jose.jwtVerify` against Privy's JWKS. "This shipped before anyone outside the team saw the repo."
 
-3. **Sign-in + new-agent flow (1 min)**: actually do the 3-sig setup live. Show that the agent gets its own Solana keypair + 0.05 SOL for gas.
+3. **Fee model (1 min)**: open `docs/fee-model.md`. Explain why 55 bps swap + 5% performance + 1% AUM + the SAW-credits margin (0.01 SOL = 500 LLM calls at ~95% margin). Show the dashboard live numbers.
 
-4. **Show an actual on-chain swap firing live (1 min)**: ask Greedie "swap right now", wait the few seconds, click the explorer link on the executed item, point at the real signature. "This is on devnet but mainnet is a config flag."
+4. **The actual one-shot setup (30 sec)**: from incognito, sign in, connect Phantom, single signature. Land in the briefing chat. "Compare this to MetaMask Snaps or generic delegated keys — they're either kernel-level or session-wide. SAW gives you on-chain policy with one transaction."
 
-5. **Close + the ask (30 sec)**: "Looking for [audit referrals / design partners / co-founders / specific feedback]."
+5. **Show a real on-chain swap firing live (1 min)**: ask Operative "swap right now", wait the few seconds, click the explorer link on the executed item, point at the real signature. "Devnet today; mainnet is a config flag plus an external audit."
+
+6. **Close + the ask (30 sec)**: "Looking for [audit referrals / design partners / co-founders / specific feedback]."
 
 ---
 
@@ -82,3 +87,4 @@ Same opening, but slow down on:
 - Re-record only segments that break flow (don't try to do one take)
 - Export at 1080p
 - Loom auto-transcribes — fix typos in the auto-transcript before sharing
+- Before hitting record, hard-refresh + Ctrl-Shift-Delete the demo tab so the localStorage is empty — the auto-bootstrap flow is the wow moment, don't ruin it with a half-restored session
