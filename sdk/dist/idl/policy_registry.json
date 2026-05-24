@@ -122,6 +122,58 @@
       ]
     },
     {
+      "name": "reset_daily_spent",
+      "docs": [
+        "L-4 fix: when the wallet is emergency-withdrawn, the agent's",
+        "daily_spent counter still reflects pre-emergency activity. If the",
+        "owner refunds the wallet within the same day, the agent finds",
+        "itself artificially throttled until midnight. This zeros the",
+        "counter. Only callable by the wallet PDA (CPI from agent_wallet's",
+        "emergency_withdraw)."
+      ],
+      "discriminator": [
+        162,
+        18,
+        89,
+        96,
+        191,
+        119,
+        181,
+        10
+      ],
+      "accounts": [
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "policy.wallet",
+                "account": "PolicyAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "set_policy",
       "discriminator": [
         40,
@@ -250,6 +302,16 @@
       "code": 6008,
       "name": "Overflow",
       "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6009,
+      "name": "CooldownTooLong",
+      "msg": "cooldown_seconds exceeds maximum allowed (7 days)"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidDailyLimit",
+      "msg": "daily_limit must be > 0 unless the allowlist is empty (intentional pause)"
     }
   ],
   "types": [

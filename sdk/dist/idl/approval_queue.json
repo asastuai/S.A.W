@@ -259,6 +259,79 @@
       "args": []
     },
     {
+      "name": "prune_expired_request",
+      "docs": [
+        "Mark an expired pending request as Denied and free its queue slot.",
+        "Permissionless cleanup — anyone can call. Fixes audit M-1."
+      ],
+      "discriminator": [
+        247,
+        96,
+        181,
+        238,
+        2,
+        196,
+        209,
+        74
+      ],
+      "accounts": [
+        {
+          "name": "queue",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queue.wallet",
+                "account": "QueueState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "request",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  113,
+                  117,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "request.wallet",
+                "account": "RequestAccount"
+              },
+              {
+                "kind": "account",
+                "path": "request.id",
+                "account": "RequestAccount"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "register_queue",
       "discriminator": [
         188,
@@ -414,6 +487,11 @@
       "code": 6005,
       "name": "WrongWallet",
       "msg": "Request does not belong to this wallet"
+    },
+    {
+      "code": 6006,
+      "name": "NotExpired",
+      "msg": "Request has not expired yet — cannot prune"
     }
   ],
   "types": [

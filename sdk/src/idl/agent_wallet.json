@@ -1048,6 +1048,11 @@
       "code": 6010,
       "name": "InsufficientBalance",
       "msg": "Insufficient wallet balance"
+    },
+    {
+      "code": 6011,
+      "name": "ZeroAmount",
+      "msg": "Amount must be greater than zero"
     }
   ],
   "types": [
