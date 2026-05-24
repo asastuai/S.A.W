@@ -263,3 +263,69 @@ Defense-in-depth: rotating `INTERNAL_API_SECRET` periodically remains a good pra
 2. Add `require!(amount > 0)` guards (L-1).
 3. Set policy bounds (M-2) — at least cap `cooldown_seconds`.
 4. Consider migrating from a shared INTERNAL_API_SECRET to per-caller HMAC-signed requests (rotate without redeploy + revoke individual callers).
+
+---
+
+## Round 6 — browser surface audit
+
+Scope: client-side XSS sinks, localStorage poisoning, agent-keypair exfil scenarios, Privy session storage. Methodology: grep for the obvious sinks (`dangerouslySetInnerHTML`, `innerHTML`, `eval`, `new Function`, `document.write`, `postMessage`, `addEventListener('message')`), read every chat/proposal renderer, walk the service worker, audit localStorage call sites.
+
+### Verified-safe surfaces
+
+**XSS in chat render.** `web/components/chat.tsx` line 113 renders message content as `{m.content.split("\n").map(line => <div>{line}</div>)}` — React auto-escapes. No `dangerouslySetInnerHTML` anywhere in the codebase (grepped all of `web/` — zero matches). No Markdown renderer in use. LLM-generated text in `opportunity-reel.tsx`, `schedule-view.tsx`, `agent-settings-modal.tsx` all flows through JSX children, escaped by React. Verdict: **SAFE**.
+
+**Anchor href injection.** All `href={...}` attributes either use hardcoded `https://explorer.solana.com/...` templates (the address segment is path data — even if attacker-controlled, the scheme stays `https://explorer.solana.com`) or the Telegram deep link returned by `/api/telegram/init-pair` (server-generated `https://t.me/${botUsername}?start=${encodeURIComponent(code)}` — both halves server-controlled). `target="_blank"` always paired with `rel="noreferrer"` (implies `noopener` on modern browsers). Verdict: **SAFE**.
+
+**postMessage / window.message handlers.** Zero matches. Verdict: **SAFE**.
+
+**Pair-code page (`/connect/telegram`).** Reads `code` from `window.location.search` and either displays `{code.slice(0, 6)}…` (React-escaped) or POSTs it to `/api/telegram/pair`. No HTML construction. Verdict: **SAFE**.
+
+### B-1 (LOW · fixed) · Service worker push payload trusted blindly
+
+**Where:** `web/public/sw.js` lines 15-32 pre-fix.
+
+**Impact:** The push handler does `const data = event.data.json()` and feeds `data.title`, `data.body`, `data.url` straight to `showNotification` / `openWindow`. Currently no VAPID keys are wired (web push lands in v1.4), so no inbound `push` event will fire today — but the moment we publish a VAPID public key in the manifest a misconfigured backend (or a compromised push provider) could ship a notification whose click handler navigates the user to `https://evil.tld/phish-saw`. Same-origin policy doesn't help because `clients.openWindow()` accepts any URL.
+
+**Severity:** LOW for now (no live push), MEDIUM the moment v1.4 ships push. Defensive hardening lands today so we don't forget.
+
+**Fix:** Validate `data.url` against an allowlist before passing it to `openWindow`. Only `https://saw-gilt.vercel.app/...` (same origin) and `https://t.me/...` (our bot deep link) are accepted. Anything else falls back to `/demo`. Title + body are still trusted because they're text rendered by the browser's native notification UI, not HTML — they can't run script.
+
+### B-2 (INFO · confirms L-8) · Privy JWT lives in localStorage via Supabase persistSession
+
+**Where:** `web/lib/supabase.ts` line 20 — browser client created with `auth: { persistSession: true, autoRefreshToken: true }`. The flow elsewhere calls `supabase.auth.setSession({ access_token: privyJwt, ... })` so the Supabase storage adapter writes the Privy JWT to `localStorage` under `sb-<project-ref>-auth-token`.
+
+**Impact:** Any XSS that escapes the React render path can `JSON.parse(localStorage.getItem('sb-...-auth-token'))` and walk away with the live Privy JWT. With that JWT the attacker authenticates against every protected `/api/*` route as the victim and can:
+- read chat history, schedule, opportunities
+- mutate codename / cadence
+- consume credits via chat calls
+- request an on-chain action up to the policy cap (still bounded — on-chain policy is the floor)
+
+The agent keypair (`saw-demo-v1:agent:<handler>`) sits in the same bucket and amplifies this: XSS → grab agent secret → sign txs directly until the on-chain `per_tx_cap` / `daily_cap` / `cooldown` blocks further spend.
+
+**Severity:** INFO because the round 6 audit found **zero XSS surfaces** — this risk is gated on a successful XSS that doesn't currently exist. Recorded for completeness and to keep us honest about the threat model.
+
+**Mitigation strategy (deferred to v1.5):**
+1. Move Privy JWT to an `httpOnly` cookie set by a server endpoint after `getAccessToken()` — eliminates JS-side read.
+2. Move agent signing into a dedicated iframe + postMessage capability boundary (a la Privy's embedded-wallet pattern), so even an XSS on the main origin cannot fetch the secret.
+3. Both require an architectural pass; until then, the floor is on-chain policy + the absence of any exploitable XSS sink documented above.
+
+### B-3 (INFO) · localStorage poisoning has no cross-origin path
+
+Same-origin policy makes localStorage unreachable from any external site. The only routes to corrupt our keys are:
+1. The user manually opening DevTools and editing — affects only themselves.
+2. A successful XSS on `saw-gilt.vercel.app` — see B-2; no such surface found.
+3. A successful XSS on a subdomain of `vercel.app` that shares storage — Vercel's preview deploys live on `*.vercel.app` and DO share cookie scope `vercel.app`. Mitigation: our `X-Frame-Options: DENY` (M-4) blocks iframe-based attempts; our auth uses Privy JWT, not cookies, so cross-deploy cookie reads don't grant access; the agent keypair localStorage is scoped to origin `saw-gilt.vercel.app`, not the parent domain.
+
+Verdict: no immediate action.
+
+---
+
+## Round 6 summary
+
+| Severity | Round 6 finding | Status |
+|---|---|---|
+| LOW | B-1 SW push payload trust | Fixed (origin allowlist) |
+| INFO | B-2 Privy JWT in localStorage | Documented (L-8 architectural) |
+| INFO | B-3 localStorage cross-origin | No action needed |
+
+No new exploitable XSS surface discovered. The on-chain policy stays as the security floor — exactly the SAW value proposition.

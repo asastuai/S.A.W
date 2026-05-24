@@ -25,8 +25,31 @@ self.addEventListener("push", (event) => {
   );
 });
 
+// B-1 hardening: allowlist the URL we'll navigate to so a compromised
+// push payload can't redirect users to a phishing page. Same-origin
+// paths + our Telegram bot deep-link are accepted; anything else falls
+// back to the canonical /demo route. Push isn't wired in v1.3 yet, so
+// this is defense-before-feature.
+const URL_ALLOWLIST = [
+  "https://saw-gilt.vercel.app",
+  "https://t.me",
+];
+
+function safeNotificationUrl(raw) {
+  if (typeof raw !== "string" || !raw) return "/demo";
+  // Relative paths are same-origin by definition — accept.
+  if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
+  try {
+    const u = new URL(raw);
+    const base = `${u.protocol}//${u.host}`;
+    return URL_ALLOWLIST.includes(base) ? raw : "/demo";
+  } catch {
+    return "/demo";
+  }
+}
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.url ?? "/demo";
+  const url = safeNotificationUrl(event.notification.data?.url);
   event.waitUntil(self.clients.openWindow(url));
 });
