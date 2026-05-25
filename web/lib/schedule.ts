@@ -38,6 +38,18 @@ export type ScheduleItem = {
   // what `propose_transfer` produces — the agent moves USDC-dev to a
   // real external wallet on devnet (still inside on-chain policy).
   toAddress?: string;
+  // Optional real-Jupiter swap descriptor. When set, dispatchItem builds
+  // a Jupiter v6 swap tx server-side and asks the handler to sign with
+  // Phantom. Only executes when NEXT_PUBLIC_JUPITER_ENABLED=true; on
+  // devnet it errors out with a clear "mainnet pending" message.
+  jupiterSwap?: {
+    inputMint: string;    // base58 mint OR uppercase symbol (SOL, USDC, ...)
+    outputMint: string;
+    amountLamports: string;   // stringified bigint
+    slippageBps?: number;
+    expectedOut?: string;     // stringified bigint, optional preview
+    routeLabel?: string;      // human-readable route, optional preview
+  };
 };
 
 export function describeTrigger(item: ScheduleItem): string {

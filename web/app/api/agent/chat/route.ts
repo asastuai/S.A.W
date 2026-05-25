@@ -62,6 +62,14 @@ type ActionAdd = {
     reason: string;
     trigger?: Trigger;
     toAddress?: string;
+    jupiterSwap?: {
+      inputMint: string;
+      outputMint: string;
+      amountLamports: string;
+      slippageBps?: number;
+      expectedOut?: string;
+      routeLabel?: string;
+    };
   };
 };
 type ActionRemove = { type: "remove"; id: string };
@@ -225,6 +233,13 @@ You have these capabilities. Match intent → action:
    → Validate: amount > 0, address looks like a base58 pubkey (32-44 chars). If shape is off, ask the handler to paste a valid address.
    → The on-chain policy still applies — per-tx cap + daily cap + approval threshold all enforced.
    → Confirm in one line: "Listo, propuse 5 USDC-dev a 7xKX…aBcD. Aprobá en la cola."
+
+7) JUPITER SWAP ("swap 0.1 SOL to USDC", "convertí mi SOL en USDC", "trade BONK for SOL")
+   → ALWAYS call get_jupiter_quote first to see the LIVE Jupiter route, expected output, price impact, and route. Quote API is public and works regardless of mainnet/devnet status.
+   → Then call propose_jupiter_swap with the same input/output/amount + a short reason.
+   → Amount is in the input token's SMALLEST UNIT (lamports): SOL = whole × 1e9, USDC = whole × 1e6. If the handler says "0.1 SOL", that's amountLamports="100000000". If they say "5 USDC", that's amountLamports="5000000".
+   → Execution requires mainnet. On devnet today the item queues but the execute step fails with a visible "mainnet pending" message — DO NOT hide this; mention it: "Queued, but execute requires mainnet (we are on devnet — Solana Foundation grant pending to deploy)."
+   → Symbols supported out of the box: SOL, USDC, USDT, BONK, JUP, WIF, PYTH, JTO. For other tokens, ask the handler for the base58 mint.
 
 GOLDEN RULES:
 - When user gives asset + amount + intent, you have enough. DO NOT interrogate. Make a call, then ask "ok?" at the end.
@@ -461,6 +476,43 @@ const greedieTools = [
           reason: { type: "string" },
         },
         required: ["vendor", "totalAmount", "count", "intervalSeconds", "reason"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_jupiter_quote",
+      description:
+        "Get a REAL live swap quote from Jupiter aggregator (mainnet pricing — always works, even on devnet, because the Jupiter API is public). Use this BEFORE propose_jupiter_swap to see the route, expected output, slippage, and price impact. Symbols supported: SOL, USDC, USDT, BONK, JUP, WIF, PYTH, JTO. Amount is in the input token's smallest unit (lamports for SOL = whole / 1e9; USDC = whole * 1e6).",
+      parameters: {
+        type: "object",
+        properties: {
+          inputSymbol: { type: "string", description: "e.g. SOL, USDC. Or a raw base58 mint." },
+          outputSymbol: { type: "string", description: "e.g. USDC, SOL." },
+          amountLamports: { type: "string", description: "Stringified bigint in input's smallest unit." },
+          slippageBps: { type: "number", description: "Default 50 (0.5%). Max 500 (5%)." },
+        },
+        required: ["inputSymbol", "outputSymbol", "amountLamports"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "propose_jupiter_swap",
+      description:
+        "Queue a REAL Jupiter swap for the handler to sign with Phantom. The agent server builds the tx (route + slippage + platform fee), the handler signs. Execution requires mainnet — on devnet today it queues but the execute step will fail with a 'mainnet pending' message (this is intentional and visible). Always call get_jupiter_quote first to confirm the route is sane.",
+      parameters: {
+        type: "object",
+        properties: {
+          inputSymbol: { type: "string", description: "e.g. SOL, USDC, or raw base58 mint." },
+          outputSymbol: { type: "string" },
+          amountLamports: { type: "string", description: "Stringified bigint in input's smallest unit." },
+          slippageBps: { type: "number", description: "Default 50, max 500." },
+          reason: { type: "string", description: "Why this swap (1 short sentence)." },
+        },
+        required: ["inputSymbol", "outputSymbol", "amountLamports", "reason"],
       },
     },
   },
@@ -864,6 +916,95 @@ export async function POST(req: NextRequest) {
             triggeredAction = true;
             toolResult = "added";
             break;
+
+          case "get_jupiter_quote": {
+            try {
+              const { resolveMint } = await import("@/lib/jupiter");
+              const inMint = resolveMint(String(args.inputSymbol ?? ""));
+              const outMint = resolveMint(String(args.outputSymbol ?? ""));
+              if (!inMint || !outMint) {
+                toolResult = `Unknown symbol/mint: ${!inMint ? args.inputSymbol : args.outputSymbol}. Try SOL, USDC, USDT, BONK, JUP, WIF, PYTH, JTO, or a raw base58 mint.`;
+                break;
+              }
+              let amountStr: string;
+              try {
+                amountStr = BigInt(String(args.amountLamports)).toString();
+              } catch {
+                toolResult = `Invalid amountLamports: ${args.amountLamports}`;
+                break;
+              }
+              const slippage = Math.min(Math.max(Number(args.slippageBps ?? 50), 10), 500);
+              const url = new URL("https://lite-api.jup.ag/swap/v1/quote");
+              url.searchParams.set("inputMint", inMint.mint);
+              url.searchParams.set("outputMint", outMint.mint);
+              url.searchParams.set("amount", amountStr);
+              url.searchParams.set("slippageBps", String(slippage));
+              url.searchParams.set("platformFeeBps", "55");
+              const res = await fetch(url.toString());
+              if (!res.ok) {
+                const errBody = await res.text().catch(() => "<unreadable>");
+                toolResult = `Jupiter quote failed (${res.status}): ${errBody.slice(0, 200)}`;
+                break;
+              }
+              const q: any = await res.json();
+              const inHuman = (Number(q.inAmount) / 10 ** inMint.decimals).toFixed(6);
+              const outHuman = (Number(q.outAmount) / 10 ** outMint.decimals).toFixed(6);
+              const route = (q.routePlan ?? [])
+                .map((s: any) => s.swapInfo?.label ?? "?")
+                .join(" → ");
+              const priceImpact = q.priceImpactPct
+                ? `${(Number(q.priceImpactPct) * 100).toFixed(3)}%`
+                : "n/a";
+              toolResult = `Jupiter quote (LIVE mainnet pricing):\n${inHuman} ${String(args.inputSymbol).toUpperCase()} → ${outHuman} ${String(args.outputSymbol).toUpperCase()}\nRoute: ${route}\nSlippage cap: ${slippage} bps\nPrice impact: ${priceImpact}\nPlatform fee: 55 bps to SAW treasury`;
+            } catch (e: any) {
+              toolResult = `Quote error: ${e?.message ?? String(e)}`;
+            }
+            break;
+          }
+
+          case "propose_jupiter_swap": {
+            const { resolveMint } = await import("@/lib/jupiter");
+            const inMint = resolveMint(String(args.inputSymbol ?? ""));
+            const outMint = resolveMint(String(args.outputSymbol ?? ""));
+            if (!inMint || !outMint) {
+              toolResult = `Unknown symbol: ${!inMint ? args.inputSymbol : args.outputSymbol}`;
+              break;
+            }
+            let amtBig: bigint;
+            try {
+              amtBig = BigInt(String(args.amountLamports));
+            } catch {
+              toolResult = `Invalid amountLamports: ${args.amountLamports}`;
+              break;
+            }
+            if (amtBig <= 0n) {
+              toolResult = `Amount must be positive.`;
+              break;
+            }
+            const slip = Math.min(Math.max(Number(args.slippageBps ?? 50), 10), 500);
+            const inSym = String(args.inputSymbol).toUpperCase();
+            const outSym = String(args.outputSymbol).toUpperCase();
+            const inHuman = (Number(amtBig) / 10 ** inMint.decimals).toFixed(4);
+            actions.push({
+              type: "add",
+              item: {
+                vendor: `Jupiter · ${inHuman} ${inSym} → ${outSym}`,
+                amount: 0, // Jupiter swaps don't move USDC-dev — amount tracked in jupiterSwap.amountLamports
+                scheduledFor: Date.now(),
+                reason: String(args.reason),
+                trigger: { kind: "time" },
+                jupiterSwap: {
+                  inputMint: inMint.mint,
+                  outputMint: outMint.mint,
+                  amountLamports: amtBig.toString(),
+                  slippageBps: slip,
+                },
+              },
+            });
+            triggeredAction = true;
+            toolResult = `proposed Jupiter swap: ${inHuman} ${inSym} → ${outSym} (slippage ${slip} bps). Execution requires mainnet (currently devnet — item will queue but execute will fail with clear message).`;
+            break;
+          }
 
           case "propose_transfer": {
             const raw = String(args.toAddress ?? "").trim();

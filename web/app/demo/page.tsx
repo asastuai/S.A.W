@@ -15,6 +15,7 @@ import {
   SystemProgram,
   Transaction,
   TransactionInstruction,
+  VersionedTransaction,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import {
@@ -1135,7 +1136,12 @@ export default function DemoPage() {
 
       for (const action of data.actions ?? []) {
         if (action.type === "add") {
-          if (action.item.amount <= 0 || action.item.amount > maxAmount) {
+          // Jupiter swaps are NOT denominated in USDC-dev — they move
+          // SOL / USDC / other mints directly via the handler's wallet.
+          // Skip the USDC-dev limit check for those; their cap is
+          // enforced by Jupiter slippage + the handler's signature.
+          const isJupiterItem = Boolean(action.item.jupiterSwap);
+          if (!isJupiterItem && (action.item.amount <= 0 || action.item.amount > maxAmount)) {
             skippedReasons.push(
               `${(action.item.amount / 10 ** DEMO_DECIMALS).toFixed(2)} USDC-dev exceeds limits`
             );
@@ -1395,6 +1401,58 @@ export default function DemoPage() {
     if (!handle || !setup || !persona || !sawClient) return;
 
     patchItem(item.id, { status: "executing" });
+
+    // Jupiter swap branch. The item carries the mint pair + amount; we
+    // ask the server to build the swap tx (Jupiter quote + serialize),
+    // then sign with Phantom directly. Devnet returns a clear 501 so the
+    // failure is visible instead of cryptic.
+    if (item.jupiterSwap) {
+      if (!wallet.publicKey || !wallet.signTransaction) {
+        patchItem(item.id, {
+          status: "failed",
+          errorMsg: "Phantom wallet required to sign Jupiter swaps",
+        });
+        setMascotPose("idle");
+        return;
+      }
+      try {
+        const res = await fetch("/api/agent/build-swap-tx", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            inputMint: item.jupiterSwap.inputMint,
+            outputMint: item.jupiterSwap.outputMint,
+            amountLamports: item.jupiterSwap.amountLamports,
+            slippageBps: item.jupiterSwap.slippageBps,
+            userPublicKey: wallet.publicKey.toBase58(),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          patchItem(item.id, {
+            status: "failed",
+            errorMsg: data.error ?? `Build failed (${res.status})`,
+          });
+          setMascotPose("idle");
+          return;
+        }
+        const txBuf = Buffer.from(data.swapTransaction, "base64");
+        const vtx = VersionedTransaction.deserialize(txBuf);
+        const signed = await wallet.signTransaction(vtx);
+        const sig = await connection.sendRawTransaction(signed.serialize(), {
+          skipPreflight: false,
+        });
+        await connection.confirmTransaction(sig, "confirmed");
+        patchItem(item.id, { status: "done", sig });
+      } catch (e: any) {
+        patchItem(item.id, {
+          status: "failed",
+          errorMsg: e.message ?? String(e),
+        });
+      }
+      setMascotPose("idle");
+      return;
+    }
 
     // Destination resolution. By default the demo routes to the built-in
     // recipient keypair, but when the schedule item carries an explicit
