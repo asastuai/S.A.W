@@ -176,7 +176,12 @@ function Row({
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
-            {item.vendor.toUpperCase().startsWith("SWAP") && (
+            {item.toAddress && (
+              <span className="text-gold text-xs uppercase tracking-widest border border-gold/40 px-1.5 py-0.5">
+                ↗ transfer
+              </span>
+            )}
+            {!item.toAddress && item.vendor.toUpperCase().startsWith("SWAP") && (
               <span className="text-gold text-xs uppercase tracking-widest border border-gold/40 px-1.5 py-0.5">
                 ⇄ swap
               </span>
@@ -200,6 +205,19 @@ function Row({
             )}
           </div>
           <div className="text-bone/50 text-xs italic mt-0.5">"{item.reason}"</div>
+          {item.toAddress && (
+            <div className="text-bone/40 text-[10px] mt-0.5 font-mono">
+              to{" "}
+              <a
+                href={`https://explorer.solana.com/address/${item.toAddress}?cluster=devnet`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-gold/70 hover:text-gold underline-offset-2 hover:underline"
+              >
+                {item.toAddress.slice(0, 8)}…{item.toAddress.slice(-6)} ↗
+              </a>
+            </div>
+          )}
           {conditional && isUpcoming && (
             <div className="text-gold/70 text-xs mt-1">▸ {describeTrigger(item)}</div>
           )}

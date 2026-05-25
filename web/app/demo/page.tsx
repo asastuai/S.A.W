@@ -213,6 +213,11 @@ export default function DemoPage() {
     amount: number;
     vendor: string;
     reason: string;
+    // When the original schedule item carried an arbitrary recipient
+    // (propose_transfer flow), we route the approveAndExecute to that
+    // destination ATA instead of the demo's built-in recipient.
+    destAddr?: PublicKey;
+    destAta?: PublicKey;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState<number>(Date.now());
@@ -1391,11 +1396,53 @@ export default function DemoPage() {
 
     patchItem(item.id, { status: "executing" });
 
+    // Destination resolution. By default the demo routes to the built-in
+    // recipient keypair, but when the schedule item carries an explicit
+    // `toAddress` (from propose_transfer) we transfer to the ATA derived
+    // from that pubkey. If the ATA doesn't exist yet, we prepend a
+    // create-ATA instruction (agent pays the rent from its gas SOL).
+    let destAddr: PublicKey = setup.recipient.publicKey;
+    let destAta: PublicKey = setup.recipientAta;
+    let createAtaIxs: TransactionInstruction[] = [];
+    if (item.toAddress) {
+      try {
+        destAddr = new PublicKey(item.toAddress);
+      } catch {
+        patchItem(item.id, {
+          status: "failed",
+          errorMsg: `Invalid destination address: ${item.toAddress}`,
+        });
+        setMascotPose("idle");
+        return;
+      }
+      const tokenProgram = await handle.detectTokenProgram(setup.mint);
+      destAta = getAssociatedTokenAddressSync(
+        setup.mint,
+        destAddr,
+        true, // allow off-curve PDAs as recipients
+        tokenProgram
+      );
+      const ataInfo = await connection.getAccountInfo(destAta);
+      if (!ataInfo) {
+        createAtaIxs.push(
+          createAssociatedTokenAccountInstruction(
+            setup.agent.publicKey,
+            destAta,
+            destAddr,
+            setup.mint,
+            tokenProgram
+          )
+        );
+      }
+    }
+
     // SWAP items execute as a real SOL transfer (devnet) from the agent
     // keypair to the SAW treasury. The "receive" leg (USDC) is mocked in
     // DB because Jupiter has no real devnet liquidity. The signature is
     // real and visible on explorer.solana.com/?cluster=devnet.
-    if (item.vendor?.toUpperCase().startsWith("SWAP")) {
+    // Skip the swap shortcut when toAddress is set — those are real
+    // transfers, not mocked swaps.
+    if (!item.toAddress && item.vendor?.toUpperCase().startsWith("SWAP")) {
       try {
         const SWAP_LEG_LAMPORTS = 1_000_000; // 0.001 SOL — symbolic, real
         const treasury = getTreasuryAddress();
@@ -1435,7 +1482,7 @@ export default function DemoPage() {
 
         const ix = await sawClient.programs.agentWallet.methods
           .requestPayment(
-            setup.recipient.publicKey,
+            destAddr,
             setup.mint,
             new BN(item.amount),
             Array(32).fill(0) as any
@@ -1451,7 +1498,7 @@ export default function DemoPage() {
             systemProgram: SystemProgram.programId,
           })
           .instruction();
-        const sig = await sendAsAgent([ix]);
+        const sig = await sendAsAgent([...createAtaIxs, ix]);
         patchItem(item.id, {
           status: "awaiting-approval",
           sig,
@@ -1463,6 +1510,8 @@ export default function DemoPage() {
           amount: item.amount,
           vendor: item.vendor,
           reason: item.reason,
+          destAddr: item.toAddress ? destAddr : undefined,
+          destAta: item.toAddress ? destAta : undefined,
         });
       } catch (e: any) {
         patchItem(item.id, { status: "failed", errorMsg: e.message ?? String(e) });
@@ -1475,7 +1524,7 @@ export default function DemoPage() {
       const tokenProgram = await handle.detectTokenProgram(setup.mint);
       const ix = await sawClient.programs.agentWallet.methods
         .payDirect(
-          setup.recipient.publicKey,
+          destAddr,
           new BN(item.amount),
           Array(32).fill(0) as any
         )
@@ -1485,13 +1534,13 @@ export default function DemoPage() {
           policy: handle.policyPda(),
           mint: setup.mint,
           sourceTokenAccount: setup.walletAta,
-          recipientTokenAccount: setup.recipientAta,
+          recipientTokenAccount: destAta,
           policyProgram: sawClient.programs.policyRegistry.programId,
           tokenProgram,
         })
         .instruction();
 
-      const sig = await sendAsAgent([ix]);
+      const sig = await sendAsAgent([...createAtaIxs, ix]);
       patchItem(item.id, { status: "done", sig });
       await refreshState(handle, setup.walletAta);
     } catch (e: any) {
@@ -1526,7 +1575,10 @@ export default function DemoPage() {
           request: handle.requestPda(pendingApproval.requestId),
           mint: setup.mint,
           sourceTokenAccount: setup.walletAta,
-          recipientTokenAccount: setup.recipientAta,
+          // Route to the propose_transfer destination if the original
+          // item carried a custom toAddress; otherwise fall back to the
+          // demo's built-in recipient ATA.
+          recipientTokenAccount: pendingApproval.destAta ?? setup.recipientAta,
           policyProgram: sawClient.programs.policyRegistry.programId,
           queueProgram: sawClient.programs.approvalQueue.programId,
           tokenProgram: TOKEN_PROGRAM_ID,

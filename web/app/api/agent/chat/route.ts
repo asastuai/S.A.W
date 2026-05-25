@@ -61,6 +61,7 @@ type ActionAdd = {
     scheduledFor: number;
     reason: string;
     trigger?: Trigger;
+    toAddress?: string;
   };
 };
 type ActionRemove = { type: "remove"; id: string };
@@ -218,6 +219,12 @@ You have these capabilities. Match intent → action:
 
 5) STATUS / HISTORY ("what's queued", "what did I spend", "what's my balance")
    → Use get_wallet_state and get_recent_fees. Report factually.
+
+6) DIRECT TRANSFER ("mandale X USDC a <address>", "enviá X a esta wallet", "send Y to <pubkey>")
+   → Use propose_transfer with toAddress = the pubkey the handler gave you, amount = whole USDC-dev, reason = one short sentence.
+   → Validate: amount > 0, address looks like a base58 pubkey (32-44 chars). If shape is off, ask the handler to paste a valid address.
+   → The on-chain policy still applies — per-tx cap + daily cap + approval threshold all enforced.
+   → Confirm in one line: "Listo, propuse 5 USDC-dev a 7xKX…aBcD. Aprobá en la cola."
 
 GOLDEN RULES:
 - When user gives asset + amount + intent, you have enough. DO NOT interrogate. Make a call, then ask "ok?" at the end.
@@ -454,6 +461,32 @@ const greedieTools = [
           reason: { type: "string" },
         },
         required: ["vendor", "totalAmount", "count", "intervalSeconds", "reason"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "propose_transfer",
+      description:
+        "Transfer USDC-dev from the agent wallet to an arbitrary Solana address on devnet. REAL on-chain transfer (devnet), still gated by on-chain policy (per-tx + daily caps + approval threshold). Use when the handler says things like 'mandale X USDC a <address>' or 'enviá X a esta wallet'. The address must be a valid Solana pubkey (base58, 32-44 chars). Amount in whole USDC-dev units (e.g. 5 for 5 USDC-dev).",
+      parameters: {
+        type: "object",
+        properties: {
+          toAddress: {
+            type: "string",
+            description: "Destination Solana pubkey (base58, e.g. 7xKXtg2C... — must be 32-44 chars).",
+          },
+          amount: {
+            type: "number",
+            description: "Amount of USDC-dev to send (whole units, e.g. 5).",
+          },
+          reason: {
+            type: "string",
+            description: "Why this transfer (1 short sentence).",
+          },
+        },
+        required: ["toAddress", "amount", "reason"],
       },
     },
   },
@@ -831,6 +864,37 @@ export async function POST(req: NextRequest) {
             triggeredAction = true;
             toolResult = "added";
             break;
+
+          case "propose_transfer": {
+            const raw = String(args.toAddress ?? "").trim();
+            // Quick shape validation — Solana pubkeys are 32-44 chars,
+            // base58 alphabet. Strict parse happens client-side; here we
+            // reject obvious junk so the LLM gets useful feedback.
+            const validShape = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(raw);
+            if (!validShape) {
+              toolResult = `Invalid Solana address: "${raw.slice(0, 60)}". Ask the handler for a valid base58 pubkey (32-44 chars).`;
+              break;
+            }
+            const amt = Number(args.amount);
+            if (!Number.isFinite(amt) || amt <= 0) {
+              toolResult = `Invalid amount: ${args.amount}. Use a positive number of USDC-dev.`;
+              break;
+            }
+            actions.push({
+              type: "add",
+              item: {
+                vendor: `Transfer · ${raw.slice(0, 4)}…${raw.slice(-4)}`,
+                amount: Math.round(amt * 10 ** DEMO_DECIMALS),
+                scheduledFor: Date.now(),
+                reason: String(args.reason),
+                trigger: { kind: "time" },
+                toAddress: raw,
+              },
+            });
+            triggeredAction = true;
+            toolResult = `proposed transfer of ${amt} USDC-dev to ${raw.slice(0, 4)}…${raw.slice(-4)}`;
+            break;
+          }
 
           case "add_dip_buy_item": {
             const deadlineSecs = Number(args.deadlineSeconds ?? 180);

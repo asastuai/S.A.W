@@ -32,6 +32,12 @@ export type ScheduleItem = {
   requestId?: string;
   errorMsg?: string;
   trigger?: Trigger;
+  // Optional explicit recipient address (Solana pubkey base58). When
+  // present, execute routes the payDirect to the ATA derived from this
+  // address instead of the demo's built-in recipient keypair. This is
+  // what `propose_transfer` produces — the agent moves USDC-dev to a
+  // real external wallet on devnet (still inside on-chain policy).
+  toAddress?: string;
 };
 
 export function describeTrigger(item: ScheduleItem): string {
