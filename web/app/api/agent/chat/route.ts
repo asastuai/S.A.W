@@ -686,6 +686,31 @@ export async function POST(req: NextRequest) {
       if (fallback) chain.push(fallback);
     }
 
+    // Reorder the SAW-credit chain by tool-calling quality. Gemini
+    // Flash-Lite is cheap but hallucinates tool calls (responds with
+    // "Listo, propuse" text while never emitting the function call),
+    // which is exactly the symptom that bit a real handler test. Put
+    // strong tool-callers first so the agent actually files items.
+    // BYOK keys (single-entry chains) are left untouched — that's the
+    // user's explicit choice.
+    if (usingSawKey && chain.length > 1) {
+      const TOOL_CALL_RANK: Record<Provider, number> = {
+        cerebras: 1,    // gpt-oss-120b — excellent tool calling
+        groq: 2,        // llama-4-maverick — excellent
+        anthropic: 3,   // haiku 4.5 — strong
+        openai: 4,      // gpt-4o-mini — strong
+        grok: 5,        // ok
+        kimi: 6,        // ok
+        deepseek: 7,    // ok
+        gemini: 9,      // flash-lite is weak at tool calls (root cause of this fix)
+      } as any;
+      chain.sort(
+        (a, b) =>
+          (TOOL_CALL_RANK[a.provider] ?? 8) -
+          (TOOL_CALL_RANK[b.provider] ?? 8)
+      );
+    }
+
     if (chain.length === 0) {
       return NextResponse.json(noKeyReply(Boolean(handlerId)));
     }
