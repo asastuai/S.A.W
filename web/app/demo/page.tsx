@@ -1117,7 +1117,18 @@ export default function DemoPage() {
         reply: string;
         usingSawKey?: boolean;
         actions: Array<
-          | { type: "add"; item: { vendor: string; amount: number; scheduledFor: number; reason: string } }
+          | {
+              type: "add";
+              item: {
+                vendor: string;
+                amount: number;
+                scheduledFor: number;
+                reason: string;
+                trigger?: ScheduleItem["trigger"];
+                toAddress?: string;
+                jupiterSwap?: ScheduleItem["jupiterSwap"];
+              };
+            }
           | { type: "remove"; id: string }
           | { type: "modify"; id: string; changes: any }
           | { type: "ready" }
