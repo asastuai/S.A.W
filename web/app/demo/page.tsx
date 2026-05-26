@@ -1145,17 +1145,6 @@ export default function DemoPage() {
       const skippedReasons: string[] = [];
       const maxAmount = Math.min(persona.policy.perTxLimit, walletBalance);
 
-      // [saw-debug] structured trace of the chat response → action flow.
-      // Filter the browser console by "[saw-debug]" to see only these.
-      console.log("[saw-debug] chat response", {
-        replyLen: data.reply?.length ?? 0,
-        actionsCount: (data.actions ?? []).length,
-        actionTypes: (data.actions ?? []).map((a: any) => a.type),
-        maxAmountLamports: maxAmount,
-        walletBalanceLamports: walletBalance,
-        perTxLimitLamports: persona.policy.perTxLimit,
-      });
-
       for (const action of data.actions ?? []) {
         if (action.type === "add") {
           // Jupiter swaps are NOT denominated in USDC-dev — they move
@@ -1163,19 +1152,7 @@ export default function DemoPage() {
           // Skip the USDC-dev limit check for those; their cap is
           // enforced by Jupiter slippage + the handler's signature.
           const isJupiterItem = Boolean(action.item.jupiterSwap);
-          console.log("[saw-debug] processing add action", {
-            vendor: action.item.vendor,
-            amount: action.item.amount,
-            toAddress: action.item.toAddress,
-            jupiterSwap: action.item.jupiterSwap,
-            isJupiterItem,
-            withinLimit: action.item.amount > 0 && action.item.amount <= maxAmount,
-          });
           if (!isJupiterItem && (action.item.amount <= 0 || action.item.amount > maxAmount)) {
-            console.warn("[saw-debug] SKIPPED — over limit", {
-              amount: action.item.amount,
-              maxAmount,
-            });
             skippedReasons.push(
               `${(action.item.amount / 10 ** DEMO_DECIMALS).toFixed(2)} USDC-dev exceeds limits`
             );
@@ -1183,12 +1160,6 @@ export default function DemoPage() {
           }
           {
             const added = newItem(action.item);
-            console.log("[saw-debug] item ADDED to local state", {
-              id: added.id,
-              vendor: added.vendor,
-              toAddress: added.toAddress,
-              jupiterSwap: added.jupiterSwap,
-            });
             updated = {
               ...updated,
               schedule: [...updated.schedule, added],
@@ -1226,15 +1197,6 @@ export default function DemoPage() {
         ready,
       };
 
-      console.log("[saw-debug] final schedule after chat turn", {
-        count: updated.schedule.length,
-        items: updated.schedule.map((i) => ({
-          id: i.id.slice(0, 8),
-          vendor: i.vendor,
-          status: i.status,
-          toAddress: i.toAddress?.slice(0, 8),
-        })),
-      });
       setBriefing(updated);
       saveBriefing(handler, updated);
 

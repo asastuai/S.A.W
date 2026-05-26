@@ -40,11 +40,19 @@ Two versions. Both written to be read aloud in your voice — no edits needed.
 >
 > One conversation, three skills: it can read the tape and propose swaps, it can pull live yields from DefiLlama, and it can help me build saving habits. No specialist hand-off, no switching personas.
 
-**[1:00 — I say: "poneme 100 USDC en el mejor APR de Solana"]**
+**[1:00 — I say: "mandale 5 USDC-dev a 83yU2kqsyRh5Dqn5L5z1sSNkEHrqqTYS77ss4GrVjUKJ"]**
 
-> Watch this. I tell the Operative — in plain Spanish — "put 100 USDC into the best Solana APR you can find."
+> Watch this. I tell the Operative — in plain Spanish — "send 5 USDC-dev to this address."
 >
-> It calls DefiLlama live, picks the top three pools by APR, and schedules the swap. Right side of the screen. Waiting for me to sign on-chain.
+> It validates the address shape, queues the item on the right with an arrow-out badge. Because 5 USDC is under the approval threshold I set, the agent fires the tx with its own keypair. Real on-chain transfer on devnet, finalized in two seconds. Click the explorer link — the signature is public.
+>
+> Same flow above the threshold would queue for my Phantom signature. The on-chain policy enforces the cap; the agent cannot override it.
+
+**[1:15 — I ask: "qué precio te da Jupiter por 0.5 SOL a USDC?"]**
+
+> And the Operative reads live market data. This quote comes straight from Jupiter mainnet — 42.62 USDC, via Raydium CLMM, price impact 0.001%. Real numbers, not training-data estimates.
+>
+> When SAW lands on mainnet the same flow executes the swap end-to-end. The adapter is already wired, gated behind a flag.
 
 **[1:20 — Tab 5, Telegram]**
 

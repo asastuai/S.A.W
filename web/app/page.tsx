@@ -3,6 +3,7 @@ import Link from "next/link";
 export default function LandingPage() {
   return (
     <main className="min-h-screen flex flex-col">
+      <AlphaDisclaimer />
       <Header />
       <Hero />
       <HowItWorks />
@@ -47,6 +48,14 @@ function Header() {
   );
 }
 
+function AlphaDisclaimer() {
+  return (
+    <div className="border-b border-rust/40 bg-rust/5 px-4 py-2 text-center text-[11px] uppercase tracking-widest text-rust/90">
+      Alpha · devnet only · unaudited externally · use test value, not real funds
+    </div>
+  );
+}
+
 function Hero() {
   return (
     <section className="px-6 py-24 max-w-5xl mx-auto">
@@ -61,7 +70,7 @@ function Hero() {
         rules. Bring your own LLM key, or pay <strong className="text-gold">0.01 SOL</strong> for 500 calls.
         Your agent operates with limits. You sign the override.
       </p>
-      <div className="flex flex-wrap gap-4 items-center">
+      <div className="flex flex-wrap gap-4 items-center mb-10">
         <Link
           href="/demo"
           className="bg-gold text-ink px-6 py-3 uppercase tracking-widest text-sm hover:bg-bone transition"
@@ -76,6 +85,21 @@ function Hero() {
         >
           Read the source
         </a>
+      </div>
+      <div className="border border-rust/30 bg-rust/5 p-4 max-w-2xl text-bone/70 text-xs leading-relaxed">
+        <p className="text-rust uppercase tracking-widest text-[10px] mb-2">
+          Alpha disclosure
+        </p>
+        <p>
+          SAW is live on Solana devnet only. The Anchor programs passed a
+          14-bug internal security audit (3 CRITICAL + 6 HIGH + 4 MEDIUM
+          closed, report in <code className="text-gold">docs/security-audit-v1.3.md</code>),
+          but no external audit has been performed yet. Mainnet deploy
+          and external audit are funded by the pending Solana Foundation
+          grant. Until then: treat all on-chain action as test value, not
+          real funds. If you choose to use SAW today, you take on the
+          risk yourself.
+        </p>
       </div>
     </section>
   );
