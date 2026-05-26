@@ -181,3 +181,96 @@ saw/
 3. **No agent acts without a registered policy on-chain.** The agent wallet program enforces this; the worker cannot circumvent.
 4. **All fees recorded in fee_ledger before/after on-chain collection.** Single source of truth for revenue.
 5. **Cron cadence is per-agent.** No global "tick" that fires all agents at once — they wake on independent schedules to spread load.
+
+---
+
+## v1.3 changes (current)
+
+### Unified Operative model
+
+Three persona personas (Greedie / Conservador / Estable) collapsed into a single Operative per handler. Handler picks a custom codename in settings; the LLM context adapts intent (trade / yield / save) per message. Old persona rows kept readable for back-compat but new setups only mint an `operative`.
+
+**Why:** the persona switcher added cognitive load with little upside — one chat handling all three skills is the natural product.
+
+### Real on-chain transfer to arbitrary address (`propose_transfer`)
+
+New LLM tool exposes `propose_transfer(toAddress, amount, reason)`. When the handler says "mandale 5 USDC-dev a `<pubkey>`", the Operative validates the address shape, queues a `ScheduleItem` with `item.toAddress` set, and `dispatchItem` routes the `payDirect` (or `requestPayment` + `approveAndExecute` above threshold) to the ATA derived from that address — creating the ATA on the fly if it doesn't exist (agent pays rent from its gas SOL).
+
+End-to-end verified on devnet (sig `QCn46M6gZfQaYzXr9b3DzNSKp1xXRUEySZqwY1FB14iA4MtqmkWe8fwzZsv4jwDnTNrmtqjedCk2bR9Ag3VjwGz`, finalized). On-chain policy enforces per-tx + daily caps + approval threshold regardless of destination.
+
+### Jupiter swap adapter (mainnet-gated)
+
+New LLM tools:
+- `get_jupiter_quote(inputSymbol, outputSymbol, amountLamports, slippageBps)` — always calls Jupiter v6 quote API for real mainnet pricing. Works on devnet too (read-only, no liquidity needed).
+- `propose_jupiter_swap(...)` — queues a swap as a `ScheduleItem` with `jupiterSwap` descriptor.
+
+The execute path is gated by `NEXT_PUBLIC_JUPITER_ENABLED`. On devnet (current) the queue accepts the item but `dispatchItem` returns a visible "mainnet pending" error. Mainnet deploy flips the flag and the same flow executes for real.
+
+Server endpoint `POST /api/agent/build-swap-tx` builds the Jupiter tx with `platformFeeBps: 55` routed to `getTreasuryAddressString()` — the platform fee accrues to SAW on every swap.
+
+### LLM provider tool-calling ranking
+
+`/api/agent/chat` reorders the SAW-credits provider chain by tool-calling quality before invoking the LLM:
+
+`cerebras > groq > anthropic > openai > grok > kimi > deepseek > gemini`
+
+Why: Gemini Flash-Lite (cheap, free RPD tier) is weak with function calls in chat history with prior tool-success references — it generates `"Listo, propuse..."` text without emitting the tool call, leaving the schedule unchanged. Reorder pushes strong tool callers (Cerebras gpt-oss-120b, Groq llama-4) to the front so tools actually fire. Gemini stays in the chain as last-resort fallback only on transient errors.
+
+BYOK keys (single-entry chains) are not reordered — that's the user's explicit choice.
+
+### Security headers + audit pre-push
+
+`next.config.mjs` now sets `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` lock-down. Verified live in production.
+
+14-bug internal audit closed before public push: 3 CRITICAL + 6 HIGH + 4 MEDIUM, zero open. Report at `docs/security-audit-v1.3.md`. JWT signature verification (CRITICAL pre-fix), wallet-claim immutability, internal-auth handler validation, IDOR closures on schedule + opportunities, topup signer check, anchor program hardenings (`require!(amount > 0)`, `validate_params`, `prune_expired_request`, `reset_daily_spent`).
+
+---
+
+## End-to-end flow: `propose_transfer` (verified on devnet)
+
+```mermaid
+sequenceDiagram
+  participant H as Handler (Phantom)
+  participant UI as Demo UI
+  participant API as /api/agent/chat
+  participant LLM
+  participant Agent as Agent keypair
+  participant Chain as agent_wallet program
+
+  H->>UI: "mandale 5 USDC-dev a 83yU..."
+  UI->>API: POST {persona, schedule, conversation, newMessage}
+  API->>LLM: messages + tools
+  LLM-->>API: tool_call propose_transfer(toAddress, amount, reason)
+  API-->>UI: { reply, actions: [add{item.toAddress}] }
+  UI->>UI: dispatchItem(item)
+  UI->>Chain: derive destination ATA, prepend createATA if missing
+  Agent->>Chain: payDirect(destAddr, amount, salt)
+  Chain->>Chain: policy_registry CPI — per-tx + daily caps
+  Chain-->>UI: signature (finalized)
+  UI->>H: schedule item status = done + explorer link
+```
+
+## End-to-end flow: Jupiter swap (mainnet-gated)
+
+```mermaid
+sequenceDiagram
+  participant H as Handler (Phantom)
+  participant UI as Demo UI
+  participant API as /api/agent/build-swap-tx
+  participant Jup as Jupiter v6 API
+  participant Chain as Solana mainnet
+
+  H->>UI: "swap 0.5 SOL to USDC"
+  UI->>UI: dispatchItem(item.jupiterSwap)
+  UI->>API: POST {inputMint, outputMint, amount, userPublicKey}
+  API->>API: gate on NEXT_PUBLIC_JUPITER_ENABLED — 501 on devnet
+  API->>Jup: GET /quote (platformFeeBps=55, feeAccount=SAW treasury)
+  Jup-->>API: quoteResponse
+  API->>Jup: POST /swap (quoteResponse + userPublicKey)
+  Jup-->>API: serialized VersionedTransaction
+  API-->>UI: { swapTransaction, quoteSummary }
+  UI->>H: Phantom sign
+  H-->>Chain: sendRawTransaction
+  Chain-->>UI: signature (finalized)
+```
+
