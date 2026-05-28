@@ -225,6 +225,8 @@ Defense-in-depth: rotating `INTERNAL_API_SECRET` periodically remains a good pra
 **Where:** `programs/agent_wallet/src/lib.rs` line 358
 **Impact:** After an emergency withdraw the policy's `daily_spent` still reflects pre-emergency spending. If the owner refunds the wallet and the agent resumes, the cap is artificially low until midnight (account level). Not security, UX edge case.
 
+> **Correction (v1.4, 2026-05-28):** the `830b272` fix only *created* `reset_daily_spent` in policy_registry — it never wired the CPI from `emergency_withdraw`, so the function was dead code and this finding remained effectively unfixed despite the summary above. Properly closed in `7e9f833` (CPI wired + regression test). See `security-audit-v1.4.md`.
+
 ---
 
 ## Out-of-scope but worth tracking
