@@ -239,6 +239,11 @@ pub mod agent_wallet {
         );
         match outcome {
             CheckOutcome::Allowed | CheckOutcome::RequiresApproval => {}
+            // L-2: cooldown is an agent rate-limit. When the owner explicitly
+            // approves a queued request, their action must not be throttled by
+            // recent agent activity. All hard caps (per-tx, daily, allowlists)
+            // still apply — only the cooldown gate is waived on this path.
+            CheckOutcome::Denied(DenyReason::CooldownActive) => {}
             CheckOutcome::Denied(reason) => return Err(map_deny(reason).into()),
         }
 
@@ -393,6 +398,15 @@ pub mod agent_wallet {
             ),
             amount,
             decimals,
+        )?;
+
+        // L-4: zero the daily_spent counter so a same-day refund doesn't leave
+        // the (typically rotated) agent throttled by pre-emergency activity.
+        cpi::reset_daily_spent(
+            ctx.accounts.policy_program.to_account_info(),
+            ctx.accounts.policy.to_account_info(),
+            wallet.to_account_info(),
+            signer_seeds,
         )?;
 
         emit!(EmergencyWithdrawal {
@@ -637,6 +651,18 @@ pub struct EmergencyWithdraw<'info> {
     pub wallet: Account<'info, WalletAccount>,
 
     pub owner: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"policy", wallet.key().as_ref()],
+        bump = policy.bump,
+        seeds::program = POLICY_REGISTRY_ID
+    )]
+    pub policy: Account<'info, PolicyAccount>,
+
+    /// CHECK: policy_registry program
+    #[account(address = POLICY_REGISTRY_ID)]
+    pub policy_program: UncheckedAccount<'info>,
 
     pub mint: InterfaceAccount<'info, Mint>,
 

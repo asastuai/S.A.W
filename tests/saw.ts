@@ -494,6 +494,61 @@ describe("SAW (Secret Agent Wallet)", () => {
       );
       expect(reqAfter.status).to.deep.equal({ denied: {} });
     });
+
+    it("owner can approve_and_execute even when agent cooldown is active (L-2)", async () => {
+      const ctx = await setupWallet({
+        cooldownSeconds: new BN(100),
+        approvalThreshold: new BN(10_000_000),
+        perTxLimit: new BN(100_000_000),
+      });
+      const memo = Array(32).fill(0);
+
+      // 1. Agent queues an over-threshold request (last_tx=0 → no cooldown yet).
+      const { request } = await nextRequestPda(ctx);
+      await agentWalletProgram.methods
+        .requestPayment(recipientOwner.publicKey, mint, new BN(50_000_000), memo as any)
+        .accountsPartial({
+          wallet: ctx.wallet,
+          agent: ctx.agent.publicKey,
+          policy: ctx.policy,
+          queue: ctx.queue,
+          request,
+          payer: ctx.owner.publicKey,
+          queueProgram: approvalQueueProgram.programId,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([ctx.agent, ctx.owner])
+        .rpc();
+
+      // 2. Agent makes a small in-policy payment → record_spend sets
+      //    last_tx_timestamp → cooldown is now active for the next eval.
+      await payDirect(ctx, new BN(1_000_000), recipientOwner.publicKey, recipientAta);
+
+      // 3. Owner approves the pending request. Pre-L-2 this reverted with
+      //    CooldownActive; now the owner path waives the agent cooldown.
+      await agentWalletProgram.methods
+        .approveAndExecute()
+        .accountsPartial({
+          wallet: ctx.wallet,
+          owner: ctx.owner.publicKey,
+          policy: ctx.policy,
+          queue: ctx.queue,
+          request,
+          mint,
+          sourceTokenAccount: ctx.walletAta,
+          recipientTokenAccount: recipientAta,
+          policyProgram: policyRegistryProgram.programId,
+          queueProgram: approvalQueueProgram.programId,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([ctx.owner])
+        .rpc();
+
+      const reqAfter = await approvalQueueProgram.account.requestAccount.fetch(
+        request
+      );
+      expect(reqAfter.status).to.deep.equal({ approved: {} });
+    });
   });
 
   describe("agent management", () => {
@@ -532,6 +587,8 @@ describe("SAW (Secret Agent Wallet)", () => {
         .accountsPartial({
           wallet: ctx.wallet,
           owner: ctx.owner.publicKey,
+          policy: ctx.policy,
+          policyProgram: policyRegistryProgram.programId,
           mint,
           sourceTokenAccount: ctx.walletAta,
           ownerTokenAccount: ownerAta,
@@ -544,6 +601,44 @@ describe("SAW (Secret Agent Wallet)", () => {
         ownerAta
       );
       expect(Number(ownerBalance.value.amount)).to.equal(200_000_000);
+    });
+
+    it("zeroes daily_spent so a same-day refund isn't throttled (L-4)", async () => {
+      const ctx = await setupWallet({}, BigInt(200_000_000));
+      const ownerAta = await createAssociatedTokenAccount(
+        provider.connection,
+        payer,
+        mint,
+        ctx.owner.publicKey
+      );
+
+      // Agent spends → daily_spent becomes non-zero.
+      await payDirect(ctx, new BN(20_000_000), recipientOwner.publicKey, recipientAta);
+      let policyAccount = await policyRegistryProgram.account.policyAccount.fetch(
+        ctx.policy
+      );
+      expect(policyAccount.dailySpent.toNumber()).to.equal(20_000_000);
+
+      // Emergency withdraw must reset the daily counter (the L-4 CPI).
+      await agentWalletProgram.methods
+        .emergencyWithdraw()
+        .accountsPartial({
+          wallet: ctx.wallet,
+          owner: ctx.owner.publicKey,
+          policy: ctx.policy,
+          policyProgram: policyRegistryProgram.programId,
+          mint,
+          sourceTokenAccount: ctx.walletAta,
+          ownerTokenAccount: ownerAta,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([ctx.owner])
+        .rpc();
+
+      policyAccount = await policyRegistryProgram.account.policyAccount.fetch(
+        ctx.policy
+      );
+      expect(policyAccount.dailySpent.toNumber()).to.equal(0);
     });
   });
 });

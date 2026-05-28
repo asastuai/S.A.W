@@ -85,6 +85,36 @@ pub fn record_spend<'info>(
     Ok(())
 }
 
+/// L-4: zero the policy's daily_spent counter after an emergency withdraw,
+/// so a same-day refund doesn't leave the (rotated) agent artificially
+/// throttled. Mirrors record_spend but carries no amount. Uses the
+/// policy_registry RecordSpend context (policy mut + wallet PDA signer).
+pub fn reset_daily_spent<'info>(
+    policy_program: AccountInfo<'info>,
+    policy_account: AccountInfo<'info>,
+    wallet: AccountInfo<'info>,
+    wallet_signer_seeds: &[&[u8]],
+) -> Result<()> {
+    let data = anchor_discriminator("reset_daily_spent").to_vec();
+
+    let ix = Instruction {
+        program_id: POLICY_REGISTRY_ID,
+        accounts: vec![
+            AccountMeta::new(policy_account.key(), false),
+            AccountMeta::new_readonly(wallet.key(), true),
+        ],
+        data,
+    };
+
+    invoke_signed(
+        &ix,
+        &[policy_account, wallet, policy_program],
+        &[wallet_signer_seeds],
+    )?;
+
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn register_queue<'info>(
     queue_program: AccountInfo<'info>,

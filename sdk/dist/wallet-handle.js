@@ -190,6 +190,8 @@ class WalletHandle {
             .accountsPartial({
             wallet: this.walletPda,
             owner: ownerSigner.publicKey,
+            policy: this.policyPda(),
+            policyProgram: program_ids_1.POLICY_REGISTRY_PROGRAM_ID,
             mint,
             sourceTokenAccount: sourceAta,
             ownerTokenAccount: ownerAta,

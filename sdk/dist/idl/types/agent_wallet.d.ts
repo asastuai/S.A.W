@@ -419,6 +419,70 @@ export type AgentWallet = {
                     "signer": true;
                 },
                 {
+                    "name": "policy";
+                    "writable": true;
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const";
+                                "value": [
+                                    112,
+                                    111,
+                                    108,
+                                    105,
+                                    99,
+                                    121
+                                ];
+                            },
+                            {
+                                "kind": "account";
+                                "path": "wallet";
+                            }
+                        ];
+                        "program": {
+                            "kind": "const";
+                            "value": [
+                                211,
+                                249,
+                                146,
+                                206,
+                                24,
+                                25,
+                                206,
+                                52,
+                                33,
+                                82,
+                                117,
+                                146,
+                                11,
+                                22,
+                                169,
+                                169,
+                                14,
+                                118,
+                                168,
+                                203,
+                                148,
+                                180,
+                                194,
+                                52,
+                                209,
+                                92,
+                                42,
+                                88,
+                                115,
+                                235,
+                                245,
+                                236
+                            ];
+                        };
+                    };
+                },
+                {
+                    "name": "policyProgram";
+                    "address": "FGTkQ9C8zr7Rm9WFZ7rK6cDdY7Bju1dTsjSN5GuHqAJF";
+                },
+                {
                     "name": "mint";
                 },
                 {
@@ -1054,6 +1118,11 @@ export type AgentWallet = {
             "code": 6010;
             "name": "insufficientBalance";
             "msg": "Insufficient wallet balance";
+        },
+        {
+            "code": 6011;
+            "name": "zeroAmount";
+            "msg": "Amount must be greater than zero";
         }
     ];
     "types": [

@@ -43,8 +43,21 @@ impl PolicyAccount {
         + 8                      // last_reset_timestamp
         + 1; // bump
 
+    // L-1: anchor the daily window to fixed UTC-day boundaries
+    // (floor(ts / 86400)) instead of a rolling delta from the last reset.
+    // The previous rolling model let the agent reposition the window by
+    // timing its first spend, enabling a ~2x burst across an arbitrary
+    // moment. UTC-day anchoring makes the reset deterministic (midnight
+    // UTC) and removes the agent's ability to choose the boundary. Note:
+    // a fixed window still permits a single 2x burst straddling midnight;
+    // eliminating that entirely would require true sliding-window
+    // accounting, which is out of scope for this limit's risk level.
+    fn utc_day(ts: i64) -> i64 {
+        ts.div_euclid(SECONDS_PER_DAY)
+    }
+
     pub fn current_daily_spent(&self, now: i64) -> u64 {
-        if now.saturating_sub(self.last_reset_timestamp) >= SECONDS_PER_DAY {
+        if Self::utc_day(now) > Self::utc_day(self.last_reset_timestamp) {
             0
         } else {
             self.daily_spent
@@ -52,7 +65,7 @@ impl PolicyAccount {
     }
 
     pub fn maybe_reset_daily(&mut self, now: i64) {
-        if now.saturating_sub(self.last_reset_timestamp) >= SECONDS_PER_DAY {
+        if Self::utc_day(now) > Self::utc_day(self.last_reset_timestamp) {
             self.daily_spent = 0;
             self.last_reset_timestamp = now;
         }

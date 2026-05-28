@@ -276,6 +276,8 @@ export class WalletHandle {
       .accountsPartial({
         wallet: this.walletPda,
         owner: ownerSigner.publicKey,
+        policy: this.policyPda(),
+        policyProgram: POLICY_REGISTRY_PROGRAM_ID,
         mint,
         sourceTokenAccount: sourceAta,
         ownerTokenAccount: ownerAta,
