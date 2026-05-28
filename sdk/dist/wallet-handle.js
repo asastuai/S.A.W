@@ -60,7 +60,9 @@ class WalletHandle {
                 },
             },
         ]);
-        return all.map((entry) => {
+        const nowSecs = Math.floor(Date.now() / 1000);
+        return all
+            .map((entry) => {
             const acc = entry.account;
             const status = acc.status?.pending
                 ? types_1.RequestStatus.Pending
@@ -68,7 +70,13 @@ class WalletHandle {
                     ? types_1.RequestStatus.Approved
                     : types_1.RequestStatus.Denied;
             return { ...acc, status };
-        });
+        })
+            // Honor the method name: only return truly-pending, non-expired requests.
+            // The memcmp above filters by wallet only, so the raw set also contains
+            // approved/denied/expired rows. On-chain approve_and_execute requires
+            // status==Pending && now<=expires_at (approval_queue::mark_approved), so
+            // anything else is not actionable and would give the UI a false queue.
+            .filter((r) => r.status === types_1.RequestStatus.Pending && nowSecs <= r.expiresAt.toNumber());
     }
     // ── Token program detection ───────────────────────────────────────
     async detectTokenProgram(mint) {
