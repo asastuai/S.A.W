@@ -32,3 +32,24 @@ export { RequestStatus } from "./types";
 export { SawClient } from "./client";
 export type { SawPrograms } from "./client";
 export { WalletHandle } from "./wallet-handle";
+
+// Chain-neutral provider interface (multichain seam).
+// Solana adapter implements this so the web app and worker can swap
+// providers without touching call sites when other chains are added.
+export type {
+  ChainKind,
+  IAgentWalletProvider,
+  IAgentWalletHandle,
+  ProviderAddress,
+  ProviderAssetId,
+  ProviderTxId,
+  ProviderRequestId,
+  ProviderWalletId,
+  ProviderPolicyInput,
+  ProviderPolicyState,
+  ProviderRequestStatus,
+  ProviderRequestInfo,
+  ProviderPayParams,
+  ProviderCreateWalletParams,
+} from "./provider";
+export { SolanaProvider, SolanaWalletHandle } from "./providers/solana";

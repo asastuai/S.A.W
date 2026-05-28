@@ -7,3 +7,5 @@ export { RequestStatus } from "./types";
 export { SawClient } from "./client";
 export type { SawPrograms } from "./client";
 export { WalletHandle } from "./wallet-handle";
+export type { ChainKind, IAgentWalletProvider, IAgentWalletHandle, ProviderAddress, ProviderAssetId, ProviderTxId, ProviderRequestId, ProviderWalletId, ProviderPolicyInput, ProviderPolicyState, ProviderRequestStatus, ProviderRequestInfo, ProviderPayParams, ProviderCreateWalletParams, } from "./provider";
+export { SolanaProvider, SolanaWalletHandle } from "./providers/solana";

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WalletHandle = exports.SawClient = exports.RequestStatus = exports.evaluatePolicyOffChain = exports.buildPolicy = exports.randomSalt = exports.deriveRequestPda = exports.deriveQueuePda = exports.derivePolicyPda = exports.deriveWalletPda = exports.APPROVAL_QUEUE_PROGRAM_ID = exports.POLICY_REGISTRY_PROGRAM_ID = exports.AGENT_WALLET_PROGRAM_ID = void 0;
+exports.SolanaWalletHandle = exports.SolanaProvider = exports.WalletHandle = exports.SawClient = exports.RequestStatus = exports.evaluatePolicyOffChain = exports.buildPolicy = exports.randomSalt = exports.deriveRequestPda = exports.deriveQueuePda = exports.derivePolicyPda = exports.deriveWalletPda = exports.APPROVAL_QUEUE_PROGRAM_ID = exports.POLICY_REGISTRY_PROGRAM_ID = exports.AGENT_WALLET_PROGRAM_ID = void 0;
 var program_ids_1 = require("./program-ids");
 Object.defineProperty(exports, "AGENT_WALLET_PROGRAM_ID", { enumerable: true, get: function () { return program_ids_1.AGENT_WALLET_PROGRAM_ID; } });
 Object.defineProperty(exports, "POLICY_REGISTRY_PROGRAM_ID", { enumerable: true, get: function () { return program_ids_1.POLICY_REGISTRY_PROGRAM_ID; } });
@@ -20,3 +20,6 @@ var client_1 = require("./client");
 Object.defineProperty(exports, "SawClient", { enumerable: true, get: function () { return client_1.SawClient; } });
 var wallet_handle_1 = require("./wallet-handle");
 Object.defineProperty(exports, "WalletHandle", { enumerable: true, get: function () { return wallet_handle_1.WalletHandle; } });
+var solana_1 = require("./providers/solana");
+Object.defineProperty(exports, "SolanaProvider", { enumerable: true, get: function () { return solana_1.SolanaProvider; } });
+Object.defineProperty(exports, "SolanaWalletHandle", { enumerable: true, get: function () { return solana_1.SolanaWalletHandle; } });
