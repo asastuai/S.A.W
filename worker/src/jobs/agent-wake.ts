@@ -99,17 +99,18 @@ export const agentWakeJob = schedules.task({
 
         for (const item of pending ?? []) {
           if (shouldFire(item, snap.priceUsd, startedAt)) {
-            // TODO: dispatch on-chain execution via worker-side SAW SDK call.
-            // For now mark the intent. Phase 1.1 wires the actual tx send.
-            await db
-              .from("scheduled_items")
-              .update({
-                status: "executing",
-                executed_at: new Date().toISOString(),
-              })
-              .eq("id", item.id);
+            // M-5 fix (v1.5 audit): do NOT flip status to 'executing' here.
+            // There is no on-chain dispatch yet (Phase 1.1), so mutating the
+            // status would leave the row stuck in 'executing' forever, and a
+            // concurrent wake could double-process the same item. Just record
+            // that the trigger fired. Phase 1.1 MUST do the status transition
+            // atomically with the tx send, using an optimistic guard
+            // (.eq("status","queued")) so it can never double-execute.
+            logger.log("trigger fired — dispatch deferred to Phase 1.1", {
+              itemId: item.id,
+            });
             executed++;
-            outcome = "executed-trigger";
+            outcome = "trigger-detected";
           }
         }
 

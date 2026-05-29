@@ -148,16 +148,31 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as RequestBody;
 
     const userKey = req.headers.get("x-user-api-key")?.trim() || "";
-    const apiKey = userKey || process.env.GROQ_API_KEY || "";
+
+    // Resolve the handler first — needed both for the rate limit and to gate
+    // the SAW-key fallback. (best-effort: requires a Privy JWT + handler row)
+    let handlerId: string | null = null;
+    try {
+      const claims = await extractPrivyClaims(req);
+      if (claims) {
+        const handler = await getHandlerByPrivy(claims.privy_user_id);
+        if (handler) handlerId = handler.id;
+      }
+    } catch {
+      /* non-fatal */
+    }
+
+    // M-4/M-6 fix (v1.5 audit): an anonymous caller (no BYOK key AND no
+    // identified handler) may NOT spend SAW's shared GROQ key — that is an
+    // unauthenticated cost-drain. Scans are agent-driven; only a BYOK key or
+    // an identified handler may run one.
+    const apiKey = userKey || (handlerId ? process.env.GROQ_API_KEY || "" : "");
     if (!apiKey) {
-      // L-2 fix: was silently returning {opportunities:[]} which hid
-      // misconfiguration from callers. Now an explicit message tells
-      // the client to attach a BYOK key or SAW credits.
       return NextResponse.json(
         {
           opportunities: [],
           error:
-            "no LLM key — attach x-user-api-key header or top up SAW credits",
+            "no LLM key — attach x-user-api-key header or top up SAW credits (anonymous scans are not allowed)",
         },
         { status: 401 }
       );
@@ -175,25 +190,15 @@ export async function POST(req: NextRequest) {
     }
     const adapter = getProviderAdapter(provider as any);
 
-    // Optional rate limit (best-effort, requires Privy JWT + handler row)
-    let handlerId: string | null = null;
-    try {
-      const claims = await extractPrivyClaims(req);
-      if (claims) {
-        const handler = await getHandlerByPrivy(claims.privy_user_id);
-        if (handler) {
-          handlerId = handler.id;
-          const rl = await llmRateLimitReached(handler.id);
-          if (rl.reached) {
-            return NextResponse.json({
-              opportunities: [],
-              error: `Daily LLM cap reached (${rl.used}/${rl.limit})`,
-            });
-          }
-        }
+    // Rate limit for identified handlers (best-effort).
+    if (handlerId) {
+      const rl = await llmRateLimitReached(handlerId);
+      if (rl.reached) {
+        return NextResponse.json({
+          opportunities: [],
+          error: `Daily LLM cap reached (${rl.used}/${rl.limit})`,
+        });
       }
-    } catch {
-      /* non-fatal */
     }
     const requestStart = Date.now();
     let scanPromptTokens = 0;

@@ -53,15 +53,26 @@ export async function POST(
     // all in v1 — those need server-side portfolio history to be safe.
     let amountLamports: number;
     if (body.kind === "swap") {
-      if (typeof body.swapInputLamports !== "number" || body.swapInputLamports <= 0) {
+      // M-3 fix (v1.5 audit): require a positive INTEGER and bound it. An
+      // unbounded value inflates the public dashboard's total-fees tile, and a
+      // non-integer crashes BigInt() into a raw 500. Cap at 1,000 SOL of input.
+      const MAX_SWAP_INPUT_LAMPORTS = 1_000 * 1_000_000_000; // 1000 SOL
+      const sin = body.swapInputLamports;
+      if (
+        typeof sin !== "number" ||
+        !Number.isInteger(sin) ||
+        sin <= 0 ||
+        sin > MAX_SWAP_INPUT_LAMPORTS
+      ) {
         return NextResponse.json(
-          { error: "swapInputLamports (positive number) required for swap fees" },
+          {
+            error:
+              "swapInputLamports must be a positive integer ≤ 1e12 (1000 SOL) for swap fees",
+          },
           { status: 400 }
         );
       }
-      amountLamports = Number(
-        previewSwapFeeLamports(BigInt(body.swapInputLamports))
-      );
+      amountLamports = Number(previewSwapFeeLamports(BigInt(sin)));
     } else {
       // performance / aum — not yet self-serve. Block until server can
       // compute the canonical value itself (P0.5 work).

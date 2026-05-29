@@ -681,7 +681,11 @@ export async function POST(req: NextRequest) {
         if (chain.length > 0) usingSawKey = true;
       }
     }
-    if (chain.length === 0) {
+    // M-4/M-6 fix (v1.5 audit): the GROQ_API_KEY fallback is a dev-only
+    // convenience. Never let an ANONYMOUS caller (no BYOK key AND no
+    // identified handler) spend SAW's shared key — that is an unauthenticated
+    // cost-drain / open LLM proxy. Only fall back for an identified handler.
+    if (chain.length === 0 && handlerId) {
       const fallback = buildEntry(process.env.GROQ_API_KEY);
       if (fallback) chain.push(fallback);
     }
