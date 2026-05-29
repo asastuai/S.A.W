@@ -34,7 +34,12 @@ let _webhookCallback: any = null;
 export function webhookHandler() {
   const bot = getBot();
   if (!bot) return null;
-  if (!_webhookCallback) _webhookCallback = webhookCallback(bot, "std/http");
+  if (!_webhookCallback) {
+    // H-1 fix (v1.5 audit): also enforce the secret at the grammy layer
+    // (defense in depth alongside the route-level constant-time check).
+    const secretToken = process.env.TELEGRAM_WEBHOOK_SECRET;
+    _webhookCallback = webhookCallback(bot, "std/http", { secretToken });
+  }
   return _webhookCallback as (req: Request) => Promise<Response>;
 }
 

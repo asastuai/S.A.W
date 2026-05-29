@@ -1533,6 +1533,13 @@ export default function DemoPage() {
     }
 
     const overThreshold = item.amount > persona.policy.approvalThreshold;
+    // H-2 fix (v1.5 audit): an LLM-proposed destination (item.toAddress) is
+    // never a pre-approved recurring recipient. Route it through the approval
+    // queue so the OWNER explicitly signs off on the destination, regardless
+    // of amount — the schedule-wide "Lock in & Start" is not consent for an
+    // arbitrary address. (On-chain recipient_allowlist defaults to allow-all,
+    // so this client gate is the consent boundary for arbitrary destinations.)
+    const requiresApproval = overThreshold || !!item.toAddress;
     const remaining = persona.policy.dailyLimit - dailySpent;
 
     if (item.amount > remaining) {
@@ -1543,7 +1550,7 @@ export default function DemoPage() {
       return;
     }
 
-    if (overThreshold) {
+    if (requiresApproval) {
       try {
         const queue = await handle.fetchQueue();
         const requestId = queue.nextRequestId;
