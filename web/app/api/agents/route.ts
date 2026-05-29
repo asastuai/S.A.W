@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthError, requireAuth } from "@/lib/auth";
 import { getHandlerByPrivy } from "@/lib/db/handlers";
 import { createAgent, listAgentsForHandler, setAgentActive } from "@/lib/db/agents";
+import { listByokKeysForHandler } from "@/lib/db/byok";
 import type { Persona } from "@/lib/db/types";
 
 export const runtime = "nodejs";
@@ -82,6 +83,19 @@ export async function POST(req: NextRequest) {
         { error: "cronCadenceMinutes must be 15..1440" },
         { status: 400 }
       );
+    }
+
+    // H-4 fix (v1.5 audit): a byokKeyId must belong to the authenticated
+    // handler. Without this an attacker could bind a victim's encrypted LLM
+    // key to their own agent and have the bot use it (billed to the victim).
+    if (byokKeyId) {
+      const ownedKeys = await listByokKeysForHandler(handler.id);
+      if (!ownedKeys.some((k) => k.id === byokKeyId)) {
+        return NextResponse.json(
+          { error: "byokKeyId not found for this handler" },
+          { status: 403 }
+        );
+      }
     }
 
     const agent = await createAgent({

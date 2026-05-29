@@ -28,7 +28,14 @@ export async function storeByokKey(input: {
   return data as ByokKey;
 }
 
-export async function getDecryptedByokKey(byokKeyId: string): Promise<{
+// H-4 fix (v1.5 audit): always scope BYOK reads to the owning handler so a
+// key id bound to the wrong handler (or a guessed/leaked id) can never be
+// decrypted by another handler. Callers MUST pass the handler that owns the
+// agent the key is attached to.
+export async function getDecryptedByokKey(
+  byokKeyId: string,
+  handlerId: string
+): Promise<{
   provider: Provider;
   plaintext: string;
 }> {
@@ -37,14 +44,16 @@ export async function getDecryptedByokKey(byokKeyId: string): Promise<{
     .from("byok_keys")
     .select("provider, ciphertext, iv")
     .eq("id", byokKeyId)
+    .eq("handler_id", handlerId)
     .single();
   if (error || !data) throw new Error(`getDecryptedByokKey: ${error?.message}`);
   const plaintext = await decryptApiKey(data.ciphertext, data.iv);
-  // Update last_used_at
+  // Update last_used_at (scoped to the same owner).
   await db
     .from("byok_keys")
     .update({ last_used_at: new Date().toISOString() })
-    .eq("id", byokKeyId);
+    .eq("id", byokKeyId)
+    .eq("handler_id", handlerId);
   return { provider: data.provider as Provider, plaintext };
 }
 

@@ -286,7 +286,7 @@ function registerHandlers(bot: Bot) {
     let plaintextKey: string | undefined;
     if (agent.byok_key_id) {
       try {
-        const key = await getDecryptedByokKey(agent.byok_key_id);
+        const key = await getDecryptedByokKey(agent.byok_key_id, agent.handler_id);
         plaintextKey = key.plaintext;
       } catch {
         await ctx.reply("Couldn't decrypt your LLM key. Re-add via the web.");
