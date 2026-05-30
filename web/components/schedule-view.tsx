@@ -254,9 +254,9 @@ function Row({
           {!readOnly && isUpcoming && item.status === "queued" && onRemove && (
             <button
               onClick={() => onRemove(item.id)}
-              className="text-bone/30 hover:text-rust text-[10px] uppercase tracking-widest"
+              className="text-rust/80 border border-rust/50 hover:bg-rust hover:text-ink text-[10px] uppercase tracking-widest px-2 py-1 transition"
             >
-              remove
+              ✕ cancel
             </button>
           )}
         </div>
