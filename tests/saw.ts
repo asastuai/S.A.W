@@ -114,6 +114,7 @@ describe("SAW (Secret Agent Wallet)", () => {
       cooldownSeconds: new BN(0),
       recipientAllowlist: [],
       tokenAllowlist: [],
+      mint,
       ...overrides,
     };
   }
@@ -125,6 +126,7 @@ describe("SAW (Secret Agent Wallet)", () => {
     cooldownSeconds: BN;
     recipientAllowlist: PublicKey[];
     tokenAllowlist: PublicKey[];
+    mint: PublicKey;
   };
 
   type WalletCtx = {
@@ -639,6 +641,75 @@ describe("SAW (Secret Agent Wallet)", () => {
         ctx.policy
       );
       expect(policyAccount.dailySpent.toNumber()).to.equal(0);
+    });
+  });
+
+  describe("mint binding (M-1)", () => {
+    it("rejects pay_direct with a mint different from the policy mint", async () => {
+      // Policy is denominated in the global `mint` (via defaultPolicyParams).
+      const ctx = await setupWallet();
+
+      // A second, unrelated mint the wallet also holds a balance in.
+      const otherMint = await createMint(
+        provider.connection,
+        payer,
+        payer.publicKey,
+        null,
+        6
+      );
+      const otherWalletAta = await createAssociatedTokenAccount(
+        provider.connection,
+        payer,
+        otherMint,
+        ctx.wallet,
+        undefined,
+        undefined,
+        undefined,
+        true
+      );
+      await mintTo(
+        provider.connection,
+        payer,
+        otherMint,
+        otherWalletAta,
+        payer.publicKey,
+        BigInt(100_000_000)
+      );
+      const otherRecipientAta = await createAssociatedTokenAccount(
+        provider.connection,
+        payer,
+        otherMint,
+        recipientOwner.publicKey
+      );
+
+      try {
+        await agentWalletProgram.methods
+          .payDirect(recipientOwner.publicKey, new BN(20_000_000), Array(32).fill(0) as any)
+          .accountsPartial({
+            wallet: ctx.wallet,
+            agent: ctx.agent.publicKey,
+            policy: ctx.policy,
+            mint: otherMint,
+            sourceTokenAccount: otherWalletAta,
+            recipientTokenAccount: otherRecipientAta,
+            policyProgram: policyRegistryProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .signers([ctx.agent])
+          .rpc();
+        assert.fail("expected MintMismatch");
+      } catch (err: any) {
+        expect(err.toString()).to.match(/MintMismatch/);
+      }
+    });
+
+    it("still allows pay_direct with the policy mint", async () => {
+      const ctx = await setupWallet();
+      await payDirect(ctx, new BN(10_000_000), recipientOwner.publicKey, recipientAta);
+      const policyAccount = await policyRegistryProgram.account.policyAccount.fetch(
+        ctx.policy
+      );
+      expect(policyAccount.dailySpent.toNumber()).to.equal(10_000_000);
     });
   });
 });

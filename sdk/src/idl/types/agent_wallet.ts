@@ -1123,6 +1123,11 @@ export type AgentWallet = {
       "code": 6011,
       "name": "zeroAmount",
       "msg": "Amount must be greater than zero"
+    },
+    {
+      "code": 6012,
+      "name": "mintMismatch",
+      "msg": "Payment mint does not match the policy's denomination mint"
     }
   ],
   "types": [
@@ -1256,6 +1261,10 @@ export type AgentWallet = {
             "type": "i64"
           },
           {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
             "name": "bump",
             "type": "u8"
           }
@@ -1294,6 +1303,10 @@ export type AgentWallet = {
             "type": {
               "vec": "pubkey"
             }
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
           }
         ]
       }

@@ -1117,6 +1117,11 @@
       "code": 6011,
       "name": "ZeroAmount",
       "msg": "Amount must be greater than zero"
+    },
+    {
+      "code": 6012,
+      "name": "MintMismatch",
+      "msg": "Payment mint does not match the policy's denomination mint"
     }
   ],
   "types": [
@@ -1250,6 +1255,10 @@
             "type": "i64"
           },
           {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
             "name": "bump",
             "type": "u8"
           }
@@ -1288,6 +1297,10 @@
             "type": {
               "vec": "pubkey"
             }
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
           }
         ]
       }

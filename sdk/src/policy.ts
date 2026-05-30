@@ -10,6 +10,8 @@ export type PolicyBuilderInput = {
   cooldownSeconds?: number | BN;
   recipientAllowlist?: PublicKey[];
   tokenAllowlist?: PublicKey[];
+  // M-1: the SPL mint the spend limits are denominated in (required).
+  mint: PublicKey;
 };
 
 const toBn = (v: number | BN): BN => (BN.isBN(v) ? v : new BN(v));
@@ -22,6 +24,7 @@ export function buildPolicy(input: PolicyBuilderInput): PolicyParams {
     cooldownSeconds: toBn(input.cooldownSeconds ?? 0),
     recipientAllowlist: input.recipientAllowlist ?? [],
     tokenAllowlist: input.tokenAllowlist ?? [],
+    mint: input.mint,
   };
 }
 
@@ -64,9 +67,15 @@ export function evaluatePolicyOffChain(
     return { kind: "denied", reason: "ExceedsPerTxLimit" };
   }
 
+  // L-1: mirror the on-chain UTC-day bucketing (div_euclid) instead of a
+  // rolling delta, so this off-chain predictor matches enforcement near
+  // midnight UTC instead of diverging from it.
   const daySec = 86_400;
-  const elapsed = nowSec - policy.lastResetTimestamp.toNumber();
-  const currentSpent = elapsed >= daySec ? new BN(0) : policy.dailySpent;
+  const utcDay = (ts: number) => Math.floor(ts / daySec);
+  const currentSpent =
+    utcDay(nowSec) > utcDay(policy.lastResetTimestamp.toNumber())
+      ? new BN(0)
+      : policy.dailySpent;
   if (currentSpent.add(usdValue).gt(policy.dailyLimit)) {
     return { kind: "denied", reason: "ExceedsDailyLimit" };
   }

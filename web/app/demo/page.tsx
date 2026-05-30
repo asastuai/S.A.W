@@ -896,13 +896,15 @@ export default function DemoPage() {
       const operative = PERSONAS.find((x) => x.id === "operative") ?? PERSONAS[0];
       const sharedPolicy = operative.policy;
       const sharedInitialFund = operative.initialFund;
-      const policy = buildPolicy(sharedPolicy);
+      // M-1: the policy is now denominated in a specific mint. Generate the
+      // demo's USDC-dev mint first so it can be pinned into the policy.
+      const mintKp = Keypair.generate();
+      const policy = buildPolicy({ ...sharedPolicy, mint: mintKp.publicKey });
       const [walletPda] = deriveWalletPda(handler, saltBuf);
 
       setSetupStep(
         `Preparing your shared wallet, policy, mint, and funding in one signature…`
       );
-      const mintKp = Keypair.generate();
       const mintRent = await getMinimumBalanceForRentExemptMint(connection);
       const walletAta = getAssociatedTokenAddressSync(
         mintKp.publicKey,

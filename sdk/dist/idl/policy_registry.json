@@ -369,6 +369,10 @@
             "type": "i64"
           },
           {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
             "name": "bump",
             "type": "u8"
           }
@@ -407,6 +411,10 @@
             "type": {
               "vec": "pubkey"
             }
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
           }
         ]
       }

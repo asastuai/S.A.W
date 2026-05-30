@@ -12,6 +12,7 @@ function buildPolicy(input) {
         cooldownSeconds: toBn(input.cooldownSeconds ?? 0),
         recipientAllowlist: input.recipientAllowlist ?? [],
         tokenAllowlist: input.tokenAllowlist ?? [],
+        mint: input.mint,
     };
 }
 function evaluatePolicyOffChain(policy, to, mint, usdValue, nowSec) {
@@ -26,9 +27,14 @@ function evaluatePolicyOffChain(policy, to, mint, usdValue, nowSec) {
     if (usdValue.gt(policy.perTxLimit)) {
         return { kind: "denied", reason: "ExceedsPerTxLimit" };
     }
+    // L-1: mirror the on-chain UTC-day bucketing (div_euclid) instead of a
+    // rolling delta, so this off-chain predictor matches enforcement near
+    // midnight UTC instead of diverging from it.
     const daySec = 86400;
-    const elapsed = nowSec - policy.lastResetTimestamp.toNumber();
-    const currentSpent = elapsed >= daySec ? new anchor_1.BN(0) : policy.dailySpent;
+    const utcDay = (ts) => Math.floor(ts / daySec);
+    const currentSpent = utcDay(nowSec) > utcDay(policy.lastResetTimestamp.toNumber())
+        ? new anchor_1.BN(0)
+        : policy.dailySpent;
     if (currentSpent.add(usdValue).gt(policy.dailyLimit)) {
         return { kind: "denied", reason: "ExceedsDailyLimit" };
     }

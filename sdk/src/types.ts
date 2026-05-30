@@ -8,6 +8,8 @@ export type PolicyParams = {
   cooldownSeconds: BN;
   recipientAllowlist: PublicKey[];
   tokenAllowlist: PublicKey[];
+  // M-1: the SPL mint this policy's spend limits are denominated in.
+  mint: PublicKey;
 };
 
 export type PolicyState = PolicyParams & {

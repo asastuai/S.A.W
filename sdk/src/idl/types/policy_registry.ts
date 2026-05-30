@@ -128,6 +128,58 @@ export type PolicyRegistry = {
       ]
     },
     {
+      "name": "resetDailySpent",
+      "docs": [
+        "L-4 fix: when the wallet is emergency-withdrawn, the agent's",
+        "daily_spent counter still reflects pre-emergency activity. If the",
+        "owner refunds the wallet within the same day, the agent finds",
+        "itself artificially throttled until midnight. This zeros the",
+        "counter. Only callable by the wallet PDA (CPI from agent_wallet's",
+        "emergency_withdraw)."
+      ],
+      "discriminator": [
+        162,
+        18,
+        89,
+        96,
+        191,
+        119,
+        181,
+        10
+      ],
+      "accounts": [
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "policy.wallet",
+                "account": "policyAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "setPolicy",
       "discriminator": [
         40,
@@ -256,6 +308,16 @@ export type PolicyRegistry = {
       "code": 6008,
       "name": "overflow",
       "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6009,
+      "name": "cooldownTooLong",
+      "msg": "cooldown_seconds exceeds maximum allowed (7 days)"
+    },
+    {
+      "code": 6010,
+      "name": "invalidDailyLimit",
+      "msg": "daily_limit must be > 0 unless the allowlist is empty (intentional pause)"
     }
   ],
   "types": [
@@ -313,6 +375,10 @@ export type PolicyRegistry = {
             "type": "i64"
           },
           {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
             "name": "bump",
             "type": "u8"
           }
@@ -351,6 +417,10 @@ export type PolicyRegistry = {
             "type": {
               "vec": "pubkey"
             }
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
           }
         ]
       }

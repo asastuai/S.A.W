@@ -91,6 +91,13 @@ pub mod agent_wallet {
             to,
             WalletError::RecipientNotAllowed
         );
+        // M-1: enforce the policy's denomination mint so the agent can't
+        // bypass the token-unit spend limits by paying in a different token.
+        require_keys_eq!(
+            ctx.accounts.mint.key(),
+            ctx.accounts.policy.mint,
+            WalletError::MintMismatch
+        );
 
         let now = Clock::get()?.unix_timestamp;
         let outcome = evaluate_policy(
@@ -167,6 +174,8 @@ pub mod agent_wallet {
             wallet.agent,
             WalletError::NotActiveAgent
         );
+        // M-1: the queued request must use the policy's denomination mint.
+        require_keys_eq!(mint, ctx.accounts.policy.mint, WalletError::MintMismatch);
 
         let now = Clock::get()?.unix_timestamp;
         let outcome = evaluate_policy(&ctx.accounts.policy, to, mint, amount, now);
@@ -227,6 +236,12 @@ pub mod agent_wallet {
             ctx.accounts.source_token_account.mint,
             request.mint,
             WalletError::TokenNotAllowed
+        );
+        // M-1: the request's mint must be the policy's denomination mint.
+        require_keys_eq!(
+            request.mint,
+            ctx.accounts.policy.mint,
+            WalletError::MintMismatch
         );
 
         let now = Clock::get()?.unix_timestamp;

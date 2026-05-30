@@ -34,6 +34,8 @@ pub mod policy_registry {
         policy.daily_spent = 0;
         policy.last_tx_timestamp = 0;
         policy.last_reset_timestamp = now;
+        // M-1: pin the denomination mint at registration (immutable thereafter).
+        policy.mint = params.mint;
         policy.bump = ctx.bumps.policy;
 
         emit!(PolicySet {
@@ -55,6 +57,9 @@ pub mod policy_registry {
         policy.cooldown_seconds = params.cooldown_seconds;
         policy.recipient_allowlist = params.recipient_allowlist;
         policy.token_allowlist = params.token_allowlist;
+        // M-1: mint is immutable post-registration. set_policy deliberately
+        // does NOT update policy.mint — changing the denomination would
+        // invalidate the accumulated daily_spent (a different token unit).
 
         emit!(PolicySet {
             wallet: policy.wallet,

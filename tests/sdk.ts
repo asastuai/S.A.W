@@ -75,6 +75,7 @@ describe("SAW SDK", () => {
           dailyLimit: 1_000_000_000,
           perTxLimit: 100_000_000,
           approvalThreshold: 50_000_000,
+          mint,
         }),
       },
       owner

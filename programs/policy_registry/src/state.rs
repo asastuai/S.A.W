@@ -11,6 +11,11 @@ pub struct PolicyParams {
     pub cooldown_seconds: u64,
     pub recipient_allowlist: Vec<Pubkey>,
     pub token_allowlist: Vec<Pubkey>,
+    // M-1 fix (v1.5 audit): the SPL mint this policy is denominated in. The
+    // per-tx / daily limits are token-unit amounts, so they only make sense
+    // against a single mint. agent_wallet enforces that every payment uses
+    // exactly this mint, closing the token-substitution limit bypass.
+    pub mint: Pubkey,
 }
 
 #[account]
@@ -26,6 +31,8 @@ pub struct PolicyAccount {
     pub daily_spent: u64,
     pub last_tx_timestamp: i64,
     pub last_reset_timestamp: i64,
+    // M-1: the mint all spend limits are denominated in (immutable post-register).
+    pub mint: Pubkey,
     pub bump: u8,
 }
 
@@ -41,6 +48,7 @@ impl PolicyAccount {
         + 8                      // daily_spent
         + 8                      // last_tx_timestamp
         + 8                      // last_reset_timestamp
+        + 32                     // mint
         + 1; // bump
 
     // L-1: anchor the daily window to fixed UTC-day boundaries

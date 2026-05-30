@@ -7,6 +7,7 @@ export type PolicyParams = {
     cooldownSeconds: BN;
     recipientAllowlist: PublicKey[];
     tokenAllowlist: PublicKey[];
+    mint: PublicKey;
 };
 export type PolicyState = PolicyParams & {
     wallet: PublicKey;

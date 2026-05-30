@@ -48,6 +48,7 @@ function adaptPolicyInput(
     cooldownSeconds: toBn(policy.cooldownSeconds ?? 0n),
     recipientAllowlist: (policy.recipientAllowlist ?? []).map(toPk),
     tokenAllowlist: (policy.tokenAllowlist ?? []).map(toPk),
+    mint: toPk(policy.denominationAsset),
   };
 }
 
@@ -190,6 +191,7 @@ export class SolanaWalletHandle implements IAgentWalletHandle<Signer> {
       cooldownSeconds: fromBn(p.cooldownSeconds),
       recipientAllowlist: p.recipientAllowlist.map((pk) => pk.toBase58()),
       tokenAllowlist: p.tokenAllowlist.map((pk) => pk.toBase58()),
+      denominationAsset: p.mint.toBase58(),
       dailySpent: fromBn(p.dailySpent),
       lastTxTimestamp: fromBn(p.lastTxTimestamp),
       lastResetTimestamp: fromBn(p.lastResetTimestamp),

@@ -26,4 +26,6 @@ pub enum WalletError {
     InsufficientBalance,
     #[msg("Amount must be greater than zero")]
     ZeroAmount,
+    #[msg("Payment mint does not match the policy's denomination mint")]
+    MintMismatch,
 }

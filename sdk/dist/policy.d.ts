@@ -8,6 +8,7 @@ export type PolicyBuilderInput = {
     cooldownSeconds?: number | BN;
     recipientAllowlist?: PublicKey[];
     tokenAllowlist?: PublicKey[];
+    mint: PublicKey;
 };
 export declare function buildPolicy(input: PolicyBuilderInput): PolicyParams;
 export type PolicyEvaluation = {

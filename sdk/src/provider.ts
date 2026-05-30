@@ -26,6 +26,9 @@ export type ProviderPolicyInput = {
   cooldownSeconds?: bigint;
   recipientAllowlist?: ProviderAddress[];
   tokenAllowlist?: ProviderAssetId[];
+  // M-1: the asset (mint on Solana) the spend limits are denominated in.
+  // Every payment must use this asset, closing the token-substitution bypass.
+  denominationAsset: ProviderAssetId;
 };
 
 export type ProviderPolicyState = ProviderPolicyInput & {
