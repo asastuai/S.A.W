@@ -105,6 +105,8 @@ export function ScheduleView({
                 now={now}
                 isUpcoming={false}
                 approvalThreshold={approvalThreshold}
+                onRemove={onRemove}
+                readOnly={readOnly}
               />
             ))}
           </>
@@ -257,6 +259,14 @@ function Row({
               className="text-rust/80 border border-rust/50 hover:bg-rust hover:text-ink text-[10px] uppercase tracking-widest px-2 py-1 transition"
             >
               ✕ cancel
+            </button>
+          )}
+          {!readOnly && !isUpcoming && onRemove && (
+            <button
+              onClick={() => onRemove(item.id)}
+              className="text-bone/40 border border-bone/20 hover:border-rust hover:text-rust text-[10px] uppercase tracking-widest px-2 py-1 transition"
+            >
+              ✕ clear
             </button>
           )}
         </div>
