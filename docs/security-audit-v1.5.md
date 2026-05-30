@@ -29,6 +29,37 @@
 
 ---
 
+## Remediation status (2026-05-30)
+
+The CRITICAL and all 4 HIGH findings are fixed and shipped; 6 of 7 MEDIUM are
+fixed (only M-7 deferred). The on-chain fixes are deployed to Solana devnet and
+the C-1 fix is verified live.
+
+| ID | Severity | Status | Where |
+|----|----------|--------|-------|
+| **C-1** | CRITICAL | ✅ **Fixed + VERIFIED** | migration `0011` run on Supabase; anon `POST /rest/v1/rpc/add_credits` now returns `401 / 42501 permission denied` (was 200+mint). Commit `748c135`. |
+| **H-1** | HIGH | ✅ Fixed | telegram webhook fail-closed + constant-time + grammy enforcement. `1e33f83` |
+| **H-2** | HIGH | ✅ Fixed | LLM-proposed transfer destinations routed through the approval queue. `1e33f83` |
+| **H-3** | HIGH | ✅ Fixed | `/api/debug/spawn-test-handler` deleted. `748c135` |
+| **H-4** | HIGH | ✅ Fixed | BYOK reads + binding scoped to the owning handler. `748c135` |
+| **M-1** | MEDIUM | ✅ Fixed + deployed | policy denominated in a single mint; `MintMismatch` enforced. `afcefb7`. Devnet: agent_wallet `2U4yD…`, policy_registry `5QM9N…`; IDLs upgraded. |
+| **M-2** | MEDIUM | ✅ Fixed | byokKeyId ownership check (closed by H-4). `748c135` |
+| **M-3** | MEDIUM | ✅ Fixed | `swapInputLamports` bounded integer. `8780a37` |
+| **M-4 / M-6** | MEDIUM | ✅ Fixed | anon callers can't spend SAW's shared LLM key (chat + scan). `8780a37` |
+| **M-5** | MEDIUM | ✅ Fixed | worker no longer flips status without dispatch (no stuck/double). `8780a37` |
+| **M-7** | MEDIUM | ⏸ Deferred | credit check/debit TOCTOU — needs an atomic reservation + refund path; bounded impact (a paying handler racing its own calls). |
+| LOW (17) / INFO (10) | — | ⏸ Hardening backlog | CSP header, constant-time secret compares, pnpm overrides, on-chain `recipient_allowlist` (complements H-2), localStorage secrets (XSS-gated), etc. |
+
+Bonus: the on-chain L-1 UTC-day window is now mirrored in the SDK
+`evaluatePolicyOffChain` (`afcefb7`), closing the off-chain/on-chain divergence
+introduced in v1.4.
+
+Test/verify gates used: `anchor test` 21 passing (incl. new MintMismatch +
+L-2/L-4 regression tests); web + worker `tsc` clean; C-1 confirmed by live anon
+RPC probe. Remediation commits: `748c135`, `1e33f83`, `8780a37`, `afcefb7`.
+
+---
+
 ## CRITICAL
 
 ### C-1 · `add_credits` / `spend_one_call` are SECURITY DEFINER and PUBLIC-executable via the anon key
