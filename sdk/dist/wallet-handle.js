@@ -87,6 +87,16 @@ class WalletHandle {
             return spl_token_1.TOKEN_2022_PROGRAM_ID;
         return spl_token_1.TOKEN_PROGRAM_ID;
     }
+    /**
+     * The decimals of an SPL mint (handles Token-2022). Pair with toBaseUnits()
+     * to build policy caps in the pinned mint's real base-units instead of
+     * assuming a fixed decimal count (v1.5 critique #2). See sdk/src/policy.ts.
+     */
+    async fetchMintDecimals(mint) {
+        const tokenProgram = await this.detectTokenProgram(mint);
+        const info = await (0, spl_token_1.getMint)(this.client.provider.connection, mint, undefined, tokenProgram);
+        return info.decimals;
+    }
     // ── Agent ops ─────────────────────────────────────────────────────
     async pay(params, agentSigner, sourceAta, recipientAta) {
         const tokenProgram = await this.detectTokenProgram(params.mint);

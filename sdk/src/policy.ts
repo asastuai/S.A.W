@@ -16,6 +16,20 @@ export type PolicyBuilderInput = {
 
 const toBn = (v: number | BN): BN => (BN.isBN(v) ? v : new BN(v));
 
+/**
+ * Convert a human amount (e.g. 120 "USDC") into the raw base-units a policy cap
+ * must be expressed in, scaled by the MINT's decimals.
+ *
+ * v1.5 critique #2: on-chain evaluate_policy compares caps against raw token
+ * base-units of the policy's pinned mint (M-1) — there is NO oracle. So caps
+ * MUST be built with that mint's ACTUAL decimals; hardcoding a count (e.g. 6)
+ * silently mis-scales a 9-decimal mint by 1000x. Pair this with
+ * WalletHandle.fetchMintDecimals(mint) (or getMint(...).decimals) instead of a
+ * fixed constant when constructing dailyLimit / perTxLimit / approvalThreshold.
+ */
+export const toBaseUnits = (human: number, decimals: number): BN =>
+  new BN(Math.round(human * 10 ** decimals));
+
 export function buildPolicy(input: PolicyBuilderInput): PolicyParams {
   return {
     dailyLimit: toBn(input.dailyLimit),

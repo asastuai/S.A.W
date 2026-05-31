@@ -1,9 +1,23 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.toBaseUnits = void 0;
 exports.buildPolicy = buildPolicy;
 exports.evaluatePolicyOffChain = evaluatePolicyOffChain;
 const anchor_1 = require("@coral-xyz/anchor");
 const toBn = (v) => (anchor_1.BN.isBN(v) ? v : new anchor_1.BN(v));
+/**
+ * Convert a human amount (e.g. 120 "USDC") into the raw base-units a policy cap
+ * must be expressed in, scaled by the MINT's decimals.
+ *
+ * v1.5 critique #2: on-chain evaluate_policy compares caps against raw token
+ * base-units of the policy's pinned mint (M-1) — there is NO oracle. So caps
+ * MUST be built with that mint's ACTUAL decimals; hardcoding a count (e.g. 6)
+ * silently mis-scales a 9-decimal mint by 1000x. Pair this with
+ * WalletHandle.fetchMintDecimals(mint) (or getMint(...).decimals) instead of a
+ * fixed constant when constructing dailyLimit / perTxLimit / approvalThreshold.
+ */
+const toBaseUnits = (human, decimals) => new anchor_1.BN(Math.round(human * 10 ** decimals));
+exports.toBaseUnits = toBaseUnits;
 function buildPolicy(input) {
     return {
         dailyLimit: toBn(input.dailyLimit),

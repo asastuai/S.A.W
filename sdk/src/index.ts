@@ -13,6 +13,7 @@ export {
 export {
   buildPolicy,
   evaluatePolicyOffChain,
+  toBaseUnits,
 } from "./policy";
 export type {
   PolicyBuilderInput,
