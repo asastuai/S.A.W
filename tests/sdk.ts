@@ -76,6 +76,9 @@ describe("SAW SDK", () => {
           perTxLimit: 100_000_000,
           approvalThreshold: 50_000_000,
           mint,
+          // v1.5 #1: pre-authorize the recipient so within-cap pays auto-spend
+          // (unlisted recipients now escalate to owner approval).
+          recipientAllowlist: [recipientOwner.publicKey],
         }),
       },
       owner

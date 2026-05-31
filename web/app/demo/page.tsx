@@ -899,7 +899,15 @@ export default function DemoPage() {
       // M-1: the policy is now denominated in a specific mint. Generate the
       // demo's USDC-dev mint first so it can be pinned into the policy.
       const mintKp = Keypair.generate();
-      const policy = buildPolicy({ ...sharedPolicy, mint: mintKp.publicKey });
+      const policy = buildPolicy({
+        ...sharedPolicy,
+        mint: mintKp.publicKey,
+        // #1 fix (v1.5 critique): pre-authorize the demo's fixed recipient so
+        // normal buys auto-spend on the fast path. Any LLM-injected toAddress
+        // stays unlisted → forced through on-chain owner approval. The
+        // client-side gate stays as defense-in-depth.
+        recipientAllowlist: [recipient.publicKey],
+      });
       const [walletPda] = deriveWalletPda(handler, saltBuf);
 
       setSetupStep(

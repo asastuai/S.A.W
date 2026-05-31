@@ -1128,6 +1128,11 @@ export type AgentWallet = {
             "code": 6012;
             "name": "mintMismatch";
             "msg": "Payment mint does not match the policy's denomination mint";
+        },
+        {
+            "code": 6013;
+            "name": "requiresOwnerApproval";
+            "msg": "Recipient is not pre-authorized; route through request_payment for owner approval";
         }
     ];
     "types": [

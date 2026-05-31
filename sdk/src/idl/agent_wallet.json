@@ -1122,6 +1122,11 @@
       "code": 6012,
       "name": "MintMismatch",
       "msg": "Payment mint does not match the policy's denomination mint"
+    },
+    {
+      "code": 6013,
+      "name": "RequiresOwnerApproval",
+      "msg": "Recipient is not pre-authorized; route through request_payment for owner approval"
     }
   ],
   "types": [

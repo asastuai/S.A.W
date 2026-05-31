@@ -28,4 +28,6 @@ pub enum WalletError {
     ZeroAmount,
     #[msg("Payment mint does not match the policy's denomination mint")]
     MintMismatch,
+    #[msg("Recipient is not pre-authorized; route through request_payment for owner approval")]
+    RequiresOwnerApproval,
 }

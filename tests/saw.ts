@@ -112,7 +112,10 @@ describe("SAW (Secret Agent Wallet)", () => {
       perTxLimit: new BN(100_000_000),
       approvalThreshold: new BN(50_000_000),
       cooldownSeconds: new BN(0),
-      recipientAllowlist: [],
+      // v1.5 #1: recipient_allowlist is a pre-authorized auto-spend set. List
+      // the happy-path recipient so within-cap pays to it stay on the fast path
+      // (unlisted recipients now escalate to owner approval instead of allow-all).
+      recipientAllowlist: [recipientOwner.publicKey],
       tokenAllowlist: [],
       mint,
       ...overrides,
@@ -319,19 +322,20 @@ describe("SAW (Secret Agent Wallet)", () => {
         await payDirect(ctx, new BN(50_000_000), recipientOwner.publicKey, recipientAta);
         assert.fail("expected requires-approval rejection");
       } catch (err: any) {
-        expect(err.toString()).to.match(/ExceedsPerTxLimit|RequiresApproval/);
+        expect(err.toString()).to.match(/RequiresOwnerApproval/);
       }
     });
 
-    it("rejects payment to non-allowlisted recipient", async () => {
+    it("routes an unlisted recipient to approval (not silent allow, not hard deny)", async () => {
+      // recipientOwner is NOT in the allowlist -> escalate to owner approval.
       const ctx = await setupWallet({
         recipientAllowlist: [Keypair.generate().publicKey],
       });
       try {
         await payDirect(ctx, new BN(20_000_000), recipientOwner.publicKey, recipientAta);
-        assert.fail("expected RecipientNotAllowed");
+        assert.fail("expected RequiresOwnerApproval");
       } catch (err: any) {
-        expect(err.toString()).to.match(/RecipientNotAllowed/);
+        expect(err.toString()).to.match(/RequiresOwnerApproval/);
       }
     });
 
@@ -710,6 +714,90 @@ describe("SAW (Secret Agent Wallet)", () => {
         ctx.policy
       );
       expect(policyAccount.dailySpent.toNumber()).to.equal(10_000_000);
+    });
+  });
+
+  describe("recipient gate (v1.5 critique #1)", () => {
+    it("unlisted recipient below threshold requires approval, then owner can approve", async () => {
+      // Empty allowlist -> recipient is unknown -> pay_direct must escalate.
+      const ctx = await setupWallet({ recipientAllowlist: [] });
+      const amount = new BN(20_000_000); // < per_tx 100M and < approval_threshold 50M
+
+      // 1. pay_direct to an unlisted recipient is rejected, not silently allowed.
+      try {
+        await payDirect(ctx, amount, recipientOwner.publicKey, recipientAta);
+        assert.fail("expected RequiresOwnerApproval");
+      } catch (err: any) {
+        expect(err.toString()).to.match(/RequiresOwnerApproval/);
+      }
+
+      // 2. The same payment via the approval queue succeeds — owner signs off.
+      const { request } = await nextRequestPda(ctx);
+      await agentWalletProgram.methods
+        .requestPayment(recipientOwner.publicKey, mint, amount, Array(32).fill(0) as any)
+        .accountsPartial({
+          wallet: ctx.wallet,
+          agent: ctx.agent.publicKey,
+          policy: ctx.policy,
+          queue: ctx.queue,
+          request,
+          payer: ctx.owner.publicKey,
+          queueProgram: approvalQueueProgram.programId,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([ctx.agent, ctx.owner])
+        .rpc();
+      await agentWalletProgram.methods
+        .approveAndExecute()
+        .accountsPartial({
+          wallet: ctx.wallet,
+          owner: ctx.owner.publicKey,
+          policy: ctx.policy,
+          queue: ctx.queue,
+          request,
+          mint,
+          sourceTokenAccount: ctx.walletAta,
+          recipientTokenAccount: recipientAta,
+          policyProgram: policyRegistryProgram.programId,
+          queueProgram: approvalQueueProgram.programId,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([ctx.owner])
+        .rpc();
+      const reqAfter = await approvalQueueProgram.account.requestAccount.fetch(request);
+      expect(reqAfter.status).to.deep.equal({ approved: {} });
+    });
+
+    it("agent cannot pay_direct to an arbitrary/injected destination (crown jewel)", async () => {
+      // Default allowlist = [recipientOwner]; the attacker address is not listed.
+      const ctx = await setupWallet();
+      const attacker = Keypair.generate();
+      const attackerAta = await createAssociatedTokenAccount(
+        provider.connection,
+        payer,
+        mint,
+        attacker.publicKey
+      );
+      // Well within every cap, but the destination is not pre-authorized.
+      try {
+        await payDirect(ctx, new BN(5_000_000), attacker.publicKey, attackerAta);
+        assert.fail("agent moved funds to an arbitrary address — must be blocked");
+      } catch (err: any) {
+        expect(err.toString()).to.match(/RequiresOwnerApproval/);
+      }
+    });
+
+    it("hard caps beat the recipient gate (over per-tx unlisted -> ExceedsPerTxLimit)", async () => {
+      const ctx = await setupWallet({
+        perTxLimit: new BN(10_000_000),
+        recipientAllowlist: [],
+      });
+      try {
+        await payDirect(ctx, new BN(20_000_000), recipientOwner.publicKey, recipientAta);
+        assert.fail("expected ExceedsPerTxLimit");
+      } catch (err: any) {
+        expect(err.toString()).to.match(/ExceedsPerTxLimit/);
+      }
     });
   });
 });

@@ -110,7 +110,10 @@ pub mod agent_wallet {
 
         match outcome {
             CheckOutcome::Allowed => {}
-            CheckOutcome::RequiresApproval => return err!(WalletError::ExceedsPerTxLimit),
+            // An unlisted recipient or over-threshold amount must go through the
+            // approval queue (request_payment + owner approve_and_execute), not
+            // an autonomous pay_direct. Surface an honest error.
+            CheckOutcome::RequiresApproval => return err!(WalletError::RequiresOwnerApproval),
             CheckOutcome::Denied(reason) => return Err(map_deny(reason).into()),
         }
 

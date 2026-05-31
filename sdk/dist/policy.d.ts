@@ -24,4 +24,4 @@ export declare function evaluatePolicyOffChain(policy: PolicyParams & {
     dailySpent: BN;
     lastTxTimestamp: BN;
     lastResetTimestamp: BN;
-}, to: PublicKey, mint: PublicKey, usdValue: BN, nowSec: number): PolicyEvaluation;
+}, to: PublicKey, mint: PublicKey, amount: BN, nowSec: number): PolicyEvaluation;
