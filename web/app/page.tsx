@@ -95,10 +95,10 @@ function Hero() {
           14-bug internal security audit (3 CRITICAL + 6 HIGH + 4 MEDIUM
           closed, report in <code className="text-gold">docs/security-audit-v1.3.md</code>),
           but no external audit has been performed yet. Mainnet deploy
-          and external audit are funded by the pending Solana Foundation
-          grant. Until then: treat all on-chain action as test value, not
-          real funds. If you choose to use SAW today, you take on the
-          risk yourself.
+          and an external audit are gated on funding, which is being
+          pursued (no grant secured yet). Until then: treat all on-chain
+          action as test value, not real funds. If you choose to use SAW
+          today, you take on the risk yourself.
         </p>
       </div>
     </section>
@@ -308,7 +308,7 @@ function FeatureGrid() {
     },
     {
       tag: "Open",
-      title: "MIT-licensed protocol.",
+      title: "Apache-2.0 licensed protocol.",
       body:
         "Use the SDK, fork the programs, build your own client. The handler model is a primitive, not a product moat.",
     },
@@ -316,13 +316,13 @@ function FeatureGrid() {
       tag: "BYOK",
       title: "Your key, your model, your spend.",
       body:
-        "Eight LLM providers supported out of the box. Keys live in your browser; the server never stores them. No platform middleman taking margin on tokens.",
+        "Eight LLM providers supported out of the box. In the web app your key lives in your browser and the server never stores it; connect Telegram and it's encrypted at rest so the bot can act for you. No platform middleman taking margin on tokens.",
     },
     {
       tag: "Yield-aware",
       title: "Live APRs from DefiLlama.",
       body:
-        "Conservador queries real Solana pools every 5 minutes. No training-data hallucinations. The agent picks from what actually exists today.",
+        "The operative queries real Solana pools live on every yield request. No training-data hallucinations. It picks from what actually exists today.",
     },
   ];
   return (

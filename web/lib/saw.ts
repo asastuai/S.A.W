@@ -55,6 +55,24 @@ export function loadOrCreateAgent(handler: PublicKey): Keypair {
   return fresh;
 }
 
+/**
+ * Overwrite the stored agent keypair (used when the handler rotates the
+ * agent on-chain — the browser dispatcher must sign as the NEW agent on the
+ * next pay). Session-restore reads this same key, so the rotation survives a
+ * reload.
+ */
+export function persistAgent(handler: PublicKey, kp: Keypair) {
+  if (typeof window === "undefined") return;
+  const key = `${STORAGE_PREFIX}:agent:${handler.toBase58()}`;
+  window.localStorage.setItem(
+    key,
+    JSON.stringify({
+      secretKey: Array.from(kp.secretKey),
+      pubkey: kp.publicKey.toBase58(),
+    })
+  );
+}
+
 export function loadOrCreateRecipient(handler: PublicKey): Keypair {
   const key = `${STORAGE_PREFIX}:recipient:${handler.toBase58()}`;
   if (typeof window === "undefined") return Keypair.generate();

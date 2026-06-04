@@ -80,7 +80,7 @@ export default function PressPage() {
             >
               ROADMAP.md
             </a>{" "}
-            — v1 plan + status (P0, P1, v1.1, v1.2 shipped)
+            — v1 plan + status (P0, P1, v1.1, v1.2, v1.3 shipped)
           </li>
           <li>
             <a
@@ -157,7 +157,7 @@ export default function PressPage() {
       </Section>
 
       <footer className="text-bone/40 text-xs mt-12 pt-6 border-t border-ash">
-        Updated 2026-05-21 · v1.2
+        Updated 2026-06-04 · v1.3
       </footer>
     </main>
   );

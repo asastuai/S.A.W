@@ -32,6 +32,7 @@ import {
   derivePolicyPda,
   deriveQueuePda,
   deriveWalletPda,
+  toBaseUnits,
   SawClient,
   WalletHandle,
 } from "@asastuai/saw-sdk";
@@ -42,6 +43,7 @@ import {
   loadOrCreateAgent,
   loadOrCreateRecipient,
   loadSetup,
+  persistAgent,
   saveSetup,
 } from "@/lib/saw";
 import { PERSONAS, Persona, getPersona } from "@/lib/personas";
@@ -80,6 +82,10 @@ import {
 } from "@/lib/hydrate";
 import { SleepingBadge } from "@/components/sleeping-badge";
 import { AgentSettingsModal } from "@/components/agent-settings-modal";
+import {
+  HandlerControlsModal,
+  PolicyEditorModal,
+} from "@/components/handler-controls";
 import { WakesFeed } from "@/components/wakes-feed";
 import { FeeSummary } from "@/components/fee-summary";
 import { ProviderBadge } from "@/components/provider-badge";
@@ -170,6 +176,11 @@ export default function DemoPage() {
     });
   }
   const [showSettings, setShowSettings] = useState(false);
+  // Handler override controls (owner-signed on-chain powers).
+  const [showControls, setShowControls] = useState(false);
+  const [showPolicyEditor, setShowPolicyEditor] = useState(false);
+  const [ctlBusy, setCtlBusy] = useState(false);
+  const [ctlMsg, setCtlMsg] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [phase, setPhase] = useState<Phase>("pick");
   const [setupStep, setSetupStep] = useState<string>("");
@@ -512,9 +523,13 @@ export default function DemoPage() {
     return () => clearInterval(id);
   }, [handler]);
 
-  // Opportunity scanner (Greedie only — requires API key)
+  // Opportunity scanner (operative — requires API key). The unified
+  // operative "reads the tape", so the market scanner + opportunity reel
+  // (and its alert chime/notification) run for it. Pre-v1.3 this was gated
+  // to the now-retired "greedie" persona id, which stranded the whole
+  // feature behind dead code.
   useEffect(() => {
-    if (persona?.id !== "greedie" || !handler) return;
+    if (persona?.id !== "operative" || !handler) return;
     if (phase !== "briefing" && phase !== "live") return;
     if (!apiKey) return;
     // v1.2: only run the client-side scanner when the agent is opted in
@@ -663,9 +678,9 @@ export default function DemoPage() {
     syncOpportunityStatusToDb(opp.id, "skipped");
   }
 
-  // Market price poller (Greedie only)
+  // Market price poller (operative)
   useEffect(() => {
-    if (persona?.id !== "greedie") return;
+    if (persona?.id !== "operative") return;
     if (phase !== "briefing" && phase !== "live") return;
 
     let cancelled = false;
@@ -1722,6 +1737,153 @@ export default function DemoPage() {
     }
   }
 
+  // ── Handler override controls ───────────────────────────────────────
+  // Owner-signed on-chain powers. Each builds the instruction with
+  // owner = the Phantom wallet, then signs + sends it the same way
+  // approvePending does. The agent key is never involved.
+  async function ownerSignSend(
+    ixs: TransactionInstruction[]
+  ): Promise<string> {
+    if (!wallet.publicKey || !wallet.signTransaction)
+      throw new Error("connect your wallet");
+    const tx = new Transaction();
+    ixs.forEach((ix) => tx.add(ix));
+    tx.feePayer = wallet.publicKey;
+    tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+    const signed = await wallet.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize());
+    await connection.confirmTransaction(sig, "confirmed");
+    return sig;
+  }
+
+  async function handleEmergencyWithdraw() {
+    if (!sawClient || !setup || !handle || !wallet.publicKey) return;
+    setCtlBusy(true);
+    setCtlMsg(null);
+    try {
+      const ownerAta = getAssociatedTokenAddressSync(
+        setup.mint,
+        wallet.publicKey
+      );
+      const ixs: TransactionInstruction[] = [];
+      // emergency_withdraw transfers into the owner's ATA — create it first
+      // if the handler has never held this mint.
+      if (!(await connection.getAccountInfo(ownerAta))) {
+        ixs.push(
+          createAssociatedTokenAccountInstruction(
+            wallet.publicKey,
+            ownerAta,
+            wallet.publicKey,
+            setup.mint
+          )
+        );
+      }
+      const ix = await sawClient.programs.agentWallet.methods
+        .emergencyWithdraw()
+        .accountsPartial({
+          wallet: setup.walletPda,
+          owner: wallet.publicKey,
+          policy: handle.policyPda(),
+          policyProgram: sawClient.programs.policyRegistry.programId,
+          mint: setup.mint,
+          sourceTokenAccount: setup.walletAta,
+          ownerTokenAccount: ownerAta,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .instruction();
+      ixs.push(ix);
+      const sig = await ownerSignSend(ixs);
+      setCtlMsg(`Funds pulled back to your wallet. tx ${sig.slice(0, 8)}…`);
+      await refreshState(handle, setup.walletAta);
+    } catch (e: any) {
+      setCtlMsg(`Withdraw failed: ${e.message ?? String(e)}`);
+    } finally {
+      setCtlBusy(false);
+    }
+  }
+
+  async function handleRevokeAgent() {
+    if (!sawClient || !setup || !wallet.publicKey) return;
+    setCtlBusy(true);
+    setCtlMsg(null);
+    try {
+      const ix = await sawClient.programs.agentWallet.methods
+        .revokeAgent()
+        .accountsPartial({ wallet: setup.walletPda, owner: wallet.publicKey })
+        .instruction();
+      const sig = await ownerSignSend([ix]);
+      setCtlMsg(`Agent frozen. It can't spend until you rotate in a new key. tx ${sig.slice(0, 8)}…`);
+    } catch (e: any) {
+      setCtlMsg(`Revoke failed: ${e.message ?? String(e)}`);
+    } finally {
+      setCtlBusy(false);
+    }
+  }
+
+  async function handleRotateAgent() {
+    if (!sawClient || !setup || !wallet.publicKey || !handler) return;
+    setCtlBusy(true);
+    setCtlMsg(null);
+    try {
+      const fresh = Keypair.generate();
+      const setIx = await sawClient.programs.agentWallet.methods
+        .setAgent(fresh.publicKey)
+        .accountsPartial({ wallet: setup.walletPda, owner: wallet.publicKey })
+        .instruction();
+      // Fund the new agent so the browser dispatcher can pay tx fees as it.
+      const fundIx = SystemProgram.transfer({
+        fromPubkey: wallet.publicKey,
+        toPubkey: fresh.publicKey,
+        lamports: 0.02 * LAMPORTS_PER_SOL,
+      });
+      const sig = await ownerSignSend([setIx, fundIx]);
+      persistAgent(handler, fresh);
+      setSetup({ ...setup, agent: fresh });
+      setCtlMsg(`Agent rotated to a fresh key. tx ${sig.slice(0, 8)}…`);
+    } catch (e: any) {
+      setCtlMsg(`Rotate failed: ${e.message ?? String(e)}`);
+    } finally {
+      setCtlBusy(false);
+    }
+  }
+
+  async function handleSavePolicy(input: {
+    dailyLimit: number;
+    perTxLimit: number;
+    approvalThreshold: number;
+    extraRecipients: string[];
+  }) {
+    if (!sawClient || !setup || !handle || !wallet.publicKey) return;
+    setCtlBusy(true);
+    setCtlMsg(null);
+    try {
+      // Always keep the demo's built-in recipient so the sample pay flow
+      // keeps working; append any extra addresses the handler entered.
+      const recipientAllowlist = [
+        setup.recipient.publicKey,
+        ...input.extraRecipients.map((a) => new PublicKey(a)),
+      ];
+      const params = buildPolicy({
+        mint: setup.mint,
+        dailyLimit: toBaseUnits(input.dailyLimit, DEMO_DECIMALS),
+        perTxLimit: toBaseUnits(input.perTxLimit, DEMO_DECIMALS),
+        approvalThreshold: toBaseUnits(input.approvalThreshold, DEMO_DECIMALS),
+        recipientAllowlist,
+      });
+      const ix = await sawClient.programs.policyRegistry.methods
+        .setPolicy(params as any)
+        .accountsPartial({ policy: handle.policyPda(), owner: wallet.publicKey })
+        .instruction();
+      const sig = await ownerSignSend([ix]);
+      setCtlMsg(`Policy updated on-chain. tx ${sig.slice(0, 8)}…`);
+      setShowPolicyEditor(false);
+    } catch (e: any) {
+      setCtlMsg(`Policy update failed: ${e.message ?? String(e)}`);
+    } finally {
+      setCtlBusy(false);
+    }
+  }
+
   function reset() {
     if (!handler) return;
     clearSetup(handler);
@@ -1873,6 +2035,17 @@ export default function DemoPage() {
           >
             ⚙ settings
           </button>
+          {setup && (
+            <button
+              onClick={() => {
+                setCtlMsg(null);
+                setShowControls(true);
+              }}
+              className="text-xs uppercase tracking-widest border border-gold/50 px-3 py-1.5 text-gold/80 hover:text-ink hover:bg-gold transition"
+            >
+              🛡 controls
+            </button>
+          )}
         </div>
       )}
 
@@ -2003,6 +2176,35 @@ export default function DemoPage() {
               setSavingSettings(false);
             }
           }}
+        />
+      )}
+
+      {showControls && setup && persona && (
+        <HandlerControlsModal
+          agentKey={setup.agent.publicKey.toBase58()}
+          busy={ctlBusy}
+          message={ctlMsg}
+          onEditPolicy={() => {
+            setCtlMsg(null);
+            setShowPolicyEditor(true);
+          }}
+          onRotate={handleRotateAgent}
+          onRevoke={handleRevokeAgent}
+          onWithdraw={handleEmergencyWithdraw}
+          onClose={() => setShowControls(false)}
+        />
+      )}
+
+      {showPolicyEditor && setup && persona && (
+        <PolicyEditorModal
+          initialDaily={persona.policy.dailyLimit / 10 ** DEMO_DECIMALS}
+          initialPerTx={persona.policy.perTxLimit / 10 ** DEMO_DECIMALS}
+          initialThreshold={persona.policy.approvalThreshold / 10 ** DEMO_DECIMALS}
+          lockedRecipient={setup.recipient.publicKey.toBase58()}
+          busy={ctlBusy}
+          message={ctlMsg}
+          onSave={handleSavePolicy}
+          onClose={() => setShowPolicyEditor(false)}
         />
       )}
 
@@ -2168,7 +2370,7 @@ function AgentGate({
       <p className="stamp mb-6 flex items-center justify-center gap-2">
         Step 2 of 2
         <CreatorNote
-          text="Imagine picking a provider per persona — Greedie uses Groq for speed, Conservador uses Claude for reasoning. The wallet doesn't care which model thinks; the policy is enforced on-chain."
+          text="Pick any of these 8 brains for your operative — swap it whenever you want. The wallet doesn't care which model thinks: the policy is enforced on-chain, so a smarter (or dumber) LLM never widens what the agent is allowed to do."
           position="center"
         />
       </p>
@@ -2197,16 +2399,9 @@ function AgentGate({
             <div className="text-[10px] uppercase tracking-widest opacity-70">
               {p.note}
             </div>
-            {!p.active && (
-              <span className="absolute top-1 right-1 text-[9px] uppercase tracking-widest text-bone/40">
-                Soon
-              </span>
-            )}
-            {p.active && (
-              <span className="absolute top-1 right-1 text-[9px] uppercase tracking-widest text-gold">
-                ●
-              </span>
-            )}
+            <span className="absolute top-1 right-1 text-[9px] uppercase tracking-widest text-gold">
+              ●
+            </span>
           </button>
         ))}
       </div>
@@ -2221,7 +2416,7 @@ function AgentGate({
         >
           console.groq.com/keys
         </a>{" "}
-        — 1 minute, no card required. Other providers coming soon.
+        — 1 minute, no card required. All 8 providers are live; pick any.
       </p>
 
       <div className="border-t border-ash pt-6 mt-2">
@@ -2415,7 +2610,7 @@ function BriefingRoom({
   onAcceptOpp: (opp: Opportunity) => void;
   onSkipOpp: (opp: Opportunity) => void;
 }) {
-  const showMarket = persona.id === "greedie";
+  const showMarket = persona.id === "operative";
   return (
     <div>
       {showMarket && (
@@ -2435,7 +2630,7 @@ function BriefingRoom({
         <div className="border border-ash p-5 flex flex-col items-center relative">
           <span className="absolute top-2 right-2">
             <CreatorNote
-              text="Imagine this as an interactive 3D render — or polished 2D animation with persona-specific gestures (Greedie smirks, Conservador adjusts glasses, Estable nods slowly)."
+              text="Imagine the operative as an interactive 3D render — or a polished 2D animation that reacts to what it's doing: leaning in when it spots a move, nodding when it executes, still when it sleeps. Today it's a clean glyph; the personality layer is a later pass."
               position="bottom-left"
               label="vision note · mascot"
             />
@@ -2519,7 +2714,7 @@ function LiveRoom({
   onSkipOpp: (opp: Opportunity) => void;
   onExecute: (id: string) => void;
 }) {
-  const showMarket = persona.id === "greedie";
+  const showMarket = persona.id === "operative";
   const dailyPct = Math.min(
     100,
     (dailySpent / persona.policy.dailyLimit) * 100

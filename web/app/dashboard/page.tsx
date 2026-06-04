@@ -121,7 +121,7 @@ export default async function DashboardPage() {
             <Card
               label="Items executed"
               value={String(stats.itemsExecuted ?? 0)}
-              hint="on-chain confirmed"
+              hint="browser-dispatched · SOL leg on-chain"
             />
           </section>
 
@@ -140,11 +140,6 @@ export default async function DashboardPage() {
               label="SAW credits sold"
               value={`${lamportsToSol(stats.creditsTopupLamports ?? 0)} SOL`}
               hint={`${stats.creditsRemaining ?? 0} calls still unused`}
-            />
-            <Card
-              label="Operatives"
-              value={String((stats as any).handlers ?? 0)}
-              hint="one per handler (v1.3)"
             />
           </section>
         </>
@@ -172,8 +167,9 @@ export default async function DashboardPage() {
           .
         </p>
         <p className="text-bone/50 text-xs">
-          Fees: 55 bps on agent-executed swaps (devnet mock leg) · 5% on net
-          weekly PnL · 1% APY AUM on active days. See{" "}
+          Fees: 55 bps on agent-executed swaps (devnet mock leg), collected
+          today. The 5% net-weekly-PnL and 1% APY AUM lines are modeled and
+          land when portfolio accounting ships. See{" "}
           <a
             href="https://github.com/asastuai/S.A.W/blob/main/docs/fee-model.md"
             target="_blank"

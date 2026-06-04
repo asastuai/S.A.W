@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Jupiter execute path disabled. SAW is on devnet; mainnet ships with the Solana Foundation grant work.",
+            "Jupiter execute path disabled. SAW is on devnet; mainnet swaps ship once funding lands (no grant secured yet).",
         },
         { status: 501 }
       );

@@ -6,6 +6,9 @@ export const dynamic = "force-dynamic";
 export const revalidate = 30;
 
 const PERSONA_LABEL: Record<string, { name: string; role: string; glyph: string }> = {
+  // operative is the unified v1.3 agent (the only one new setups create);
+  // the three legacy persona ids are kept for back-compat with old rows.
+  operative: { name: "Operative", role: "Unified Agent", glyph: "◉" },
   greedie: { name: "Greedie", role: "Degen Operative", glyph: "◆" },
   conservador: { name: "Conservador", role: "Yield Researcher", glyph: "▣" },
   estable: { name: "Estable", role: "Wealth Coach", glyph: "○" },
