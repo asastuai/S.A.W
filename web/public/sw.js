@@ -1,7 +1,8 @@
 // SAW PWA service worker (v1) — install + activate only.
 // Caching strategy is intentionally minimal in v1 — Next.js handles asset
-// caching well enough at the CDN. Web push registration lands in v1.3
-// when we wire VAPID keys + notification permission UX.
+// caching well enough at the CDN. Web push registration lands in a later
+// release, when we wire VAPID keys + notification permission UX. Foreground
+// (tab-open) alerts already ship via lib/notify.ts.
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -28,7 +29,7 @@ self.addEventListener("push", (event) => {
 // B-1 hardening: allowlist the URL we'll navigate to so a compromised
 // push payload can't redirect users to a phishing page. Same-origin
 // paths + our Telegram bot deep-link are accepted; anything else falls
-// back to the canonical /demo route. Push isn't wired in v1.3 yet, so
+// back to the canonical /demo route. Closed-tab push isn't wired yet, so
 // this is defense-before-feature.
 const URL_ALLOWLIST = [
   "https://saw-gilt.vercel.app",

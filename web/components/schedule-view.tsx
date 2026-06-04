@@ -45,6 +45,7 @@ export function ScheduleView({
   approvalThreshold: number;
   readOnly?: boolean;
 }) {
+  const [view, setView] = useState<"list" | "timeline">("list");
   const stats = summarize(items);
   const upcoming = items
     .filter((i) => i.status === "queued" || i.status === "executing" || i.status === "awaiting-approval")
@@ -55,12 +56,12 @@ export function ScheduleView({
 
   return (
     <div className="border border-ash bg-ink">
-      <div className="border-b border-ash px-4 py-3 flex items-center justify-between">
+      <div className="border-b border-ash px-4 py-3 flex items-start justify-between gap-3">
         <div>
           <div className="text-xs uppercase tracking-widest text-gold flex items-center gap-2">
             Today's schedule
             <CreatorNote
-              text="Hover (or tap ⊙) a queued item to preview the exact on-chain instruction that will fire — program, instruction, recipient, amount in base units, and whether it auto-executes or routes to your signature. The horizontal-timeline + drag-to-reorder view is the next layout pass."
+              text="Two views now: the list, and a horizontal timeline of what's queued (toggle top-right). Hover or tap ⊙ a queued item to preview the exact on-chain instruction it will fire — program, instruction, recipient, amount in base units, and whether it auto-executes or routes to your signature. Items are ordered by schedule time; move one by editing its trigger."
               position="bottom-right"
             />
           </div>
@@ -69,6 +70,21 @@ export function ScheduleView({
             {stats.awaiting > 0 ? ` · ${stats.awaiting} awaiting you` : ""}
             {stats.failed > 0 ? ` · ${stats.failed} failed` : ""}
           </div>
+        </div>
+        <div className="flex border border-ash shrink-0">
+          {(["list", "timeline"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`text-[10px] uppercase tracking-widest px-2.5 py-1 transition ${
+                view === v
+                  ? "bg-gold text-ink"
+                  : "text-bone/50 hover:text-gold"
+              }`}
+            >
+              {v === "list" ? "▤ list" : "▭ timeline"}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -85,18 +101,29 @@ export function ScheduleView({
           </div>
         )}
 
-        {upcoming.map((item) => (
-          <Row
-            key={item.id}
-            item={item}
+        {view === "timeline" && upcoming.length > 0 ? (
+          <Timeline
+            upcoming={upcoming}
             now={now}
-            isUpcoming
             approvalThreshold={approvalThreshold}
             onRemove={onRemove}
             onExecute={onExecute}
             readOnly={readOnly}
           />
-        ))}
+        ) : (
+          upcoming.map((item) => (
+            <Row
+              key={item.id}
+              item={item}
+              now={now}
+              isUpcoming
+              approvalThreshold={approvalThreshold}
+              onRemove={onRemove}
+              onExecute={onExecute}
+              readOnly={readOnly}
+            />
+          ))
+        )}
 
         {past.length > 0 && (
           <>
@@ -375,6 +402,170 @@ function Kv({ k, v }: { k: string; v: string }) {
     <div className="flex gap-2">
       <span className="text-bone/40 w-14 shrink-0">{k}</span>
       <span className="text-bone/80 break-all">{v}</span>
+    </div>
+  );
+}
+
+/**
+ * Horizontal timeline of upcoming items — the alternate layout the vision
+ * note promised. Nodes sit left-to-right in schedule order on a connecting
+ * baseline; conditional ("watching") items have no fixed time and read as
+ * such. Scrolls horizontally when the queue is long.
+ */
+function Timeline({
+  upcoming,
+  now,
+  approvalThreshold,
+  onRemove,
+  onExecute,
+  readOnly,
+}: {
+  upcoming: ScheduleItem[];
+  now: number;
+  approvalThreshold: number;
+  onRemove?: (id: string) => void;
+  onExecute?: (id: string) => void;
+  readOnly?: boolean;
+}) {
+  return (
+    <div className="overflow-x-auto pb-2 -mx-1">
+      <div className="flex items-stretch min-w-max px-1">
+        {upcoming.map((item, i) => (
+          <TimelineNode
+            key={item.id}
+            item={item}
+            now={now}
+            first={i === 0}
+            last={i === upcoming.length - 1}
+            approvalThreshold={approvalThreshold}
+            onRemove={onRemove}
+            onExecute={onExecute}
+            readOnly={readOnly}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TimelineNode({
+  item,
+  now,
+  first,
+  last,
+  approvalThreshold,
+  onRemove,
+  onExecute,
+  readOnly,
+}: {
+  item: ScheduleItem;
+  now: number;
+  first: boolean;
+  last: boolean;
+  approvalThreshold: number;
+  onRemove?: (id: string) => void;
+  onExecute?: (id: string) => void;
+  readOnly?: boolean;
+}) {
+  const overThreshold = item.amount > approvalThreshold;
+  const secsUntil = Math.max(0, Math.round((item.scheduledFor - now) / 1000));
+  const conditional = item.trigger && item.trigger.kind !== "time";
+  const timeText =
+    item.status === "executing"
+      ? "executing…"
+      : item.status === "awaiting-approval"
+      ? "awaiting you"
+      : conditional
+      ? "watching…"
+      : fmtCountdown(secsUntil);
+
+  const dotCls =
+    item.status === "executing"
+      ? "bg-gold animate-pulse"
+      : item.status === "awaiting-approval"
+      ? "bg-rust"
+      : overThreshold
+      ? "bg-rust/60"
+      : "bg-gold/60";
+
+  return (
+    <div className="relative flex flex-col w-44 shrink-0 px-2">
+      {/* baseline connector — half-cut at the two ends */}
+      <div
+        className="absolute top-[7px] h-px bg-ash"
+        style={{ left: first ? "50%" : 0, right: last ? "50%" : 0 }}
+      />
+      <div className="relative flex justify-center mb-2">
+        <span
+          className={`w-3.5 h-3.5 rounded-full border border-ink z-10 ${dotCls}`}
+        />
+      </div>
+      <div className="text-center text-[10px] uppercase tracking-widest text-bone/50 mb-2">
+        {timeText}
+      </div>
+      <div
+        className={`border p-2.5 text-xs ${
+          item.status === "awaiting-approval"
+            ? "border-rust"
+            : overThreshold
+            ? "border-rust/50"
+            : "border-ash"
+        }`}
+      >
+        <div className="flex items-center gap-1 mb-1 flex-wrap">
+          {item.jupiterSwap ? (
+            <span className="text-gold text-[9px] uppercase tracking-widest border border-gold/40 px-1 bg-gold/10">
+              ⇄ jup
+            </span>
+          ) : item.toAddress ? (
+            <span className="text-gold text-[9px] uppercase tracking-widest border border-gold/40 px-1">
+              ↗ xfer
+            </span>
+          ) : (
+            <span className="text-gold text-[9px] uppercase tracking-widest border border-gold/40 px-1">
+              ⇄ swap
+            </span>
+          )}
+          <StatusBadge s={item.status} />
+        </div>
+        <div className="font-display text-sm text-bone truncate">
+          {fmtAmount(item.amount)}
+        </div>
+        <div className="text-bone/60 truncate">→ {item.vendor}</div>
+        {conditional && (
+          <div
+            className="text-gold/70 text-[10px] mt-1 truncate"
+            title={describeTrigger(item)}
+          >
+            ▸ {describeTrigger(item)}
+          </div>
+        )}
+        {overThreshold && item.status === "queued" && (
+          <div className="text-rust text-[9px] uppercase tracking-widest mt-1">
+            ⚠ over threshold
+          </div>
+        )}
+        {!readOnly && item.status === "queued" && (
+          <div className="flex gap-1 mt-2">
+            {onExecute && (
+              <button
+                onClick={() => onExecute(item.id)}
+                className="flex-1 text-gold border border-gold/60 hover:bg-gold hover:text-ink text-[9px] uppercase tracking-widest py-1 transition"
+              >
+                ▶ now
+              </button>
+            )}
+            {onRemove && (
+              <button
+                onClick={() => onRemove(item.id)}
+                className="text-rust/80 border border-rust/50 hover:bg-rust hover:text-ink text-[9px] uppercase tracking-widest px-1.5 py-1 transition"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

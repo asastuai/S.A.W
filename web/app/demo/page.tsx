@@ -2387,13 +2387,8 @@ function AgentGate({
         {providers.map((p) => (
           <button
             key={p.id}
-            onClick={p.active ? onOpen : undefined}
-            disabled={!p.active}
-            className={`relative border p-4 text-left transition ${
-              p.active
-                ? "border-gold text-bone hover:bg-gold/10 cursor-pointer"
-                : "border-ash/40 text-bone/30 cursor-not-allowed"
-            }`}
+            onClick={onOpen}
+            className="relative border border-gold text-bone hover:bg-gold/10 cursor-pointer p-4 text-left transition"
           >
             <div className="font-display text-base sm:text-lg mb-1">{p.name}</div>
             <div className="text-[10px] uppercase tracking-widest opacity-70">
@@ -2464,63 +2459,39 @@ function PersonaPicker({
         </div>
       )}
       <div className="grid md:grid-cols-1 gap-6 max-w-md mx-auto">
-        {PERSONAS.filter((p) => p.id === "operative").map((p) => {
-          const locked = !!p.comingSoon;
-          return (
-            <button
-              key={p.id}
-              onClick={() => !locked && onPick(p)}
-              disabled={locked}
-              className={`text-left border p-6 transition group relative ${
-                locked
-                  ? "border-ash/60 cursor-not-allowed"
-                  : "border-ash hover:border-gold"
-              }`}
-            >
-              {locked && (
-                <div className="absolute top-3 right-3 text-[10px] uppercase tracking-widest border border-bone/30 text-bone/50 px-2 py-0.5">
-                  Coming soon
-                </div>
-              )}
-              <div className={`flex justify-center mb-3 ${locked ? "opacity-40" : ""}`}>
-                <Mascot pose="idle" size={120} glyph={p.glyph} />
+        {PERSONAS.filter((p) => p.id === "operative").map((p) => (
+          <button
+            key={p.id}
+            onClick={() => onPick(p)}
+            className="text-left border border-ash hover:border-gold p-6 transition group relative"
+          >
+            <div className="flex justify-center mb-3">
+              <Mascot pose="idle" size={120} glyph={p.glyph} />
+            </div>
+            <div className="stamp mb-3">{p.role}</div>
+            <h3 className="font-display text-3xl mb-3">{p.name}</h3>
+            <p className="text-bone/70 text-sm mb-4 leading-relaxed">
+              {p.mission}
+            </p>
+            <div className="space-y-1.5 text-xs text-bone/50 mb-6">
+              <div className="flex justify-between">
+                <span>Daily cap</span>
+                <span className="text-bone/80">{fmt(p.policy.dailyLimit)}</span>
               </div>
-              <div className="stamp mb-3">{p.role}</div>
-              <h3 className="font-display text-3xl mb-3">{p.name}</h3>
-              <p className="text-bone/70 text-sm mb-4 leading-relaxed">
-                {p.mission}
-              </p>
-              {locked && p.comingSoonPreview && (
-                <p className="text-bone/50 text-xs italic mb-4 leading-relaxed border-l-2 border-bone/20 pl-3">
-                  {p.comingSoonPreview}
-                </p>
-              )}
-              <div className="space-y-1.5 text-xs text-bone/50 mb-6">
-                <div className="flex justify-between">
-                  <span>Daily cap</span>
-                  <span className="text-bone/80">{fmt(p.policy.dailyLimit)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Per-tx cap</span>
-                  <span className="text-bone/80">{fmt(p.policy.perTxLimit)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Threshold</span>
-                  <span className="text-gold">{fmt(p.policy.approvalThreshold)}</span>
-                </div>
+              <div className="flex justify-between">
+                <span>Per-tx cap</span>
+                <span className="text-bone/80">{fmt(p.policy.perTxLimit)}</span>
               </div>
-              <div
-                className={`text-xs uppercase tracking-widest ${
-                  locked
-                    ? "text-bone/30"
-                    : "text-gold group-hover:translate-x-1 transition"
-                }`}
-              >
-                {locked ? "Locked · waitlist" : `Brief ${p.name} →`}
+              <div className="flex justify-between">
+                <span>Threshold</span>
+                <span className="text-gold">{fmt(p.policy.approvalThreshold)}</span>
               </div>
-            </button>
-          );
-        })}
+            </div>
+            <div className="text-xs uppercase tracking-widest text-gold group-hover:translate-x-1 transition">
+              Brief {p.name} →
+            </div>
+          </button>
+        ))}
       </div>
     </div>
   );

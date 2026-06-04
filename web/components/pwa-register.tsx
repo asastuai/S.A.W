@@ -4,7 +4,8 @@ import { useEffect } from "react";
 
 /**
  * Registers the service worker once on mount. Silent on unsupported
- * browsers. Push notifications come later (v1.3).
+ * browsers. Closed-tab push comes in a later release; foreground alerts
+ * already ship via lib/notify.ts.
  */
 export function PwaRegister() {
   useEffect(() => {
