@@ -123,7 +123,8 @@ export async function GET(req: NextRequest) {
       })
       .eq("id", agent.id);
 
-    // Audit row
+    // Audit row — record the market the agent actually saw at this wake,
+    // so the Wake history feed can show real context (and replay it later).
     await db.from("agent_wakes").insert({
       agent_id: agent.id,
       woke_at: nowIso,
@@ -132,6 +133,7 @@ export async function GET(req: NextRequest) {
       llm_calls: 0,
       items_executed: firedCount,
       opportunities_proposed: 0,
+      market_price: solSnapshot?.priceUsd ?? null,
     });
 
     results.push({ agentId: agent.id, outcome, triggersFired: firedCount });

@@ -2376,7 +2376,8 @@ function SetupOverlay({ step, persona }: { step: string; persona: Persona }) {
       </p>
       <h2 className="font-display text-3xl mb-3">{persona.tagline}</h2>
       <p className="text-bone/60 text-sm mb-8">
-        Three signatures. Phantom will prompt you for each.
+        One signature. Phantom prompts you once — wallet, policy, mint, and
+        funding settle in a single atomic transaction.
       </p>
       <div className="text-bone/80 text-sm">{step || "Working…"}</div>
     </div>

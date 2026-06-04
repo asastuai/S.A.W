@@ -29,12 +29,24 @@ export async function GET(
       Math.max(1, Number(new URL(req.url).searchParams.get("limit") ?? 10))
     );
 
-    const { data, error } = await supabaseAdmin()
-      .from("agent_wakes")
-      .select("id, woke_at, finished_at, outcome, llm_calls, items_executed, opportunities_proposed, error_message")
-      .eq("agent_id", params.id)
-      .order("woke_at", { ascending: false })
-      .limit(limit);
+    const BASE_COLS =
+      "id, woke_at, finished_at, outcome, llm_calls, items_executed, opportunities_proposed, error_message";
+
+    const query = (cols: string) =>
+      supabaseAdmin()
+        .from("agent_wakes")
+        .select(cols)
+        .eq("agent_id", params.id)
+        .order("woke_at", { ascending: false })
+        .limit(limit);
+
+    // Prefer the richer row (with market context). If the migration that
+    // adds `market_price` has not run yet, gracefully fall back so the feed
+    // keeps working regardless of deploy/migration ordering.
+    let { data, error } = await query(`${BASE_COLS}, market_price`);
+    if (error && /market_price/i.test(error.message)) {
+      ({ data, error } = await query(BASE_COLS));
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

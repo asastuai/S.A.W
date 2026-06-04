@@ -18,6 +18,7 @@ type Wake = {
   items_executed: number;
   opportunities_proposed: number;
   error_message: string | null;
+  market_price: number | null;
 };
 
 const OUTCOME_LABEL: Record<string, string> = {
@@ -87,7 +88,7 @@ export function WakesFeed({
           Wake history
         </div>
         <CreatorNote
-          text="Every time the cron wakes the agent, a row is recorded here. Future versions show full audit (signatures, fee collected, market context at wake)."
+          text="Every cron wake is recorded here with the market the agent actually saw at that moment. When server-side dispatch lands (Privy delegated wallets), each row also carries the tx signature and fee collected — the cron is observation-only today, so signing still happens in your browser."
           position="bottom-right"
         />
         <div className="ml-auto text-[10px] text-bone/40">{wakes.length} recent</div>
@@ -110,6 +111,14 @@ export function WakesFeed({
                 <span className={`flex-1 ${OUTCOME_COLOR[outcome] ?? "text-bone/60"}`}>
                   {OUTCOME_LABEL[outcome] ?? outcome}
                 </span>
+                {w.market_price != null && (
+                  <span
+                    className="text-bone/40 font-mono shrink-0"
+                    title="SOL/USD the agent saw at this wake"
+                  >
+                    SOL ${Number(w.market_price).toFixed(2)}
+                  </span>
+                )}
                 {w.items_executed > 0 && (
                   <span className="text-gold/80 shrink-0">
                     ⚡ {w.items_executed}

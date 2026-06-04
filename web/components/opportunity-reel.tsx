@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { Opportunity, ScheduleItem } from "@/lib/schedule";
 import { describeTrigger, pendingOpportunities } from "@/lib/schedule";
 import { DEMO_DECIMALS } from "@/lib/saw";
 import { CreatorNote } from "@/components/creator-note";
+import { BellToggle } from "@/components/notify-toggle";
+import { alertEvent } from "@/lib/notify";
 
 const fmt = (n: number) =>
   `${(n / 10 ** DEMO_DECIMALS).toLocaleString(undefined, {
@@ -29,6 +32,28 @@ export function OpportunityReel({
 }) {
   const pending = pendingOpportunities(opportunities, now);
 
+  // Fire a chime + native notification the moment a NEW opportunity lands.
+  // The first render seeds the "seen" set silently so a session restore
+  // doesn't ping for every pre-existing card — only genuinely fresh
+  // proposals buzz.
+  const seenRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const ids = pending.map((o) => o.id);
+    if (seenRef.current === null) {
+      seenRef.current = new Set(ids);
+      return;
+    }
+    for (const o of pending) {
+      if (!seenRef.current.has(o.id)) {
+        seenRef.current.add(o.id);
+        alertEvent(
+          `${personaName} spotted a move`,
+          `${o.title} — ${fmt(o.suggested.amount)} → ${o.suggested.vendor}`
+        );
+      }
+    }
+  }, [pending, personaName]);
+
   if (pending.length === 0 && !scanning) return null;
 
   return (
@@ -38,8 +63,9 @@ export function OpportunityReel({
           <span className="text-gold font-display text-lg">{glyph}</span>
           <span className="text-xs uppercase tracking-widest text-gold flex items-center gap-2">
             {personaName} spotted
+            <BellToggle />
             <CreatorNote
-              text="Imagine this with sound and a native push notification — like a Robinhood alert when a price hits. Today it's a card; tomorrow it's a buzz in your pocket."
+              text="This is now live: turn on the bell and every fresh proposal arrives with a chime and a native OS notification — the buzz in your pocket. When server-side dispatch lands, the same alert moves behind a service-worker push so it reaches you with the tab closed."
               position="bottom-left"
             />
           </span>

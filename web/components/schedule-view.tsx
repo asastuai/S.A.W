@@ -1,9 +1,14 @@
 "use client";
 
+import { useState } from "react";
+import { AGENT_WALLET_PROGRAM_ID } from "@asastuai/saw-sdk";
 import type { ScheduleItem, ScheduleStatus } from "@/lib/schedule";
 import { describeTrigger, summarize } from "@/lib/schedule";
 import { DEMO_DECIMALS } from "@/lib/saw";
 import { CreatorNote } from "@/components/creator-note";
+
+const AGENT_WALLET_PROGRAM = AGENT_WALLET_PROGRAM_ID.toBase58();
+const shortKey = (k: string) => `${k.slice(0, 4)}…${k.slice(-4)}`;
 
 const fmtAmount = (n: number) =>
   `${(n / 10 ** DEMO_DECIMALS).toLocaleString(undefined, {
@@ -55,7 +60,7 @@ export function ScheduleView({
           <div className="text-xs uppercase tracking-widest text-gold flex items-center gap-2">
             Today's schedule
             <CreatorNote
-              text="Imagine this as a horizontal timeline rather than a list. Drag items to reorder, swipe to cancel, hover to preview the on-chain tx that will fire."
+              text="Hover (or tap ⊙) a queued item to preview the exact on-chain instruction that will fire — program, instruction, recipient, amount in base units, and whether it auto-executes or routes to your signature. The horizontal-timeline + drag-to-reorder view is the next layout pass."
               position="bottom-right"
             />
           </div>
@@ -137,6 +142,13 @@ function Row({
   const secsUntil = Math.max(0, Math.round((item.scheduledFor - now) / 1000));
   const conditional = item.trigger && item.trigger.kind !== "time";
 
+  // Hover-to-preview the on-chain instruction. `pinned` keeps it open after
+  // a tap (touch has no hover); `hovered` is the desktop affordance.
+  const [hovered, setHovered] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const previewable = isUpcoming && item.status === "queued";
+  const showPreview = previewable && (hovered || pinned);
+
   // Detect yield picks (Conservador): vendor format "{project} · {symbol} · {apy}%"
   const aprMatch = item.vendor.match(/(\d+(?:\.\d+)?)\s*%/);
   const isYieldPick = !!aprMatch && /·/.test(item.vendor);
@@ -155,6 +167,8 @@ function Row({
 
   return (
     <div
+      onMouseEnter={() => previewable && setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       className={`border-l-2 pl-3 py-2 ${
         isYieldPick && item.status === "queued" ? "bg-gold/5" : ""
       } ${
@@ -231,6 +245,9 @@ function Row({
           {item.errorMsg && (
             <div className="text-rust text-xs mt-1">{item.errorMsg}</div>
           )}
+          {showPreview && (
+            <TxPreview item={item} overThreshold={overThreshold} />
+          )}
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <span className="text-bone/60 text-xs">{timeText}</span>
@@ -244,6 +261,20 @@ function Row({
             >
               tx ↗
             </a>
+          )}
+          {previewable && (
+            <button
+              onClick={() => setPinned((p) => !p)}
+              aria-pressed={pinned}
+              title="Preview the on-chain tx that will fire"
+              className={`text-[10px] uppercase tracking-widest px-2 py-1 border transition ${
+                pinned || hovered
+                  ? "text-gold border-gold/60 bg-gold/10"
+                  : "text-bone/50 border-bone/30 hover:text-gold hover:border-gold/60"
+              }`}
+            >
+              ⊙ preview tx
+            </button>
           )}
           {!readOnly && isUpcoming && item.status === "queued" && onExecute && (
             <button
@@ -271,6 +302,79 @@ function Row({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * A simulated preview of the exact on-chain instruction this queued item
+ * will fire. Read-only — nothing is signed until the item executes — but
+ * it shows the real program, instruction, recipient, base-unit amount, and
+ * the policy gate, so the handler can see what the agent is about to do.
+ */
+function TxPreview({
+  item,
+  overThreshold,
+}: {
+  item: ScheduleItem;
+  overThreshold: boolean;
+}) {
+  const isJupiter = !!item.jupiterSwap;
+  const isTransfer = !isJupiter && !!item.toAddress;
+
+  const instruction = isJupiter
+    ? "jupiter swap"
+    : "pay_direct";
+  const program = isJupiter
+    ? "Jupiter v6 · handler-signed"
+    : `agent_wallet ${shortKey(AGENT_WALLET_PROGRAM)}`;
+  const recipient = isJupiter
+    ? `route → ${item.jupiterSwap!.outputMint}`
+    : isTransfer
+    ? shortKey(item.toAddress!)
+    : "SAW treasury";
+
+  const human = `${(item.amount / 10 ** DEMO_DECIMALS).toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+  })} USDC-dev`;
+
+  const gate = overThreshold
+    ? {
+        warn: true,
+        text: "over per-tx cap → routes to your signature (request_payment)",
+      }
+    : isTransfer
+    ? {
+        warn: false,
+        text: "auto if recipient is allow-listed; unknown destination → your signature",
+      }
+    : { warn: false, text: "auto · within daily + per-tx caps" };
+
+  return (
+    <div className="mt-2 border border-gold/30 bg-ink/60 p-2 text-[10px] font-mono leading-relaxed animate-fade-in">
+      <div className="text-gold/70 uppercase tracking-widest mb-1 not-italic">
+        tx preview · simulated, signs on execute
+      </div>
+      <Kv k="program" v={program} />
+      <Kv k="ix" v={instruction} />
+      <Kv k="to" v={recipient} />
+      <Kv k="amount" v={`${human}  (${item.amount.toLocaleString()} base units)`} />
+      <div className="flex gap-2">
+        <span className="text-bone/40 w-14 shrink-0">gate</span>
+        <span className={gate.warn ? "text-rust" : "text-bone/70"}>
+          {gate.warn ? "⚠ " : ""}
+          {gate.text}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function Kv({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex gap-2">
+      <span className="text-bone/40 w-14 shrink-0">{k}</span>
+      <span className="text-bone/80 break-all">{v}</span>
     </div>
   );
 }
