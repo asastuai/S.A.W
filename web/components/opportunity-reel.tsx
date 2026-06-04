@@ -54,15 +54,56 @@ export function OpportunityReel({
     }
   }, [pending, personaName]);
 
+  // Purely-visual freshness tracking. Kept entirely separate from the
+  // notification seenRef above so the chime/native-alert logic is never
+  // touched: this only decides which cards get the one-shot "buzz" flash.
+  // First render seeds silently (matching the alert seeding) so restored
+  // sessions don't flash every pre-existing card.
+  const flashSeenRef = useRef<Set<string> | null>(null);
+  const freshIds = new Set<string>();
+  {
+    const ids = pending.map((o) => o.id);
+    if (flashSeenRef.current === null) {
+      flashSeenRef.current = new Set(ids);
+    } else {
+      for (const id of ids) {
+        if (!flashSeenRef.current.has(id)) {
+          flashSeenRef.current.add(id);
+          freshIds.add(id);
+        }
+      }
+    }
+  }
+
+  const hasFresh = freshIds.size > 0;
+
   if (pending.length === 0 && !scanning) return null;
 
   return (
-    <div className="border border-gold/40 bg-gold/5 p-4 mb-6">
+    <div
+      className={`relative border bg-gold/5 p-4 mb-6 transition-colors duration-500 ${
+        hasFresh ? "border-gold reel-alive" : "border-gold/40"
+      }`}
+    >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-gold font-display text-lg">{glyph}</span>
+          <span
+            className={`text-gold font-display text-lg ${
+              hasFresh ? "reel-glyph-alive" : ""
+            }`}
+          >
+            {glyph}
+          </span>
           <span className="text-xs uppercase tracking-widest text-gold flex items-center gap-2">
-            {personaName} spotted
+            <span className="relative flex items-center gap-2">
+              {pending.length > 0 && (
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-gold animate-ping opacity-70" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-gold" />
+                </span>
+              )}
+              {personaName} spotted
+            </span>
             <BellToggle />
             <CreatorNote
               text="This is now live: turn on the bell and every fresh proposal arrives with a chime and a native OS notification — the buzz in your pocket. When server-side dispatch lands, the same alert moves behind a service-worker push so it reaches you with the tab closed."
@@ -89,10 +130,52 @@ export function OpportunityReel({
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-1">
           {pending.map((o) => (
-            <Card key={o.id} opp={o} now={now} onAccept={onAccept} onSkip={onSkip} />
+            <Card
+              key={o.id}
+              opp={o}
+              now={now}
+              fresh={freshIds.has(o.id)}
+              onAccept={onAccept}
+              onSkip={onSkip}
+            />
           ))}
         </div>
       )}
+
+      <style jsx>{`
+        /* The whole surface briefly brightens when a fresh proposal lands —
+           a real-time-alert pulse, gone in under a second. */
+        .reel-alive {
+          animation: reel-alert 900ms ease-out 1;
+        }
+        @keyframes reel-alert {
+          0% {
+            box-shadow: 0 0 0 0 rgba(201, 169, 110, 0);
+          }
+          25% {
+            box-shadow: 0 0 22px 2px rgba(201, 169, 110, 0.35);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(201, 169, 110, 0);
+          }
+        }
+        .reel-glyph-alive {
+          animation: reel-glyph 900ms ease-out 1;
+          transform-origin: center;
+        }
+        @keyframes reel-glyph {
+          0% {
+            transform: scale(1);
+          }
+          30% {
+            transform: scale(1.35);
+            filter: drop-shadow(0 0 6px rgba(201, 169, 110, 0.8));
+          }
+          100% {
+            transform: scale(1);
+          }
+        }
+      `}</style>
     </div>
   );
 }
@@ -100,11 +183,13 @@ export function OpportunityReel({
 function Card({
   opp,
   now,
+  fresh,
   onAccept,
   onSkip,
 }: {
   opp: Opportunity;
   now: number;
+  fresh: boolean;
   onAccept: (opp: Opportunity) => void;
   onSkip: (opp: Opportunity) => void;
 }) {
@@ -113,6 +198,20 @@ function Card({
     secsLeft >= 60
       ? `${Math.floor(secsLeft / 60)}m ${secsLeft % 60}s`
       : `${secsLeft}s`;
+
+  // Live countdown bar. Fraction of lifespan remaining, derived from the
+  // opportunity's own creation ts + expiresAt. The parent ticks `now`, so
+  // this thins in real time. As it runs low the bar shifts gold → rust and
+  // starts to pulse — the card visibly communicates "this is expiring".
+  const lifespan = Math.max(1, opp.expiresAt - opp.ts);
+  const remaining = Math.max(0, Math.min(1, (opp.expiresAt - now) / lifespan));
+  const expiringSoon = secsLeft <= 15;
+  const barColor = expiringSoon
+    ? "#b7410e" // rust
+    : remaining < 0.4
+    ? "#c98a3e" // gold leaning warm
+    : "#c9a96e"; // gold
+
   const conf =
     opp.confidence === "high"
       ? "text-gold border-gold"
@@ -131,7 +230,11 @@ function Card({
   };
 
   return (
-    <div className="shrink-0 w-[340px] border border-ash bg-ink p-4 animate-pop-in">
+    <div
+      className={`relative shrink-0 w-[340px] border bg-ink p-4 animate-pop-in overflow-hidden ${
+        fresh ? "border-gold card-fresh" : "border-ash"
+      }`}
+    >
       <div className="flex items-start justify-between mb-2">
         <div className="font-display text-base text-bone leading-tight">
           {opp.title}
@@ -154,8 +257,25 @@ function Card({
           <div className="text-gold/70 text-xs">▸ {describeTrigger(fakeItem)}</div>
         )}
       </div>
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-bone/40 text-xs">expires in {expiry}</span>
+      <div className="flex items-center justify-between mb-1.5">
+        <span
+          className={`text-xs transition-colors ${
+            expiringSoon ? "text-rust card-expiry-soon" : "text-bone/40"
+          }`}
+        >
+          expires in {expiry}
+        </span>
+      </div>
+      {/* Thinning countdown bar — the time pressure made visible. */}
+      <div className="h-0.5 w-full bg-ash/60 mb-3 overflow-hidden">
+        <div
+          className={`h-full ${expiringSoon ? "card-bar-soon" : ""}`}
+          style={{
+            width: `${Math.round(remaining * 100)}%`,
+            backgroundColor: barColor,
+            transition: "width 1s linear, background-color 500ms ease",
+          }}
+        />
       </div>
       <div className="grid grid-cols-2 gap-2">
         <button
@@ -171,6 +291,52 @@ function Card({
           Accept
         </button>
       </div>
+
+      <style jsx>{`
+        /* One-shot arrival buzz: a fresh card flashes to pull the eye,
+           then settles. Plays once — it is not a looping decoration. */
+        .card-fresh {
+          animation: card-arrive 1100ms ease-out 1;
+        }
+        @keyframes card-arrive {
+          0% {
+            box-shadow: 0 0 0 0 rgba(201, 169, 110, 0.6);
+            background-color: rgba(201, 169, 110, 0.1);
+          }
+          15% {
+            box-shadow: 0 0 18px 1px rgba(201, 169, 110, 0.5);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(201, 169, 110, 0);
+            background-color: transparent;
+          }
+        }
+        /* Expiry urgency: label and bar breathe once time is short. */
+        .card-expiry-soon {
+          animation: expiry-flash 1s ease-in-out infinite;
+        }
+        @keyframes expiry-flash {
+          0%,
+          100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.45;
+          }
+        }
+        .card-bar-soon {
+          animation: bar-flash 1s ease-in-out infinite;
+        }
+        @keyframes bar-flash {
+          0%,
+          100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.55;
+          }
+        }
+      `}</style>
     </div>
   );
 }

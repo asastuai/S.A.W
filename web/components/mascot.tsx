@@ -22,15 +22,63 @@ export function Mascot({
   const breathe =
     pose === "executing" ? "animate-mascot-pulse" : "animate-mascot-breathe";
 
+  // Per-pose float/drift on the wrapper, layered on top of the SVG's own
+  // breathe/pulse so each state reads as a distinct, living micro-motion.
+  // All keyframes below are scoped by styled-jsx (no global CSS touched).
+  const floatClass =
+    pose === "idle"
+      ? "sawm-float-idle"
+      : pose === "listening"
+        ? "sawm-float-listen"
+        : pose === "thinking"
+          ? "sawm-float-think"
+          : pose === "writing"
+            ? "sawm-float-write"
+            : pose === "executing"
+              ? "sawm-float-exec"
+              : pose === "speaking"
+                ? "sawm-float-speak"
+                : pose === "sleeping"
+                  ? "sawm-float-sleep"
+                  : "";
+
+  // Active accent ring: energetic for executing, attentive for listening.
+  const showExecRing = pose === "executing";
+  const showListenRing = pose === "listening";
+
   return (
     <div
-      className="relative inline-block max-w-full"
+      className={`sawm-root relative inline-block max-w-full ${floatClass}`}
       style={{ width: size, height: size }}
     >
+      {/* EXECUTING active accent — pulsing ring + an orbiting scan dot */}
+      {showExecRing && (
+        <>
+          <span
+            aria-hidden
+            className="sawm-exec-ring pointer-events-none absolute inset-0 z-0 rounded-full"
+          />
+          <span
+            aria-hidden
+            className="sawm-exec-orbit pointer-events-none absolute inset-0 z-0"
+          >
+            <span className="sawm-exec-dot absolute left-1/2 top-1 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-gold" />
+          </span>
+        </>
+      )}
+
+      {/* LISTENING attention — soft expanding ring that nudges focus in */}
+      {showListenRing && (
+        <span
+          aria-hidden
+          className="sawm-listen-ring pointer-events-none absolute inset-0 z-0 rounded-full"
+        />
+      )}
+
       {/* THINKING bubble */}
       {pose === "thinking" && (
         <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10 animate-mascot-bounce">
-          <div className="font-display text-3xl text-gold">?</div>
+          <div className="sawm-think-q font-display text-3xl text-gold">?</div>
         </div>
       )}
 
@@ -43,12 +91,12 @@ export function Mascot({
         </div>
       )}
 
-      {/* SLEEPING Zs */}
+      {/* SLEEPING Zs — slow upward/outward drift */}
       {pose === "sleeping" && (
         <div className="absolute -top-3 right-0 z-10 flex flex-col items-end gap-0.5">
-          <span className="text-gold/80 font-display text-xs animate-mascot-bounce" style={{ animationDelay: "0ms" }}>z</span>
-          <span className="text-gold/60 font-display text-sm animate-mascot-bounce" style={{ animationDelay: "300ms" }}>z</span>
-          <span className="text-gold/40 font-display text-base animate-mascot-bounce" style={{ animationDelay: "600ms" }}>Z</span>
+          <span className="sawm-zzz text-gold/80 font-display text-xs" style={{ animationDelay: "0ms" }}>z</span>
+          <span className="sawm-zzz text-gold/60 font-display text-sm" style={{ animationDelay: "900ms" }}>z</span>
+          <span className="sawm-zzz text-gold/40 font-display text-base" style={{ animationDelay: "1800ms" }}>Z</span>
         </div>
       )}
 
@@ -65,7 +113,9 @@ export function Mascot({
         viewBox="0 0 100 100"
         width="100%"
         height="100%"
-        className={`origin-bottom ${breathe} ${tilt} transition-transform duration-500`}
+        className={`relative z-[1] origin-bottom ${breathe} ${tilt} ${
+          pose === "sleeping" ? "sawm-svg-sleep" : ""
+        } ${pose === "executing" ? "sawm-svg-exec" : ""} transition-transform duration-500`}
       >
         {/* shadow */}
         <ellipse cx="50" cy="96" rx="22" ry="2.5" fill="#000" opacity="0.4" />
@@ -147,6 +197,243 @@ export function Mascot({
           </text>
         )}
       </svg>
+
+      {/* Self-contained, pose-reactive motion. Scoped by styled-jsx — no
+          global keyframes added. Layers on top of the existing tailwind
+          animate-mascot-* utilities, never replacing them. */}
+      <style jsx>{`
+        .sawm-root {
+          will-change: transform;
+        }
+
+        /* idle — gentle vertical float / breathing drift */
+        .sawm-float-idle {
+          animation: sawm-float-idle 5.5s ease-in-out infinite;
+        }
+        @keyframes sawm-float-idle {
+          0%,
+          100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-3px);
+          }
+        }
+
+        /* listening — slight forward attention lean that settles */
+        .sawm-float-listen {
+          animation: sawm-float-listen 2.6s ease-in-out infinite;
+        }
+        @keyframes sawm-float-listen {
+          0%,
+          100% {
+            transform: translateY(0) rotate(0deg);
+          }
+          50% {
+            transform: translateY(-1.5px) rotate(-1.5deg);
+          }
+        }
+
+        /* thinking — slow contemplative bob */
+        .sawm-float-think {
+          animation: sawm-float-think 3.4s ease-in-out infinite;
+        }
+        @keyframes sawm-float-think {
+          0%,
+          100% {
+            transform: translateY(0);
+          }
+          45% {
+            transform: translateY(-4px);
+          }
+        }
+
+        /* writing — focused micro-lean into the work */
+        .sawm-float-write {
+          animation: sawm-float-write 1.6s ease-in-out infinite;
+        }
+        @keyframes sawm-float-write {
+          0%,
+          100% {
+            transform: translateY(0) rotate(0deg);
+          }
+          50% {
+            transform: translateY(0.5px) rotate(0.8deg);
+          }
+        }
+
+        /* executing — tight energetic float, quicker cadence */
+        .sawm-float-exec {
+          animation: sawm-float-exec 0.9s ease-in-out infinite;
+        }
+        @keyframes sawm-float-exec {
+          0%,
+          100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-2px);
+          }
+        }
+
+        /* speaking — small talk bob */
+        .sawm-float-speak {
+          animation: sawm-float-speak 1.1s ease-in-out infinite;
+        }
+        @keyframes sawm-float-speak {
+          0%,
+          100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-1.5px);
+          }
+        }
+
+        /* sleeping — heavy, very slow sway */
+        .sawm-float-sleep {
+          animation: sawm-float-sleep 7s ease-in-out infinite;
+        }
+        @keyframes sawm-float-sleep {
+          0%,
+          100% {
+            transform: translateY(0) rotate(0deg);
+          }
+          50% {
+            transform: translateY(2px) rotate(1.5deg);
+          }
+        }
+
+        /* sleeping — dim the operative down */
+        .sawm-svg-sleep {
+          animation: sawm-dim 7s ease-in-out infinite;
+        }
+        @keyframes sawm-dim {
+          0%,
+          100% {
+            opacity: 0.55;
+          }
+          50% {
+            opacity: 0.42;
+          }
+        }
+
+        /* executing — subtle active brightening accent */
+        .sawm-svg-exec {
+          animation: sawm-exec-bright 1.2s ease-in-out infinite;
+        }
+        @keyframes sawm-exec-bright {
+          0%,
+          100% {
+            filter: drop-shadow(0 0 0 rgba(201, 169, 110, 0));
+          }
+          50% {
+            filter: drop-shadow(0 0 5px rgba(201, 169, 110, 0.65));
+          }
+        }
+
+        /* executing — pulsing accent ring */
+        .sawm-exec-ring {
+          border: 1px solid rgba(201, 169, 110, 0.5);
+          animation: sawm-exec-ring 1.2s ease-out infinite;
+        }
+        @keyframes sawm-exec-ring {
+          0% {
+            transform: scale(0.86);
+            opacity: 0;
+          }
+          35% {
+            opacity: 0.6;
+          }
+          100% {
+            transform: scale(1.04);
+            opacity: 0;
+          }
+        }
+
+        /* executing — orbiting scan dot circling the operative */
+        .sawm-exec-orbit {
+          animation: sawm-spin 2.4s linear infinite;
+        }
+        @keyframes sawm-spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+        .sawm-exec-dot {
+          box-shadow: 0 0 5px rgba(201, 169, 110, 0.8);
+        }
+
+        /* listening — slow attentive ring that draws focus inward */
+        .sawm-listen-ring {
+          border: 1px solid rgba(201, 169, 110, 0.4);
+          animation: sawm-listen-ring 2.6s ease-in-out infinite;
+        }
+        @keyframes sawm-listen-ring {
+          0%,
+          100% {
+            transform: scale(1.02);
+            opacity: 0;
+          }
+          50% {
+            transform: scale(0.92);
+            opacity: 0.5;
+          }
+        }
+
+        /* thinking — soft glow pulse on the question mark */
+        .sawm-think-q {
+          animation: sawm-think-q 1.8s ease-in-out infinite;
+        }
+        @keyframes sawm-think-q {
+          0%,
+          100% {
+            opacity: 0.6;
+            text-shadow: 0 0 0 rgba(201, 169, 110, 0);
+          }
+          50% {
+            opacity: 1;
+            text-shadow: 0 0 8px rgba(201, 169, 110, 0.6);
+          }
+        }
+
+        /* sleeping — Zzz drift up and out, then fade */
+        .sawm-zzz {
+          animation: sawm-zzz 2.7s ease-in-out infinite;
+        }
+        @keyframes sawm-zzz {
+          0% {
+            transform: translate(0, 0) scale(0.85);
+            opacity: 0;
+          }
+          25% {
+            opacity: 1;
+          }
+          100% {
+            transform: translate(7px, -12px) scale(1.05);
+            opacity: 0;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .sawm-float-idle,
+          .sawm-float-listen,
+          .sawm-float-think,
+          .sawm-float-write,
+          .sawm-float-exec,
+          .sawm-float-speak,
+          .sawm-float-sleep,
+          .sawm-svg-sleep,
+          .sawm-svg-exec,
+          .sawm-exec-ring,
+          .sawm-exec-orbit,
+          .sawm-listen-ring,
+          .sawm-think-q,
+          .sawm-zzz {
+            animation: none;
+          }
+        }
+      `}</style>
     </div>
   );
 }
