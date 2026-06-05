@@ -40,6 +40,14 @@ Token-2022 CT research ───────────────────
 
 **Closes #3. Retires #1. Do this first.**
 
+> **STATUS (2026-06-04): BUILT.** All plumbing shipped — `web-push` dep,
+> `lib/push.ts` (send), `lib/push-client.ts` (subscribe), `/api/push/{subscribe,unsubscribe}`,
+> the `BellToggle` wiring, and the cron "trigger ready" push (deduped). It is
+> live-but-dormant pending **two manual steps**: (1) generate VAPID keys and
+> set `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` in Vercel + local
+> env; (2) run `db/migrations/0013_push_subscriptions.sql` in Supabase. Until
+> then every send is a safe no-op.
+
 Cheapest, highest UX leverage, and already half-scaffolded: `web/public/sw.js`
 has the `push` event handler + a hardened URL allowlist, and foreground alerts
 already ship via `web/lib/notify.ts`. The only gap is the subscription +

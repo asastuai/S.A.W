@@ -106,7 +106,7 @@ export function OpportunityReel({
             </span>
             <BellToggle />
             <CreatorNote
-              text="This is now live: turn on the bell and every fresh proposal arrives with a chime and a native OS notification — the buzz in your pocket. When server-side dispatch lands, the same alert moves behind a service-worker push so it reaches you with the tab closed."
+              text="This is live: turn on the bell and every fresh proposal arrives with a chime and a native OS notification — the buzz in your pocket. Closed-tab delivery is wired too: the cron sends a web push (service worker) when a trigger goes ready, so an installed PWA buzzes even with the tab shut."
               position="bottom-left"
             />
           </span>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getSnapshot } from "@/lib/market";
+import { sendPushToHandler } from "@/lib/push";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest) {
   const { data: due, error } = await db
     .from("agents")
     .select(
-      "id, persona, cron_cadence_minutes, next_wake_at, active_hours_start, active_hours_end"
+      "id, handler_id, persona, cron_cadence_minutes, next_wake_at, active_hours_start, active_hours_end"
     )
     .eq("active", true)
     .or(`next_wake_at.lte.${nowIso},next_wake_at.is.null`)
@@ -108,6 +109,25 @@ export async function GET(req: NextRequest) {
       for (const item of pending ?? []) {
         if (shouldFire(item, solSnapshot?.priceUsd ?? null, now)) {
           firedCount++;
+          // Closed-tab heads-up: push once when an item first becomes ready
+          // (push_notified dedup). This only flips a benign flag, never the
+          // status, so it can't create the stuck "executing" rows the
+          // observation-only design avoids. No-op until VAPID keys are set.
+          if (!item.push_notified && agent.handler_id) {
+            try {
+              await sendPushToHandler(agent.handler_id, {
+                title: "SAW — a trigger is ready",
+                body: `${item.vendor} is ready to fire. Open SAW to execute.`,
+                url: "/demo",
+              });
+            } catch {
+              /* push is best-effort */
+            }
+            await db
+              .from("scheduled_items")
+              .update({ push_notified: true })
+              .eq("id", item.id);
+          }
         }
       }
       if (firedCount > 0) outcome = "executed-trigger";

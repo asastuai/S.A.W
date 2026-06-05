@@ -44,13 +44,15 @@
     "posthog-js": "^1.374.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tailwind-merge": "^2.5.4"
+    "tailwind-merge": "^2.5.4",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@types/node": "^22.9.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/web-push": "^3.6.4",
     "@vitest/coverage-v8": "^4.1.7",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",

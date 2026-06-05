@@ -2874,7 +2874,7 @@ function ApprovalSheet({
             <div className="stamp flex items-center gap-2">
               Approval requested
               <CreatorNote
-                text="Imagine this as a native Phantom mobile push — vibration, biometric, gone in 2 seconds. The browser modal is just the desktop fallback."
+                text="Closed-tab alerts are real now: install the PWA, turn on the bell, and a web push reaches you when a trigger goes ready. Biometric one-tap approval via passkeys is the next layer; this browser modal is today's approval surface."
                 position="bottom-right"
               />
             </div>
