@@ -94,6 +94,37 @@ approval needed, execution done.
 
 **Closes #4. Foundation for #2. The biggest free product unlock.**
 
+> **DECISION (2026-06-05): Path B — Privy delegated wallets.** Verified:
+> Privy delegated actions support Solana server-side signing
+> (`walletApi.solana.signAndSendTransaction`); the key **never leaves Privy**
+> (respects the no-private-keys-on-disk rule); and it is **free under 499 MAU /
+> 50K signatures per month** — $0 at SAW's devnet scale ($299/mo Core only past
+> 499 MAU). Privy is already integrated, and native gas sponsorship comes with
+> it, which also unlocks #2 (gasless).
+>
+> **Architecture change:** the agent stops being a browser-`localStorage`
+> keypair and becomes a **Privy embedded Solana wallet** the user delegates to
+> the server. The owner stays on Phantom (external).
+>
+> **Prerequisites (Juan — in the Privy dashboard + env, like Track 1's VAPID):**
+> 1. Enable **embedded Solana wallets** + **delegated actions** for the SAW app.
+> 2. Set `PRIVY_APP_SECRET` (server) in Vercel + local env; confirm `NEXT_PUBLIC_PRIVY_APP_ID`.
+>
+> **Build phases (after the prerequisites):**
+> 1. **Spike** — create an embedded wallet, delegate it, and server-sign ONE
+>    devnet tx via `signAndSendTransaction`. Proves the loop end-to-end.
+> 2. **Agent = embedded wallet** — at setup, provision the agent as a Privy
+>    embedded wallet, write its pubkey into `initialize_wallet`'s `agent` field,
+>    and prompt the owner to `delegateWallet({ chainType: 'solana' })`.
+> 3. **Server dispatch** — refactor the cron's "fire" branch to build
+>    `pay_direct`, serialize, and `signAndSendTransaction` with the agent's
+>    Privy `walletId`; record sig + fee on `agent_wakes`.
+> 4. **#2 gasless** — use Privy gas sponsorship so the owner's setup signature
+>    can drop.
+>
+> The self-managed path below (Path A) is retained as the rejected alternative
+> and rationale.
+
 Today the agent keypair lives **only** in browser `localStorage`, so the cron
 (`web/app/api/cron/wake-due-agents/route.ts`) is observation-only — it counts
 fired triggers but cannot sign. To execute server-side, the server needs a way
