@@ -15,6 +15,32 @@
     color: #0a0a0a;
   }
 
+  /* Noir scrollbars — thin and themed, so scroll areas (the briefing chat,
+     schedule, etc.) never show the chunky default OS bar against the dark UI. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #2a2a2a transparent; /* ash thumb, transparent track */
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2a2a2a; /* ash */
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #c9a96e; /* gold */
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
   /* Cinematic display: tight tracking on the big title-card headings. */
   h1,
   h2,
