@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { getTreasuryAddressString } from "@/lib/treasury";
+import { Reveal } from "@/components/reveal";
 
 export const metadata = {
   title: "SAW — Treasury",
@@ -60,144 +61,227 @@ export default async function TreasuryPage() {
   const state = await fetchTreasuryState();
 
   return (
-    <main className="min-h-screen px-4 sm:px-6 py-8 max-w-5xl mx-auto">
-      <header className="flex items-center justify-between mb-12 border-b border-ash pb-4">
-        <Link href="/" className="font-display text-2xl tracking-widest">
-          S A W
-        </Link>
-        <nav className="flex gap-6 text-sm uppercase tracking-widest text-bone/60">
-          <Link href="/demo" className="hover:text-gold">Demo</Link>
-          <Link href="/dashboard" className="hover:text-gold">Dashboard</Link>
-          <Link href="/treasury" className="text-gold">Treasury</Link>
-          <a
-            href="https://github.com/asastuai/S.A.W"
-            target="_blank"
-            rel="noreferrer"
-            className="hover:text-gold"
+    <main className="relative min-h-screen overflow-hidden bg-obsidian">
+      {/* Layered depth: gold pool of light pooling from the vault, hairline grid */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_70%_50%_at_50%_-10%,rgba(201,169,110,0.12),transparent_70%)]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-r from-transparent via-gold/40 to-transparent"
+      />
+
+      <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
+        <header className="flex items-center justify-between mb-16 border-b border-ash/70 pb-4">
+          <Link
+            href="/"
+            className="font-display text-2xl tracking-widest uppercase text-bone hover:text-gold transition-colors"
           >
-            GitHub
-          </a>
-        </nav>
-      </header>
+            S A W
+          </Link>
+          <nav className="flex gap-6 text-sm uppercase tracking-widest text-bone/60">
+            <Link href="/demo" className="hover:text-gold transition-colors">Demo</Link>
+            <Link href="/dashboard" className="hover:text-gold transition-colors">Dashboard</Link>
+            <Link href="/treasury" className="text-gold text-glow">Treasury</Link>
+            <a
+              href="https://github.com/asastuai/S.A.W"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-gold transition-colors"
+            >
+              GitHub
+            </a>
+          </nav>
+        </header>
 
-      <p className="stamp mb-4">Public on-chain · {("cluster" in state ? state.cluster : "devnet")}</p>
-      <h1 className="font-display text-4xl sm:text-5xl mb-3">The treasury.</h1>
-      <p className="text-bone/60 max-w-2xl mb-10 leading-relaxed">
-        Every fee SAW collects lands at one Solana address. Visible to anyone,
-        verifiable in any block explorer. Pre-mainnet this is a team-controlled
-        wallet on devnet; before going live it becomes a Squads 3-of-5 multisig.
-      </p>
+        {/* TITLE CARD — dossier framing for the vault readout */}
+        <section className="relative mb-20">
+          <div className="flex flex-wrap items-center gap-3 mb-6 animate-intro">
+            <span className="stamp">Classified · Eyes only</span>
+            <span className="stamp text-gold border-gold/60">
+              Public on-chain · {"cluster" in state ? state.cluster : "devnet"}
+            </span>
+          </div>
 
-      {"error" in state ? (
-        <div className="border border-rust p-6">
-          <p className="text-rust">Treasury fetch failed: {state.error}</p>
-        </div>
-      ) : (
-        <>
-          <section className="border border-gold p-6 mb-10">
-            <div className="stamp mb-3">Treasury address</div>
-            <div className="font-mono text-xs text-bone/90 break-all mb-4">
-              {state.address}
-            </div>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <div className="text-xs uppercase tracking-widest text-bone/40 mb-1">
-                  Current balance
-                </div>
-                <div className="font-display text-3xl text-gold">
-                  {state.balanceSol.toFixed(9)} SOL
-                </div>
+          <h1
+            className="font-display uppercase tracking-cinema text-bone text-5xl sm:text-7xl md:text-8xl leading-[0.92] animate-intro"
+            style={{ animationDelay: "120ms" }}
+          >
+            The
+            <span className="block text-gold text-glow drop-shadow-gold-lg">
+              treasury
+            </span>
+          </h1>
+
+          <p
+            className="text-bone/60 max-w-2xl mt-8 leading-relaxed text-base sm:text-lg animate-intro"
+            style={{ animationDelay: "240ms" }}
+          >
+            Every fee SAW collects lands at one Solana address. Visible to anyone,
+            verifiable in any block explorer. Pre-mainnet this is a team-controlled
+            wallet on devnet; before going live it becomes a Squads 3-of-5 multisig.
+          </p>
+        </section>
+
+        {"error" in state ? (
+          <Reveal>
+            <div className="relative border border-rust/70 bg-ink/40 p-8">
+              <div className="stamp text-rust border-rust/50 mb-4">
+                Signal lost
               </div>
-              <div className="text-right">
-                <a
-                  href={`https://explorer.solana.com/address/${state.address}?cluster=${state.cluster}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="border border-bone/30 px-4 py-2 text-xs uppercase tracking-widest text-bone/80 hover:text-gold hover:border-gold inline-block"
-                >
-                  Open in Solana Explorer ↗
-                </a>
-              </div>
+              <p className="font-mono text-sm text-rust break-all">
+                Treasury fetch failed: {state.error}
+              </p>
             </div>
-          </section>
-
-          <section className="mb-10">
-            <h2 className="font-display text-2xl mb-4">Recent on-chain activity</h2>
-            <div className="border border-ash divide-y divide-ash/30">
-              {state.recentSigs.length === 0 ? (
-                <div className="p-6 text-bone/40 italic text-sm text-center">
-                  No transactions yet on this address.
-                </div>
-              ) : (
-                state.recentSigs.map((s) => (
-                  <div
-                    key={s.signature}
-                    className="p-3 flex items-center justify-between gap-3 text-xs"
-                  >
-                    <a
-                      href={`https://explorer.solana.com/tx/${s.signature}?cluster=${state.cluster}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-mono text-bone/70 hover:text-gold truncate max-w-[60%]"
-                    >
-                      {s.signature}
-                    </a>
-                    <span className="text-bone/40 shrink-0">
-                      {s.blockTime
-                        ? new Date(s.blockTime * 1000).toLocaleString()
-                        : "—"}
-                    </span>
-                    {s.err && <span className="text-rust">failed</span>}
+          </Reveal>
+        ) : (
+          <>
+            {/* THE VAULT — primary balance readout, glowing dossier card */}
+            <Reveal>
+              <section className="relative mb-16 border border-gold/60 bg-gradient-to-b from-ink/60 to-obsidian/80 shadow-glow-lg overflow-hidden">
+                {/* corner stamp + scan accent */}
+                <div className="absolute right-0 top-0 h-16 w-16 border-l border-b border-gold/30" />
+                <div className="p-7 sm:p-10">
+                  <div className="stamp text-gold border-gold/60 mb-5">
+                    Treasury address · file 001
                   </div>
-                ))
-              )}
-            </div>
-          </section>
+                  <div className="font-mono text-xs sm:text-sm text-bone/90 break-all mb-8 tracking-wide">
+                    {state.address}
+                  </div>
 
-          <section className="mb-10">
-            <h2 className="font-display text-2xl mb-4">Recent fees (DB ledger)</h2>
-            <div className="border border-ash divide-y divide-ash/30">
-              {state.recentFees.length === 0 ? (
-                <div className="p-6 text-bone/40 italic text-sm text-center">
-                  Fee ledger is empty. First swap will land here.
-                </div>
-              ) : (
-                state.recentFees.map((f: any, i: number) => (
-                  <div
-                    key={i}
-                    className="p-3 flex items-center justify-between gap-3 text-xs"
-                  >
-                    <span className="text-bone/60">{f.fee_kind}</span>
-                    <span className="font-mono text-gold">
-                      {(Number(f.amount_lamports) / 1_000_000_000).toFixed(9)} SOL
-                    </span>
-                    <span className="text-bone/40">
-                      {new Date(f.created_at).toLocaleTimeString()}
-                    </span>
-                    {f.related_tx && (
+                  <div className="grid sm:grid-cols-2 gap-8 items-end">
+                    <div>
+                      <div className="text-[0.65rem] uppercase tracking-[0.3em] text-bone/40 mb-2">
+                        Current balance
+                      </div>
+                      <div className="font-display text-4xl sm:text-6xl text-gold text-glow drop-shadow-gold-lg leading-none animate-glow-pulse">
+                        {state.balanceSol.toFixed(9)}
+                        <span className="text-2xl sm:text-3xl text-goldlit ml-3 align-baseline">
+                          SOL
+                        </span>
+                      </div>
+                      <div className="font-mono text-[0.7rem] text-bone/40 mt-3">
+                        {state.balanceLamports.toLocaleString()} lamports
+                      </div>
+                    </div>
+                    <div className="sm:text-right">
                       <a
-                        href={`https://explorer.solana.com/tx/${f.related_tx}?cluster=${state.cluster}`}
+                        href={`https://explorer.solana.com/address/${state.address}?cluster=${state.cluster}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-gold/70 hover:text-gold"
+                        className="border border-bone/30 px-5 py-3 text-xs uppercase tracking-widest text-bone/80 hover:text-gold hover:border-gold hover:shadow-glow transition-all inline-block"
                       >
-                        tx ↗
+                        Open in Solana Explorer ↗
                       </a>
-                    )}
+                    </div>
                   </div>
-                ))
-              )}
-            </div>
-          </section>
-        </>
-      )}
+                </div>
+              </section>
+            </Reveal>
 
-      <footer className="text-bone/40 text-xs">
-        Devnet · v1 build in progress ·{" "}
-        {"updatedAt" in state && state.updatedAt && (
-          <>updated {new Date(state.updatedAt).toLocaleTimeString()}</>
+            {/* ON-CHAIN ACTIVITY DOSSIER */}
+            <Reveal delay={80}>
+              <section className="mb-16">
+                <div className="flex items-baseline gap-4 mb-6">
+                  <h2 className="font-display uppercase tracking-cinema text-2xl sm:text-3xl text-bone">
+                    Recent on-chain activity
+                  </h2>
+                  <span className="h-px flex-1 bg-gradient-to-r from-gold/30 to-transparent" />
+                  <span className="stamp shrink-0">Ledger · chain</span>
+                </div>
+                <div className="border border-ash/70 bg-ink/30 divide-y divide-ash/30">
+                  {state.recentSigs.length === 0 ? (
+                    <div className="p-8 text-bone/40 italic text-sm text-center">
+                      No transactions yet on this address.
+                    </div>
+                  ) : (
+                    state.recentSigs.map((s) => (
+                      <div
+                        key={s.signature}
+                        className="p-3 sm:p-4 flex items-center justify-between gap-3 text-xs hover:bg-gold/[0.04] transition-colors"
+                      >
+                        <a
+                          href={`https://explorer.solana.com/tx/${s.signature}?cluster=${state.cluster}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-mono text-bone/70 hover:text-gold truncate max-w-[60%] transition-colors"
+                        >
+                          {s.signature}
+                        </a>
+                        <span className="font-mono text-bone/40 shrink-0">
+                          {s.blockTime
+                            ? new Date(s.blockTime * 1000).toLocaleString()
+                            : "—"}
+                        </span>
+                        {s.err && (
+                          <span className="stamp text-rust border-rust/50 shrink-0">
+                            failed
+                          </span>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+            </Reveal>
+
+            {/* FEE LEDGER DOSSIER */}
+            <Reveal delay={160}>
+              <section className="mb-16">
+                <div className="flex items-baseline gap-4 mb-6">
+                  <h2 className="font-display uppercase tracking-cinema text-2xl sm:text-3xl text-bone">
+                    Recent fees
+                  </h2>
+                  <span className="h-px flex-1 bg-gradient-to-r from-gold/30 to-transparent" />
+                  <span className="stamp shrink-0">Ledger · DB</span>
+                </div>
+                <div className="border border-ash/70 bg-ink/30 divide-y divide-ash/30">
+                  {state.recentFees.length === 0 ? (
+                    <div className="p-8 text-bone/40 italic text-sm text-center">
+                      Fee ledger is empty. First swap will land here.
+                    </div>
+                  ) : (
+                    state.recentFees.map((f: any, i: number) => (
+                      <div
+                        key={i}
+                        className="p-3 sm:p-4 flex items-center justify-between gap-3 text-xs hover:bg-gold/[0.04] transition-colors"
+                      >
+                        <span className="uppercase tracking-widest text-bone/60">
+                          {f.fee_kind}
+                        </span>
+                        <span className="font-mono text-gold text-glow">
+                          {(Number(f.amount_lamports) / 1_000_000_000).toFixed(9)} SOL
+                        </span>
+                        <span className="font-mono text-bone/40">
+                          {new Date(f.created_at).toLocaleTimeString()}
+                        </span>
+                        {f.related_tx && (
+                          <a
+                            href={`https://explorer.solana.com/tx/${f.related_tx}?cluster=${state.cluster}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-gold/70 hover:text-gold transition-colors"
+                          >
+                            tx ↗
+                          </a>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+            </Reveal>
+          </>
         )}
-      </footer>
+
+        <footer className="border-t border-ash/50 pt-5 text-bone/40 text-xs font-mono uppercase tracking-widest">
+          Devnet · v1 build in progress ·{" "}
+          {"updatedAt" in state && state.updatedAt && (
+            <>updated {new Date(state.updatedAt).toLocaleTimeString()}</>
+          )}
+        </footer>
+      </div>
     </main>
   );
 }
