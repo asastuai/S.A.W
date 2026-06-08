@@ -9,17 +9,31 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "monospace"],
-        display: ["ui-serif", "Georgia", "Cambria", "serif"],
+        display: ["var(--font-display)", "ui-serif", "Georgia", "serif"],
       },
       colors: {
         ink: "#0a0a0a",
+        obsidian: "#060608", // deepest cinematic black (hero backdrops)
         smoke: "#1a1a1a",
         ash: "#2a2a2a",
         bone: "#e8e4d8",
         cream: "#f4f0e6",
         rust: "#b7410e",
         gold: "#c9a96e",
+        goldlit: "#e7c98a", // brighter gold for glow highlights
+      },
+      letterSpacing: {
+        cinema: "-0.02em",
+      },
+      boxShadow: {
+        glow: "0 0 24px -4px rgba(201, 169, 110, 0.45)",
+        "glow-lg": "0 0 56px -8px rgba(201, 169, 110, 0.5)",
+      },
+      dropShadow: {
+        gold: "0 0 10px rgba(201, 169, 110, 0.55)",
+        "gold-lg": "0 0 22px rgba(201, 169, 110, 0.6)",
       },
       animation: {
         "scan-line": "scan-line 3s linear infinite",
@@ -27,6 +41,10 @@ const config: Config = {
         "fade-in": "fade-in 200ms ease-out",
         "slide-up": "slide-up 320ms cubic-bezier(0.16, 1, 0.3, 1)",
         "pop-in": "pop-in 200ms ease-out",
+        "reveal": "reveal 700ms cubic-bezier(0.16, 1, 0.3, 1) both",
+        "intro": "intro 900ms cubic-bezier(0.16, 1, 0.3, 1) both",
+        "glow-pulse": "glow-pulse 3.2s ease-in-out infinite",
+        "grain-drift": "grain-drift 8s steps(6) infinite",
         "mascot-breathe": "mascot-breathe 4s ease-in-out infinite",
         "mascot-pulse": "mascot-pulse 1.2s ease-in-out infinite",
         "mascot-blink": "mascot-blink 5s ease-in-out infinite",
@@ -58,6 +76,26 @@ const config: Config = {
         "pop-in": {
           "0%": { transform: "scale(0.96)", opacity: "0" },
           "100%": { transform: "scale(1)", opacity: "1" },
+        },
+        // Scroll-reveal: a section rises and resolves into focus.
+        reveal: {
+          "0%": { transform: "translateY(28px)", opacity: "0", filter: "blur(6px)" },
+          "100%": { transform: "translateY(0)", opacity: "1", filter: "blur(0)" },
+        },
+        // Title-card intro: blur-fade-in like a film credit resolving.
+        intro: {
+          "0%": { transform: "translateY(14px)", opacity: "0", filter: "blur(10px)" },
+          "100%": { transform: "translateY(0)", opacity: "1", filter: "blur(0)" },
+        },
+        // Slow gold breathing glow for hero accents + CTAs.
+        "glow-pulse": {
+          "0%, 100%": { filter: "drop-shadow(0 0 4px rgba(201,169,110,0.25))" },
+          "50%": { filter: "drop-shadow(0 0 16px rgba(201,169,110,0.6))" },
+        },
+        // Subtle film-grain drift.
+        "grain-drift": {
+          "0%": { transform: "translate(0,0)" },
+          "100%": { transform: "translate(-4%,3%)" },
         },
         "mascot-breathe": {
           "0%, 100%": { transform: "scaleY(1) scaleX(1)" },
