@@ -312,6 +312,7 @@ export default function DemoPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          id: item.id,
           actionType: "pay",
           vendor: item.vendor,
           amount: item.amount,
@@ -348,6 +349,23 @@ export default function DemoPage() {
             txSignature: extras?.txSignature,
             errorMessage: extras?.errorMessage,
           }),
+        }
+      );
+    } catch (_) {
+      /* non-fatal */
+    }
+  }
+
+  async function syncScheduleRemoveFromDb(itemId: string) {
+    if (!dbAgentId || !privyAuthed) return;
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      await fetch(
+        `/api/agents/${dbAgentId}/schedule?itemId=${encodeURIComponent(itemId)}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
         }
       );
     } catch (_) {
@@ -1200,6 +1218,7 @@ export default function DemoPage() {
             ...updated,
             schedule: updated.schedule.filter((i) => i.id !== action.id),
           };
+          syncScheduleRemoveFromDb(action.id);
         } else if (action.type === "modify") {
           updated = {
             ...updated,
@@ -1257,6 +1276,9 @@ export default function DemoPage() {
     };
     setBriefing(updated);
     saveBriefing(handler, updated);
+    // Propagate the delete to the DB — otherwise the row survives and the
+    // next session's hydration (DB is source of truth) brings the item back.
+    syncScheduleRemoveFromDb(id);
   }
 
   function startExecution() {

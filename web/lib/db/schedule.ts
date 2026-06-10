@@ -13,6 +13,10 @@ export async function listScheduleForAgent(agentId: string): Promise<ScheduledIt
 }
 
 export async function createScheduledItem(input: {
+  /** Optional client-provided uuid so the browser item and the DB row share
+   *  the same id. Lets remove/patch target the row by the id the client holds
+   *  (the client mints it with crypto.randomUUID before the POST). */
+  id?: string;
   agentId: string;
   actionType: ActionType;
   vendor?: string | null;
@@ -33,6 +37,7 @@ export async function createScheduledItem(input: {
   const { data, error } = await db
     .from("scheduled_items")
     .insert({
+      ...(input.id ? { id: input.id } : {}),
       agent_id: input.agentId,
       action_type: input.actionType,
       vendor: input.vendor ?? null,

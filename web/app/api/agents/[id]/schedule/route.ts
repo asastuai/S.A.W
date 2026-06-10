@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthError, requireAuth } from "@/lib/auth";
 import { getHandlerByPrivy } from "@/lib/db/handlers";
 import { listAgentsForHandler } from "@/lib/db/agents";
-import { createScheduledItem, updateScheduledItemStatus } from "@/lib/db/schedule";
+import { createScheduledItem, updateScheduledItemStatus, removeScheduledItem } from "@/lib/db/schedule";
 import type { ActionType, TriggerKind, ScheduledStatus } from "@/lib/db/types";
 
 export const runtime = "nodejs";
@@ -68,6 +68,7 @@ export async function POST(
     }
 
     const item = await createScheduledItem({
+      id: typeof body.id === "string" ? body.id : undefined,
       agentId: params.id,
       actionType: body.actionType,
       vendor: body.vendor,
@@ -127,6 +128,44 @@ export async function PATCH(
       txSignature: body.txSignature,
       errorMessage: body.errorMessage,
     });
+
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    if (e instanceof AuthError) return NextResponse.json({ error: e.message }, { status: 401 });
+    if (e instanceof HttpError) return NextResponse.json({ error: e.message }, { status: e.status });
+    return NextResponse.json({ error: e.message ?? String(e) }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/agents/:id/schedule?itemId=<uuid>
+ * Permanently remove a scheduled item the caller owns. This is what makes a
+ * "kill"/"rm" in the UI persist — without it the row survives in the DB and
+ * the next session's hydration (DB is source of truth) brings it back.
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    await getOwnedAgentOr404(req, params.id);
+
+    const itemId = new URL(req.url).searchParams.get("itemId");
+    if (!itemId) return NextResponse.json({ error: "itemId required" }, { status: 400 });
+
+    // Same IDOR guard as PATCH: bind the item to the agent the caller owns
+    // before deleting, so knowing a uuid alone can't delete another handler's item.
+    const { supabaseAdmin } = await import("@/lib/supabase");
+    const { data: itemRow } = await supabaseAdmin()
+      .from("scheduled_items")
+      .select("agent_id")
+      .eq("id", itemId)
+      .maybeSingle();
+    if (!itemRow || itemRow.agent_id !== params.id) {
+      return NextResponse.json({ error: "item not found" }, { status: 404 });
+    }
+
+    await removeScheduledItem(itemId);
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
