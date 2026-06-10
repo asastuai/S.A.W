@@ -1,5 +1,8 @@
 "use client";
 
+import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
+
 export type MascotPose =
   | "idle"
   | "listening"
@@ -8,6 +11,37 @@ export type MascotPose =
   | "executing"
   | "speaking"
   | "sleeping";
+
+// three.js hologram is lazy + client-only. While its chunk loads, the static
+// SVG operative stands in, so there is never an empty frame.
+const OperativeHologram = dynamic(
+  () => import("./operative-hologram").then((m) => m.OperativeHologram),
+  { ssr: false, loading: () => <MascotSvgBody pose="idle" /> }
+);
+
+/**
+ * Decide whether to render the three.js hologram. Conservative on purpose:
+ * the SVG mascot is the default and the hologram is an enhancement only for
+ * capable, motion-OK, non-tiny surfaces. Runs client-side only.
+ */
+function qualifies3D(size: number): boolean {
+  if (typeof window === "undefined") return false;
+  if (size < 100) return false; // tiny avatars stay crisp as SVG
+  try {
+    const m = (q: string) => !!window.matchMedia?.(q).matches;
+    if (m("(prefers-reduced-motion: reduce)")) return false;
+    const conn = (navigator as unknown as { connection?: { saveData?: boolean } })
+      .connection;
+    if (conn?.saveData) return false;
+    if (m("(pointer: coarse)") && window.innerWidth < 768) return false; // small touch screens
+    const c = document.createElement("canvas");
+    const gl = c.getContext("webgl2") || c.getContext("webgl");
+    if (!gl) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function Mascot({
   pose = "idle",
@@ -18,13 +52,17 @@ export function Mascot({
   size?: number;
   glyph?: string;
 }) {
-  const tilt = pose === "listening" ? "rotate-[-6deg]" : "";
-  const breathe =
-    pose === "executing" ? "animate-mascot-pulse" : "animate-mascot-breathe";
+  // Start as SVG (SSR + first paint), upgrade to the hologram after mount if
+  // the device qualifies — avoids hydration mismatch and a WebGL cost on
+  // surfaces that don't benefit.
+  const [use3D, setUse3D] = useState(false);
+  useEffect(() => {
+    setUse3D(qualifies3D(size));
+  }, [size]);
 
-  // Per-pose float/drift on the wrapper, layered on top of the SVG's own
-  // breathe/pulse so each state reads as a distinct, living micro-motion.
-  // All keyframes below are scoped by styled-jsx (no global CSS touched).
+  // Per-pose float/drift on the wrapper, layered on top of the body's own
+  // motion so each state reads as a distinct, living micro-motion. Applies to
+  // both the SVG and the hologram.
   const floatClass =
     pose === "idle"
       ? "sawm-float-idle"
@@ -146,94 +184,13 @@ export function Mascot({
         </div>
       )}
 
-      <svg
-        viewBox="0 0 100 100"
-        width="100%"
-        height="100%"
-        className={`relative z-[1] origin-bottom ${breathe} ${tilt} ${
-          pose === "sleeping" ? "sawm-svg-sleep" : ""
-        } ${pose === "executing" ? "sawm-svg-exec" : ""} transition-transform duration-500`}
-      >
-        {/* shadow */}
-        <ellipse cx="50" cy="96" rx="22" ry="2.5" fill="#000" opacity="0.4" />
-
-        {/* collar / coat */}
-        <path
-          d="M 28 82 Q 50 76 72 82 L 74 100 L 26 100 Z"
-          fill="#14161b"
-          stroke="#f0b429"
-          strokeWidth="0.8"
-        />
-        {/* collar lapels (subtle V) */}
-        <path
-          d="M 42 80 L 50 88 L 58 80"
-          fill="none"
-          stroke="#f0b429"
-          strokeWidth="0.6"
-          opacity="0.6"
-        />
-
-        {/* head */}
-        <circle
-          cx="50"
-          cy="55"
-          r="20"
-          fill="#14161b"
-          stroke="#f0b429"
-          strokeWidth="0.8"
-        />
-
-        {/* hat brim */}
-        <ellipse cx="50" cy="34" rx="30" ry="3" fill="#0c0d11" stroke="#f0b429" strokeWidth="0.8" />
-        {/* hat crown */}
-        <path
-          d="M 35 34 L 36 14 Q 36 11 39 11 L 61 11 Q 64 11 64 14 L 65 34 Z"
-          fill="#0c0d11"
-          stroke="#f0b429"
-          strokeWidth="0.8"
-        />
-        {/* hat band */}
-        <rect x="35" y="29" width="30" height="3" fill="#f0b429" opacity="0.5" />
-
-        {/* eyes — group blinks */}
-        <g className="origin-center animate-mascot-blink" style={{ transformOrigin: "50px 53px" }}>
-          <circle cx="43" cy="53" r="2" fill="#f0b429" />
-          <circle cx="57" cy="53" r="2" fill="#f0b429" />
-          {/* eye glints */}
-          <circle cx="43.7" cy="52.3" r="0.6" fill="#d6d2c4" />
-          <circle cx="57.7" cy="52.3" r="0.6" fill="#d6d2c4" />
-        </g>
-
-        {/* mouth — changes by pose */}
-        {pose === "speaking" ? (
-          <ellipse cx="50" cy="64" rx="3" ry="2" fill="#0c0d11" stroke="#f0b429" strokeWidth="0.5" />
-        ) : pose === "thinking" ? (
-          <line x1="46" y1="64" x2="54" y2="64" stroke="#f0b429" strokeWidth="0.8" />
-        ) : (
-          <path
-            d="M 46 64 Q 50 65.5 54 64"
-            fill="none"
-            stroke="#f0b429"
-            strokeWidth="0.8"
-            strokeLinecap="round"
-          />
-        )}
-
-        {/* persona glyph on lapel */}
-        {glyph && (
-          <text
-            x="50"
-            y="93"
-            fill="#f0b429"
-            fontFamily="serif"
-            fontSize="6"
-            textAnchor="middle"
-            opacity="0.7"
-          >
-            {glyph}
-          </text>
-        )}
-      </svg>
+      {/* Body: three.js hologram when the device qualifies, SVG operative
+          otherwise. Same identity either way. */}
+      {use3D ? (
+        <OperativeHologram pose={pose} size={size} />
+      ) : (
+        <MascotSvgBody pose={pose} glyph={glyph} />
+      )}
 
       {/* Self-contained, pose-reactive motion. Scoped by styled-jsx — no
           global keyframes added. Layers on top of the existing tailwind
@@ -341,34 +298,6 @@ export function Mascot({
           }
         }
 
-        /* sleeping — dim the operative down */
-        .sawm-svg-sleep {
-          animation: sawm-dim 7s ease-in-out infinite;
-        }
-        @keyframes sawm-dim {
-          0%,
-          100% {
-            opacity: 0.55;
-          }
-          50% {
-            opacity: 0.42;
-          }
-        }
-
-        /* executing — subtle active brightening accent */
-        .sawm-svg-exec {
-          animation: sawm-exec-bright 1.2s ease-in-out infinite;
-        }
-        @keyframes sawm-exec-bright {
-          0%,
-          100% {
-            filter: drop-shadow(0 0 0 rgba(240, 180, 41, 0));
-          }
-          50% {
-            filter: drop-shadow(0 0 5px rgba(240, 180, 41, 0.65));
-          }
-        }
-
         /* executing — pulsing accent ring */
         .sawm-exec-ring {
           border: 1px solid rgba(240, 180, 41, 0.5);
@@ -460,8 +389,6 @@ export function Mascot({
           .sawm-float-exec,
           .sawm-float-speak,
           .sawm-float-sleep,
-          .sawm-svg-sleep,
-          .sawm-svg-exec,
           .sawm-exec-ring,
           .sawm-exec-orbit,
           .sawm-listen-ring,
@@ -472,5 +399,113 @@ export function Mascot({
         }
       `}</style>
     </div>
+  );
+}
+
+/**
+ * The original SVG operative — secret-agent fedora + coat with pose-reactive
+ * eyes/mouth. Serves as the universal fallback (reduced-motion, no WebGL,
+ * small/touch screens) and as the hologram's loading placeholder.
+ */
+function MascotSvgBody({
+  pose = "idle",
+  glyph,
+}: {
+  pose?: MascotPose;
+  glyph?: string;
+}) {
+  const tilt = pose === "listening" ? "rotate-[-6deg]" : "";
+  const breathe =
+    pose === "executing" ? "animate-mascot-pulse" : "animate-mascot-breathe";
+
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      width="100%"
+      height="100%"
+      className={`relative z-[1] origin-bottom ${breathe} ${tilt} ${
+        pose === "sleeping" ? "opacity-50" : ""
+      } ${pose === "executing" ? "drop-shadow-gold" : ""} transition-transform duration-500`}
+    >
+      {/* shadow */}
+      <ellipse cx="50" cy="96" rx="22" ry="2.5" fill="#000" opacity="0.4" />
+
+      {/* collar / coat */}
+      <path
+        d="M 28 82 Q 50 76 72 82 L 74 100 L 26 100 Z"
+        fill="#14161b"
+        stroke="#f0b429"
+        strokeWidth="0.8"
+      />
+      {/* collar lapels (subtle V) */}
+      <path
+        d="M 42 80 L 50 88 L 58 80"
+        fill="none"
+        stroke="#f0b429"
+        strokeWidth="0.6"
+        opacity="0.6"
+      />
+
+      {/* head */}
+      <circle
+        cx="50"
+        cy="55"
+        r="20"
+        fill="#14161b"
+        stroke="#f0b429"
+        strokeWidth="0.8"
+      />
+
+      {/* hat brim */}
+      <ellipse cx="50" cy="34" rx="30" ry="3" fill="#0c0d11" stroke="#f0b429" strokeWidth="0.8" />
+      {/* hat crown */}
+      <path
+        d="M 35 34 L 36 14 Q 36 11 39 11 L 61 11 Q 64 11 64 14 L 65 34 Z"
+        fill="#0c0d11"
+        stroke="#f0b429"
+        strokeWidth="0.8"
+      />
+      {/* hat band */}
+      <rect x="35" y="29" width="30" height="3" fill="#f0b429" opacity="0.5" />
+
+      {/* eyes — group blinks */}
+      <g className="origin-center animate-mascot-blink" style={{ transformOrigin: "50px 53px" }}>
+        <circle cx="43" cy="53" r="2" fill="#f0b429" />
+        <circle cx="57" cy="53" r="2" fill="#f0b429" />
+        {/* eye glints */}
+        <circle cx="43.7" cy="52.3" r="0.6" fill="#d6d2c4" />
+        <circle cx="57.7" cy="52.3" r="0.6" fill="#d6d2c4" />
+      </g>
+
+      {/* mouth — changes by pose */}
+      {pose === "speaking" ? (
+        <ellipse cx="50" cy="64" rx="3" ry="2" fill="#0c0d11" stroke="#f0b429" strokeWidth="0.5" />
+      ) : pose === "thinking" ? (
+        <line x1="46" y1="64" x2="54" y2="64" stroke="#f0b429" strokeWidth="0.8" />
+      ) : (
+        <path
+          d="M 46 64 Q 50 65.5 54 64"
+          fill="none"
+          stroke="#f0b429"
+          strokeWidth="0.8"
+          strokeLinecap="round"
+        />
+      )}
+
+      {/* persona glyph on lapel */}
+      {glyph && (
+        <text
+          x="50"
+          y="93"
+          fill="#f0b429"
+          fontFamily="serif"
+          fontSize="6"
+          textAnchor="middle"
+          opacity="0.7"
+        >
+          {glyph}
+        </text>
+      )}
+    </svg>
   );
 }
