@@ -5,6 +5,10 @@ import { useEffect, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useHandler } from "@/lib/use-handler";
 import { Reveal } from "@/components/reveal";
+import { TerminalPanel } from "@/components/terminal/terminal-panel";
+import { Readout } from "@/components/terminal/readout";
+import { CommandLine } from "@/components/terminal/command-line";
+import { Caret } from "@/components/terminal/caret";
 
 export default function ConnectTelegramPage() {
   const { authenticated, ready, login, getAccessToken } = usePrivy();
@@ -54,7 +58,7 @@ export default function ConnectTelegramPage() {
       <div className="pointer-events-none absolute right-3 top-3 h-5 w-5 border-r border-t border-gold/30 sm:right-6 sm:top-6" />
 
       <div className="mx-auto max-w-3xl">
-        <header className="mb-16 flex items-center justify-between border-b border-ash/70 pb-4">
+        <header className="mb-14 flex items-center justify-between border-b border-ash pb-4">
           <Link
             href="/"
             className="font-display text-2xl uppercase tracking-[0.45em] text-bone transition-colors hover:text-gold"
@@ -82,21 +86,32 @@ export default function ConnectTelegramPage() {
               className="stamp mb-6 animate-intro inline-flex items-center gap-3 border border-gold/40 px-3 py-1.5 text-gold"
               style={{ animationDelay: "60ms" }}
             >
-              <span className="inline-block h-1.5 w-1.5 animate-glow-pulse rounded-full bg-goldlit" />
+              <span className="inline-block h-1.5 w-1.5 animate-glow-pulse rounded-full bg-phosphor" />
               Telegram bot
             </p>
 
+            <div
+              className="animate-intro mb-5"
+              style={{ animationDelay: "90ms" }}
+            >
+              <CommandLine>
+                saw pair telegram{" "}
+                <span className="text-gold/80">--channel</span> secure
+              </CommandLine>
+            </div>
+
             <h1
-              className="animate-intro font-display text-5xl uppercase leading-[0.92] tracking-cinema text-bone sm:text-7xl md:text-8xl"
+              className="animate-intro font-display text-4xl uppercase leading-[0.92] tracking-cinema text-bone sm:text-6xl md:text-7xl"
               style={{ animationDelay: "120ms" }}
             >
               Link your
               <br />
-              <span className="text-goldlit text-glow drop-shadow-gold-lg">chat.</span>
+              <span className="text-goldlit text-glow drop-shadow-gold-lg">chat</span>
+              <Caret className="ml-2 align-baseline" />
             </h1>
 
             <p
-              className="animate-intro mt-7 max-w-xl text-base leading-relaxed text-bone/60"
+              className="animate-intro mt-7 max-w-xl text-base leading-relaxed font-mono text-bone/60"
               style={{ animationDelay: "220ms" }}
             >
               Pair this Telegram conversation with your SAW handler so the bot
@@ -104,151 +119,159 @@ export default function ConnectTelegramPage() {
             </p>
 
             {/* Classified channel meta strip */}
-            <div
-              className="animate-intro mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-ash/60 pt-4 font-mono text-[0.65rem] uppercase tracking-[0.25em] text-bone/35"
-              style={{ animationDelay: "320ms" }}
-            >
-              <span>Secure channel</span>
-              <span className="hidden text-gold/40 sm:inline">//</span>
-              <span>Handshake protocol</span>
-              <span className="hidden text-gold/40 sm:inline">//</span>
-              <span>Operative ↔ handler</span>
-            </div>
+            <Readout
+              className="animate-intro mt-8 border-t border-ash pt-4"
+              items={[
+                { label: "channel", value: "secure", tone: "gold" },
+                { label: "proto", value: "handshake" },
+                { label: "link", value: "operative ↔ handler", tone: "phosphor" },
+              ]}
+            />
           </div>
         </section>
 
         {/* PAIRING FLOW — the handshake terminal */}
         <Reveal delay={80}>
           {!code && (
-            <div className="relative overflow-hidden border-l-2 border-rust bg-ink/60 p-6 sm:p-7">
-              <p className="mb-3 font-mono text-[0.65rem] uppercase tracking-[0.3em] text-rust/80">
-                No channel
-              </p>
-              <p className="text-sm leading-relaxed text-bone/70">
-                No pair code in URL. Start in Telegram: send{" "}
-                <code className="rounded-sm bg-smoke px-1.5 py-0.5 font-mono text-gold">
-                  /start
-                </code>{" "}
-                to the bot.
-              </p>
-            </div>
+            <TerminalPanel label="no_channel" className="border-rust/50">
+              <div className="relative overflow-hidden border-l-2 border-rust p-6 sm:p-7">
+                <p className="mb-3 font-mono text-[0.65rem] uppercase tracking-[0.3em] text-rust/80">
+                  No channel
+                </p>
+                <p className="text-sm leading-relaxed font-mono text-bone/70">
+                  No pair code in URL. Start in Telegram: send{" "}
+                  <code className="rounded-sm bg-smoke px-1.5 py-0.5 font-mono text-gold">
+                    /start
+                  </code>{" "}
+                  to the bot.
+                </p>
+              </div>
+            </TerminalPanel>
           )}
 
           {code && !authenticated && (
-            <div className="group relative overflow-hidden border border-gold/40 bg-ink/60 p-7 shadow-glow transition-shadow hover:shadow-glow-lg sm:p-9">
-              <div
-                className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_60%_at_50%_0%,rgba(201,169,110,0.07),transparent_70%)]"
-                aria-hidden
-              />
-              <div className="relative">
-                <p className="mb-2 font-mono text-[0.65rem] uppercase tracking-[0.3em] text-gold/70">
-                  Step 01 // Identity
-                </p>
-                <p className="mb-7 max-w-md text-base leading-relaxed text-bone/75">
-                  Sign in first to prove you own this handler.
-                </p>
-                <button
-                  onClick={() => login()}
-                  disabled={!ready}
-                  className="group/btn relative inline-flex items-center gap-3 bg-gold px-7 py-3.5 font-mono text-xs uppercase tracking-[0.3em] text-ink shadow-glow transition-all hover:bg-goldlit hover:shadow-glow-lg disabled:opacity-30 disabled:shadow-none"
-                >
-                  {ready ? "Sign in" : "Loading…"}
-                  {ready && (
-                    <span className="transition-transform group-hover/btn:translate-x-1">
-                      →
-                    </span>
-                  )}
-                </button>
+            <TerminalPanel label="step_01 // identity" className="border-gold/40 shadow-glow">
+              <div className="group relative overflow-hidden p-7 transition-shadow sm:p-9">
+                <div
+                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_60%_at_50%_0%,rgba(240,180,41,0.07),transparent_70%)]"
+                  aria-hidden
+                />
+                <div className="relative">
+                  <p className="mb-2 font-mono text-[0.65rem] uppercase tracking-[0.3em] text-gold/70">
+                    Step 01 // Identity
+                  </p>
+                  <p className="mb-7 max-w-md text-base leading-relaxed font-mono text-bone/75">
+                    Sign in first to prove you own this handler.
+                  </p>
+                  <button
+                    onClick={() => login()}
+                    disabled={!ready}
+                    className="group/btn relative inline-flex items-center gap-3 bg-gold px-7 py-3.5 font-mono text-xs uppercase tracking-[0.3em] text-ink shadow-glow transition-all hover:bg-goldlit hover:shadow-glow-lg disabled:opacity-30 disabled:shadow-none"
+                  >
+                    {ready ? "Sign in" : "Loading…"}
+                    {ready && (
+                      <span className="transition-transform group-hover/btn:translate-x-1">
+                        →
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
+            </TerminalPanel>
           )}
 
           {code && authenticated && handlerState.status === "ready" && status === "idle" && (
-            <div className="group relative overflow-hidden border border-gold/50 bg-ink/60 p-7 shadow-glow transition-shadow hover:shadow-glow-lg sm:p-9">
-              <div
-                className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_70%_at_50%_0%,rgba(201,169,110,0.09),transparent_70%)]"
-                aria-hidden
-              />
-              <div className="relative">
-                <p className="mb-5 font-mono text-[0.65rem] uppercase tracking-[0.3em] text-gold/70">
-                  Step 02 // Confirm handshake
-                </p>
+            <TerminalPanel label="step_02 // handshake" className="border-gold/50 shadow-glow">
+              <div className="group relative overflow-hidden p-7 transition-shadow sm:p-9">
+                <div
+                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_70%_at_50%_0%,rgba(240,180,41,0.09),transparent_70%)]"
+                  aria-hidden
+                />
+                <div className="relative">
+                  <p className="mb-5 font-mono text-[0.65rem] uppercase tracking-[0.3em] text-gold/70">
+                    Step 02 // Confirm handshake
+                  </p>
 
-                {/* On-chain / classified data rows — mono */}
-                <dl className="mb-8 space-y-3 border-y border-ash/60 py-5">
-                  <div className="flex items-baseline justify-between gap-4">
-                    <dt className="font-mono text-[0.6rem] uppercase tracking-[0.3em] text-bone/35">
-                      Pair code
-                    </dt>
-                    <dd className="font-mono text-sm tracking-wider text-goldlit text-glow">
-                      {code.slice(0, 6)}…
-                    </dd>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-4">
-                    <dt className="font-mono text-[0.6rem] uppercase tracking-[0.3em] text-bone/35">
-                      Handler
-                    </dt>
-                    <dd className="font-mono text-sm tracking-wider text-bone/70">
-                      {handlerState.handler.primary_wallet.slice(0, 4)}…
-                      {handlerState.handler.primary_wallet.slice(-4)}
-                    </dd>
-                  </div>
-                </dl>
+                  {/* On-chain / classified data rows — mono */}
+                  <dl className="mb-8 space-y-3 border-y border-ash py-5">
+                    <div className="flex items-baseline justify-between gap-4">
+                      <dt className="font-mono text-[0.6rem] uppercase tracking-[0.3em] text-bone/35">
+                        Pair code
+                      </dt>
+                      <dd className="font-mono text-sm tracking-wider text-goldlit text-glow">
+                        {code.slice(0, 6)}…
+                      </dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-4">
+                      <dt className="font-mono text-[0.6rem] uppercase tracking-[0.3em] text-bone/35">
+                        Handler
+                      </dt>
+                      <dd className="font-mono text-sm tracking-wider text-bone/70">
+                        {handlerState.handler.primary_wallet.slice(0, 4)}…
+                        {handlerState.handler.primary_wallet.slice(-4)}
+                      </dd>
+                    </div>
+                  </dl>
 
-                <button
-                  onClick={pair}
-                  className="group/btn relative inline-flex w-full items-center justify-center gap-3 bg-gold px-8 py-4 font-mono text-sm uppercase tracking-[0.3em] text-ink shadow-glow-lg animate-glow-pulse transition-all hover:bg-goldlit sm:w-auto"
-                >
-                  Confirm link
-                  <span className="transition-transform group-hover/btn:translate-x-1">
-                    →
-                  </span>
-                </button>
+                  <button
+                    onClick={pair}
+                    className="group/btn relative inline-flex w-full items-center justify-center gap-3 bg-gold px-8 py-4 font-mono text-sm uppercase tracking-[0.3em] text-ink shadow-glow-lg animate-glow-pulse transition-all hover:bg-goldlit sm:w-auto"
+                  >
+                    Confirm link
+                    <span className="transition-transform group-hover/btn:translate-x-1">
+                      →
+                    </span>
+                  </button>
+                </div>
               </div>
-            </div>
+            </TerminalPanel>
           )}
 
           {status === "pairing" && (
-            <div className="flex items-center gap-4 border-l-2 border-gold/50 bg-ink/40 p-6">
+            <div className="flex items-center gap-4 border-l-2 border-gold/50 bg-ink/40 p-6 font-mono">
               <span className="inline-flex gap-1.5">
-                <span className="h-1.5 w-1.5 animate-glow-pulse rounded-full bg-goldlit" />
+                <span className="h-1.5 w-1.5 animate-glow-pulse rounded-full bg-phosphor" />
                 <span
-                  className="h-1.5 w-1.5 animate-glow-pulse rounded-full bg-goldlit"
+                  className="h-1.5 w-1.5 animate-glow-pulse rounded-full bg-phosphor"
                   style={{ animationDelay: "200ms" }}
                 />
                 <span
-                  className="h-1.5 w-1.5 animate-glow-pulse rounded-full bg-goldlit"
+                  className="h-1.5 w-1.5 animate-glow-pulse rounded-full bg-phosphor"
                   style={{ animationDelay: "400ms" }}
                 />
               </span>
               <p className="font-mono text-xs uppercase tracking-[0.3em] text-bone/60">
-                Pairing…
+                &gt; pairing…
               </p>
             </div>
           )}
 
           {status === "ok" && (
-            <div className="relative overflow-hidden border border-gold/60 bg-ink/60 p-7 shadow-glow-lg sm:p-9">
-              <div
-                className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_80%_at_50%_0%,rgba(201,169,110,0.12),transparent_70%)]"
-                aria-hidden
-              />
-              <div className="relative">
-                <p className="mb-3 flex items-center gap-2 font-mono text-xs uppercase tracking-[0.3em] text-goldlit text-glow">
-                  <span className="drop-shadow-gold">✓</span> Linked
-                </p>
-                <p className="text-base leading-relaxed text-bone/85">{message}</p>
+            <TerminalPanel label="linked" className="border-gold/60 shadow-glow-lg">
+              <div className="relative overflow-hidden p-7 sm:p-9">
+                <div
+                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_80%_at_50%_0%,rgba(240,180,41,0.12),transparent_70%)]"
+                  aria-hidden
+                />
+                <div className="relative">
+                  <p className="mb-3 flex items-center gap-2 font-mono text-xs uppercase tracking-[0.3em] text-phosphor text-glow">
+                    <span>●</span> Linked · ok
+                  </p>
+                  <p className="text-base leading-relaxed font-mono text-bone/85">{message}</p>
+                </div>
               </div>
-            </div>
+            </TerminalPanel>
           )}
 
           {status === "error" && (
-            <div className="relative overflow-hidden border-l-2 border-rust bg-ink/60 p-7 sm:p-9">
-              <p className="mb-3 font-mono text-xs uppercase tracking-[0.3em] text-rust">
-                Failed
-              </p>
-              <p className="text-base leading-relaxed text-bone/85">{message}</p>
-            </div>
+            <TerminalPanel label="failed" className="border-rust/50">
+              <div className="relative overflow-hidden border-l-2 border-rust p-7 sm:p-9">
+                <p className="mb-3 font-mono text-xs uppercase tracking-[0.3em] text-rust">
+                  Failed
+                </p>
+                <p className="text-base leading-relaxed font-mono text-bone/85">{message}</p>
+              </div>
+            </TerminalPanel>
           )}
         </Reveal>
       </div>

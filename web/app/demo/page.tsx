@@ -97,6 +97,10 @@ import { Chat } from "@/components/chat";
 import { ScheduleView } from "@/components/schedule-view";
 import { ApiKeyModal } from "@/components/api-key-modal";
 import { clearApiKey, loadApiKey, saveApiKey } from "@/lib/api-key";
+import { TerminalPanel } from "@/components/terminal/terminal-panel";
+import { CommandLine } from "@/components/terminal/command-line";
+import { Caret } from "@/components/terminal/caret";
+import { Readout } from "@/components/terminal/readout";
 
 type Phase = "pick" | "setup" | "briefing" | "live";
 
@@ -1913,28 +1917,41 @@ export default function DemoPage() {
 
   return (
     <main className="min-h-screen">
-      <header className="border-b border-ash px-4 sm:px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
-        <Link href="/" className="font-display text-2xl tracking-widest">
-          S A W
+      <header className="border-b border-ash bg-obsidian/60 px-4 sm:px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
+        <Link
+          href="/"
+          className="group inline-flex items-baseline gap-2 font-mono text-sm tracking-widest"
+          title="saw://handler_console"
+        >
+          <span aria-hidden="true" className="select-none font-semibold text-gold">
+            $
+          </span>
+          <span className="font-display text-xl tracking-[0.35em] text-cream group-hover:text-gold transition">
+            SAW
+          </span>
+          <span className="hidden sm:inline text-bone/40 normal-case tracking-normal">
+            ://handler_console
+          </span>
+          <Caret className="hidden sm:inline-block" />
         </Link>
-        <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-end">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
           <button
             onClick={() => setShowApiKeyModal(true)}
-            className={`text-xs uppercase tracking-widest border px-3 py-1.5 transition ${
+            className={`font-mono text-[11px] uppercase tracking-widest border px-3 py-1.5 transition ${
               apiKey
-                ? "border-gold/40 text-gold hover:bg-gold hover:text-ink"
-                : "border-rust text-rust hover:bg-rust hover:text-bone animate-pulse"
+                ? "border-phosphor/50 text-phosphor hover:bg-phosphor hover:text-obsidian"
+                : "border-rust text-rust hover:bg-rust hover:text-obsidian animate-pulse"
             }`}
             title={apiKey ? "Agent connected" : "No agent connected"}
           >
-            ⚙ {apiKey ? "Agent" : "Connect agent"}
+            {apiKey ? "● brain --linked" : "○ brain --connect"}
           </button>
           {phase === "live" && (
             <button
               onClick={backToBriefing}
-              className="text-xs uppercase tracking-widest text-bone/60 hover:text-gold border border-ash px-3 py-1.5"
+              className="font-mono text-[11px] uppercase tracking-widest text-bone/60 hover:text-gold border border-ash hover:border-gold/50 px-3 py-1.5 transition"
             >
-              ⌘ Brief again
+              cd ../brief
             </button>
           )}
           {(phase === "briefing" || phase === "live") && (
@@ -1947,10 +1964,10 @@ export default function DemoPage() {
                 )
                   reset();
               }}
-              className="text-xs uppercase tracking-widest text-bone/40 hover:text-rust"
+              className="font-mono text-[11px] uppercase tracking-widest text-bone/40 hover:text-rust transition"
               title="Clear all 3 conversations + local setup (on-chain wallet stays)"
             >
-              Burn the dossier
+              rm -rf --dossier
             </button>
           )}
           <WalletButton />
@@ -1958,10 +1975,11 @@ export default function DemoPage() {
       </header>
 
       <div className="border-b border-gold/30 bg-gold/5 px-4 sm:px-6 py-2 text-center">
-        <p className="text-xs text-bone/70 inline-flex items-center gap-2 flex-wrap justify-center">
+        <p className="font-mono text-xs text-bone/70 inline-flex items-center gap-2 flex-wrap justify-center">
+          <span aria-hidden="true" className="text-gold/40 select-none">#</span>
           <span className="text-gold animate-pulse">✱</span>
           <span>
-            Gold asterisks across the demo are{" "}
+            Gold asterisks across the console are{" "}
             <span className="text-gold uppercase tracking-widest">vision notes</span>
             {" "}— click any of them to read where I want this feature to go next.
           </span>
@@ -1988,32 +2006,35 @@ export default function DemoPage() {
               their own BYOK key nor SAW credits. Disappears the moment
               one of those is in place. */}
           {!apiKey && sawCredits === 0 && (
-            <div className="border border-gold/60 bg-gold/5 px-4 py-3 text-sm flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+            <TerminalPanel
+              label="brain · unlinked"
+              className="px-4 py-3 text-sm flex flex-col sm:flex-row sm:items-center gap-3 justify-between"
+            >
               <div className="flex items-start gap-3">
-                <span className="text-gold text-lg leading-none">🧠</span>
+                <span aria-hidden="true" className="text-gold text-lg leading-none">🧠</span>
                 <div>
-                  <div className="text-bone/90 font-medium">
-                    Wire up the operative's brain
+                  <div className="text-bone/90 font-medium font-mono">
+                    <CommandLine prompt="$">saw link --brain</CommandLine>
                   </div>
-                  <div className="text-[11px] text-bone/50 mt-1 leading-tight">
+                  <div className="text-[11px] text-bone/50 mt-1 leading-tight font-mono">
                     Use your own LLM key — free at <span className="text-gold">console.groq.com</span> — or pay <span className="text-gold">0.01 SOL</span> and let SAW handle the LLM for 500 calls. Either way, the operative is ready to brief.
                   </div>
                 </div>
               </div>
               <button
                 onClick={() => setShowApiKeyModal(true)}
-                className="text-xs uppercase tracking-widest border border-gold text-gold hover:bg-gold hover:text-ink transition px-3 py-2 whitespace-nowrap"
+                className="font-mono text-[11px] uppercase tracking-widest border border-gold text-gold hover:bg-gold hover:text-obsidian transition px-3 py-2 whitespace-nowrap"
               >
-                Connect API key →
+                link --key →
               </button>
-            </div>
+            </TerminalPanel>
           )}
           <TopupCard hasApiKey={!!apiKey} onCreditAdded={setSawCredits} />
         </div>
       )}
 
       {dbAgent && (phase === "briefing" || phase === "live") && (
-        <div className="border-b border-ash px-4 sm:px-6 py-2 flex items-center justify-center gap-2 flex-wrap">
+        <div className="border-b border-ash bg-ink/40 px-4 sm:px-6 py-2 flex items-center justify-center gap-2 flex-wrap">
           <SleepingBadge
             active={dbAgent.active}
             nextWakeAt={dbAgent.next_wake_at}
@@ -2031,9 +2052,9 @@ export default function DemoPage() {
           <ConnectTelegramButton />
           <button
             onClick={() => setShowSettings(true)}
-            className="text-xs uppercase tracking-widest border border-ash px-3 py-1.5 text-bone/60 hover:text-gold hover:border-gold transition"
+            className="font-mono text-[11px] uppercase tracking-widest border border-ash px-3 py-1.5 text-bone/60 hover:text-gold hover:border-gold transition"
           >
-            ⚙ settings
+            saw config
           </button>
           {setup && (
             <button
@@ -2041,9 +2062,9 @@ export default function DemoPage() {
                 setCtlMsg(null);
                 setShowControls(true);
               }}
-              className="text-xs uppercase tracking-widest border border-gold/50 px-3 py-1.5 text-gold/80 hover:text-ink hover:bg-gold transition"
+              className="font-mono text-[11px] uppercase tracking-widest border border-gold/50 px-3 py-1.5 text-gold/80 hover:text-obsidian hover:bg-gold transition"
             >
-              🛡 controls
+              sudo --override
             </button>
           )}
         </div>
@@ -2241,7 +2262,7 @@ function PersonaTabs({
             <button
               key={p.id}
               onClick={() => onSwitch(p.id)}
-              className={`flex items-center gap-2 px-4 sm:px-5 py-3 text-sm uppercase tracking-widest transition border-b-2 -mb-px whitespace-nowrap ${
+              className={`flex items-center gap-2 px-4 sm:px-5 py-3 font-mono text-sm uppercase tracking-widest transition border-b-2 -mb-px whitespace-nowrap ${
                 active
                   ? `${accentCls} bg-ink`
                   : "border-transparent text-bone/40 hover:text-bone hover:bg-ink/60"
@@ -2291,12 +2312,14 @@ function Idle() {
   }
 
   return (
-    <div className="border border-ash p-8 sm:p-12 text-center">
-      <p className="stamp mb-6">Awaiting handler</p>
+    <TerminalPanel label="auth · awaiting handler" className="p-8 sm:p-12 text-center">
+      <p className="font-mono text-[11px] uppercase tracking-widest text-phosphor/80 mb-6">
+        <CommandLine prompt="$">saw login --wallet phantom</CommandLine>
+      </p>
       <h2 className="font-display text-3xl sm:text-4xl mb-4">
-        Connect your Phantom.
+        Connect your Phantom.<Caret className="ml-2 align-middle" />
       </h2>
-      <p className="text-bone/60 max-w-xl mx-auto mb-6 text-sm sm:text-base">
+      <p className="font-mono text-bone/60 max-w-xl mx-auto mb-6 text-sm sm:text-base">
         Pick an agent, brief them by chat, then watch them execute the schedule
         on Solana devnet. You sign only what crosses the threshold.
       </p>
@@ -2343,7 +2366,7 @@ function Idle() {
           above.
         </div>
       )}
-    </div>
+    </TerminalPanel>
   );
 }
 
@@ -2500,38 +2523,38 @@ function PersonaPicker({
 function MarketTicker({ snap }: { snap: MarketSnapshot | null }) {
   if (!snap) {
     return (
-      <div className="border border-ash p-3 text-xs text-bone/40 italic">
-        Reading the tape…
-      </div>
+      <TerminalPanel label="tail -f tape" className="p-3 font-mono text-xs text-bone/40 italic">
+        Reading the tape…<Caret className="ml-1" />
+      </TerminalPanel>
     );
   }
   const positive = snap.change24hPct >= 0;
   return (
-    <div className="border border-ash p-3 space-y-1">
-      <div className="text-[10px] uppercase tracking-widest text-bone/40">
-        Live tape · {snap.asset}
-      </div>
+    <TerminalPanel label={`tail -f tape · ${snap.asset}`} className="p-3 space-y-1">
       <div className="flex items-baseline gap-3">
         <span className="font-display text-2xl text-bone">
           ${snap.priceUsd.toFixed(2)}
         </span>
         <span
-          className={`text-xs ${positive ? "text-gold" : "text-rust"}`}
+          className={`font-mono text-xs ${positive ? "text-phosphor" : "text-rust"}`}
         >
           {positive ? "+" : ""}
           {snap.change24hPct.toFixed(2)}%
         </span>
       </div>
-      <div className="text-xs text-bone/50">
+      <div className="font-mono text-xs text-bone/50">
         24h ${snap.low24hUsd.toFixed(2)} → ${snap.high24hUsd.toFixed(2)}
       </div>
-    </div>
+    </TerminalPanel>
   );
 }
 
 function SetupOverlay({ step, persona }: { step: string; persona: Persona }) {
   return (
-    <div className="border border-ash p-12 text-center min-h-[400px] flex flex-col items-center justify-center">
+    <TerminalPanel
+      label="provisioning · on-chain"
+      className="p-12 text-center min-h-[400px] flex flex-col items-center justify-center"
+    >
       <Mascot pose="thinking" size={140} glyph={persona.glyph} />
       <p className="stamp mt-4 mb-2 flex items-center gap-2">
         Briefing {persona.name}
@@ -2541,12 +2564,16 @@ function SetupOverlay({ step, persona }: { step: string; persona: Persona }) {
         />
       </p>
       <h2 className="font-display text-3xl mb-3">{persona.tagline}</h2>
-      <p className="text-bone/60 text-sm mb-8">
+      <p className="font-mono text-bone/60 text-sm mb-8">
         One signature. Phantom prompts you once — wallet, policy, mint, and
         funding settle in a single atomic transaction.
       </p>
-      <div className="text-bone/80 text-sm">{step || "Working…"}</div>
-    </div>
+      <div className="font-mono text-bone/80 text-sm inline-flex items-center justify-center gap-2">
+        <span aria-hidden="true" className="text-phosphor select-none">&gt;</span>
+        {step || "Working…"}
+        <Caret />
+      </div>
+    </TerminalPanel>
   );
 }
 
@@ -2598,8 +2625,8 @@ function BriefingRoom({
     <div className="grid grid-cols-1 lg:grid-cols-[3fr_4fr_3fr] gap-4 lg:gap-6">
       {/* LEFT: mascot + identity */}
       <div className="space-y-4">
-        <div className="border border-ash p-5 flex flex-col items-center relative">
-          <span className="absolute top-2 right-2">
+        <TerminalPanel label="operative" className="p-5 flex flex-col items-center">
+          <span className="absolute top-2 right-2 z-10">
             <CreatorNote
               text="Imagine the operative as an interactive 3D render — or a polished 2D animation that reacts to what it's doing: leaning in when it spots a move, nodding when it executes, still when it sleeps. Today it's a clean glyph; the personality layer is a later pass."
               position="bottom-left"
@@ -2609,20 +2636,17 @@ function BriefingRoom({
           <Mascot pose={mascotPose} size={180} glyph={persona.glyph} />
           <div className="stamp mt-4">{persona.role}</div>
           <h2 className="font-display text-2xl mt-1">{persona.name}</h2>
-          <p className="text-bone/60 text-xs italic text-center mt-2">
+          <p className="font-mono text-bone/60 text-xs italic text-center mt-2">
             {persona.tagline}
           </p>
-        </div>
+        </TerminalPanel>
         {showMarket && <MarketTicker snap={marketSnap} />}
-        <div className="border border-ash p-4 space-y-2 text-xs">
-          <div className="text-bone/40 uppercase tracking-widest mb-2">
-            Policy ceilings
-          </div>
+        <TerminalPanel label="policy --ceilings" className="p-4 space-y-2 text-xs">
           <Row label="Daily" value={fmt(persona.policy.dailyLimit)} />
           <Row label="Per-tx" value={fmt(persona.policy.perTxLimit)} />
           <Row label="Threshold" value={fmt(persona.policy.approvalThreshold)} accent />
           <Row label="Balance" value={fmt(walletBalance)} />
-        </div>
+        </TerminalPanel>
       </div>
 
       {/* MIDDLE: chat */}
@@ -2642,13 +2666,11 @@ function BriefingRoom({
         <button
           onClick={onStart}
           disabled={briefing.schedule.length === 0}
-          className="w-full bg-gold text-ink py-4 uppercase tracking-widest text-sm hover:bg-bone disabled:opacity-30 disabled:cursor-not-allowed transition"
+          className="w-full bg-gold text-obsidian font-mono py-4 uppercase tracking-widest text-sm hover:bg-goldlit disabled:opacity-30 disabled:cursor-not-allowed transition"
         >
           {briefing.schedule.length === 0
-            ? "Build the schedule via chat"
-            : `Run ${briefing.schedule.length} ${
-                briefing.schedule.length === 1 ? "action" : "actions"
-              } →`}
+            ? "// build the schedule via chat"
+            : `saw run --queue ${briefing.schedule.length} →`}
         </button>
       </div>
     </div>
@@ -2711,43 +2733,43 @@ function LiveRoom({
       )}
     <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4 lg:gap-6">
       <div className="space-y-4">
-        <div className="border border-ash p-5">
+        <TerminalPanel label="status · live" className="p-5">
           <div className="flex items-start gap-4 mb-4">
             <Mascot pose={mascotPose} size={110} glyph={persona.glyph} />
             <div className="flex-1">
               <div className="stamp mb-2">{persona.role}</div>
               <h2 className="font-display text-2xl">{persona.name}</h2>
-              <span className="inline-block mt-2 text-xs uppercase tracking-widest border border-gold text-gold px-2 py-0.5 animate-pulse">
-                In mission
+              <span className="inline-flex items-center gap-1.5 mt-2 font-mono text-[11px] uppercase tracking-widest border border-phosphor/50 text-phosphor px-2 py-0.5">
+                <span aria-hidden="true" className="animate-pulse">●</span> on mission
               </span>
             </div>
           </div>
-          <div className="text-xs uppercase tracking-widest text-bone/50 mb-2">
+          <div className="font-mono text-[11px] uppercase tracking-widest text-bone/50 mb-2">
             Daily budget
           </div>
-          <div className="relative h-3 bg-ash overflow-hidden mb-2">
+          <div className="relative h-3 bg-smoke overflow-hidden mb-2">
             <div
               className="absolute inset-y-0 left-0 bg-gold transition-all duration-500"
               style={{ width: `${dailyPct}%` }}
             />
             <div
-              className="absolute inset-y-0 w-px bg-bone/60"
+              className="absolute inset-y-0 w-px bg-phosphor/80"
               style={{ left: `${thresholdPct}%` }}
               title="Approval threshold"
             />
           </div>
-          <div className="flex justify-between text-xs text-bone/60">
+          <div className="flex justify-between font-mono text-xs text-bone/60">
             <span>{fmt(dailySpent)} spent</span>
             <span>of {fmt(persona.policy.dailyLimit)}</span>
           </div>
-        </div>
+        </TerminalPanel>
 
         {showMarket && <MarketTicker snap={marketSnap} />}
 
         {upcoming && (
-          <div className="border border-gold/40 bg-gold/5 p-5">
-            <div className="text-xs uppercase tracking-widest text-gold mb-2">
-              Next up
+          <TerminalPanel label="next --up" className="bg-gold/5 p-5">
+            <div className="font-mono text-[11px] uppercase tracking-widest text-gold mb-2">
+              Queued
               {upcoming.trigger && upcoming.trigger.kind !== "time"
                 ? " · waiting for trigger"
                 : secsToNext !== null && secsToNext > 0
@@ -2757,12 +2779,12 @@ function LiveRoom({
             <div className="font-display text-2xl text-bone mb-1">
               {fmt(upcoming.amount)}
             </div>
-            <div className="text-bone/70 text-sm">→ {upcoming.vendor}</div>
-            <div className="text-bone/50 text-xs italic mt-1">
+            <div className="font-mono text-bone/70 text-sm">→ {upcoming.vendor}</div>
+            <div className="font-mono text-bone/50 text-xs italic mt-1">
               "{upcoming.reason}"
             </div>
             {upcoming.trigger && upcoming.trigger.kind !== "time" && (
-              <div className="mt-3 pt-3 border-t border-gold/20 text-xs text-gold/80">
+              <div className="mt-3 pt-3 border-t border-gold/20 font-mono text-xs text-gold/80">
                 ▸ {describeTrigger(upcoming)}
                 {marketSnap && (
                   <span className="text-bone/50 ml-2">
@@ -2771,18 +2793,18 @@ function LiveRoom({
                 )}
               </div>
             )}
-          </div>
+          </TerminalPanel>
         )}
 
         <div className="grid grid-cols-2 gap-px bg-ash">
           <div className="bg-ink p-4">
-            <div className="text-xs uppercase tracking-widest text-bone/50 mb-1">
+            <div className="font-mono text-[11px] uppercase tracking-widest text-bone/50 mb-1">
               Wallet balance
             </div>
             <div className="font-display text-2xl">{fmt(walletBalance)}</div>
           </div>
           <div className="bg-ink p-4">
-            <div className="text-xs uppercase tracking-widest text-bone/50 mb-1">
+            <div className="font-mono text-[11px] uppercase tracking-widest text-bone/50 mb-1">
               Threshold
             </div>
             <div className="font-display text-2xl text-gold">
@@ -2791,16 +2813,13 @@ function LiveRoom({
           </div>
         </div>
 
-        <div className="border border-ash p-4">
-          <div className="text-xs uppercase tracking-widest text-bone/50 mb-3">
-            On-chain identities
-          </div>
+        <TerminalPanel label="on-chain --identities" className="p-4">
           <div className="space-y-2 text-xs">
             <Identity label="Wallet" value={setup.walletPda} />
             <Identity label="Agent" value={setup.agent.publicKey} />
             <Identity label="Mint" value={setup.mint} />
           </div>
-        </div>
+        </TerminalPanel>
       </div>
 
       <ScheduleView
@@ -2824,7 +2843,7 @@ function Row({
   accent?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3">
+    <div className="flex items-center justify-between gap-3 font-mono">
       <span className="text-bone/40 uppercase tracking-widest">{label}</span>
       <span className={accent ? "text-gold font-medium" : "text-bone/80"}>
         {value}
@@ -2836,13 +2855,13 @@ function Row({
 function Identity({ label, value }: { label: string; value: PublicKey }) {
   const s = value.toBase58();
   return (
-    <div className="flex items-center justify-between gap-3">
+    <div className="flex items-center justify-between gap-3 font-mono">
       <span className="text-bone/40 uppercase tracking-widest">{label}</span>
       <a
         href={`https://explorer.solana.com/address/${s}?cluster=devnet`}
         target="_blank"
         rel="noreferrer"
-        className="text-bone/70 hover:text-gold font-mono"
+        className="text-bone/70 hover:text-gold"
       >
         {s.slice(0, 4)}…{s.slice(-4)}
       </a>
@@ -2866,8 +2885,11 @@ function ApprovalSheet({
   onDeny: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/80 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-2xl bg-ink border border-gold m-4 mb-8 p-8 animate-slide-up">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-obsidian/80 backdrop-blur-sm animate-fade-in">
+      <TerminalPanel
+        label="override · signature required"
+        className="w-full max-w-2xl m-4 mb-8 p-8 animate-slide-up shadow-glow-lg"
+      >
         <div className="flex items-center gap-4 mb-6">
           <Mascot pose="thinking" size={80} glyph={persona.glyph} />
           <div>
@@ -2882,21 +2904,21 @@ function ApprovalSheet({
           </div>
         </div>
         <div className="mb-6">
-          <div className="text-bone/50 text-xs uppercase tracking-widest mb-2">
-            Wants to send
+          <div className="font-mono text-bone/50 text-[11px] uppercase tracking-widest mb-2">
+            <CommandLine prompt="$">saw pay --to {vendor}</CommandLine>
           </div>
           <div className="font-display text-5xl text-gold mb-1">
             {fmt(amount)}
           </div>
-          <div className="text-bone/70">to {vendor}</div>
+          <div className="font-mono text-bone/70">→ {vendor}</div>
         </div>
-        <div className="border-l-2 border-bone/30 pl-4 mb-8">
-          <div className="text-bone/40 text-xs uppercase tracking-widest mb-1">
+        <div className="border-l-2 border-gold/40 pl-4 mb-8">
+          <div className="font-mono text-bone/40 text-[11px] uppercase tracking-widest mb-1">
             {persona.name}'s reasoning
           </div>
-          <div className="text-bone/80 italic">"{reason}"</div>
+          <div className="font-mono text-bone/80 italic">"{reason}"</div>
         </div>
-        <div className="text-xs text-bone/50 mb-6 leading-relaxed">
+        <div className="font-mono text-xs text-bone/50 mb-6 leading-relaxed">
           This payment exceeds the approval threshold you set on-chain. Without
           your signature it sits in the queue and never executes. The agent
           cannot bypass you.
@@ -2904,18 +2926,18 @@ function ApprovalSheet({
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={onDeny}
-            className="border border-rust text-rust py-4 uppercase tracking-widest text-sm hover:bg-rust hover:text-bone transition"
+            className="border border-rust text-rust font-mono py-4 uppercase tracking-widest text-sm hover:bg-rust hover:text-obsidian transition"
           >
-            Deny
+            deny
           </button>
           <button
             onClick={onApprove}
-            className="bg-gold text-ink py-4 uppercase tracking-widest text-sm hover:bg-bone transition"
+            className="bg-gold text-obsidian font-mono py-4 uppercase tracking-widest text-sm hover:bg-goldlit transition"
           >
-            Approve & sign
+            approve --sign
           </button>
         </div>
-      </div>
+      </TerminalPanel>
     </div>
   );
 }

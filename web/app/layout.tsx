@@ -1,22 +1,25 @@
 import type { Metadata } from "next";
-import { Oswald, Inter } from "next/font/google";
+import { Martian_Mono, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { SolanaWalletProvider } from "@/components/wallet-provider";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { PrivyAuthProvider } from "@/components/privy-provider";
 import { PosthogBootstrap } from "@/lib/posthog";
 import { PwaRegister } from "@/components/pwa-register";
+import { StatusHeader } from "@/components/terminal/status-header";
 
-// Cinematic-noir type system. Oswald = condensed title-sequence display;
-// Inter = clean body prose. Mono (system) stays for classified stamps + data.
-const display = Oswald({
+// Operator Console type system. Martian Mono = wide, technical, military display
+// (hero, panel numbers, section titles). IBM Plex Mono = the default voice for
+// the whole UI (body, readouts, commands) — the site is monospace end to end.
+const display = Martian_Mono({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["400", "600", "700", "800"],
   variable: "--font-display",
   display: "swap",
 });
-const sans = Inter({
+const mono = IBM_Plex_Mono({
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
   variable: "--font-sans",
   display: "swap",
 });
@@ -33,8 +36,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable}`}>
-      <body className="grain vignette min-h-screen scan-line font-sans antialiased">
+    <html lang="en" className={`${display.variable} ${mono.variable}`}>
+      <body className="grain min-h-screen scan-line font-sans antialiased">
+        <StatusHeader />
         <ErrorBoundary>
           <PosthogBootstrap />
           <PwaRegister />

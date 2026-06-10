@@ -1,5 +1,9 @@
 import Link from "next/link";
 import { Reveal } from "@/components/reveal";
+import { TerminalPanel } from "@/components/terminal/terminal-panel";
+import { Readout } from "@/components/terminal/readout";
+import { CommandLine } from "@/components/terminal/command-line";
+import { Caret } from "@/components/terminal/caret";
 
 export const metadata = {
   title: "SAW — Dashboard",
@@ -65,14 +69,14 @@ export default async function DashboardPage() {
 
   return (
     <main className="relative min-h-screen bg-obsidian px-4 sm:px-6 py-8 max-w-6xl mx-auto">
-      <header className="flex items-center justify-between mb-16 border-b border-ash/70 pb-4">
+      <header className="flex items-center justify-between mb-12 border-b border-ash pb-4">
         <Link
           href="/"
           className="font-display text-2xl tracking-[0.4em] uppercase text-bone hover:text-gold transition-colors"
         >
           S A W
         </Link>
-        <nav className="flex gap-6 text-sm uppercase tracking-widest text-bone/60">
+        <nav className="flex gap-6 font-mono text-xs uppercase tracking-widest text-bone/60">
           <Link href="/demo" className="hover:text-gold transition-colors">
             Demo
           </Link>
@@ -93,27 +97,36 @@ export default async function DashboardPage() {
         </nav>
       </header>
 
-      {/* HERO — title-card readout */}
-      <section className="relative mb-20">
-        <div className="flex items-center gap-3 mb-6 animate-intro">
-          <span
-            className="h-2 w-2 rounded-full bg-goldlit animate-glow-pulse shadow-glow"
-            aria-hidden
-          />
-          <p className="stamp">Public ledger · Devnet · Live telemetry</p>
+      {/* HERO — boot command + title-card readout */}
+      <section className="relative mb-16">
+        <div className="mb-6 animate-intro">
+          <CommandLine>
+            saw stats{" "}
+            <span className="text-gold/80">--scope</span> network{" "}
+            <span className="text-gold/80">--anon</span>
+          </CommandLine>
         </div>
+        <Readout
+          className="mb-7 animate-intro"
+          items={[
+            { label: "ledger", value: "public" },
+            { label: "cluster", value: "devnet", tone: "gold" },
+            { label: "feed", value: "live", tone: "phosphor" },
+          ]}
+        />
         <h1
-          className="font-display uppercase text-5xl sm:text-7xl md:text-8xl leading-[0.92] tracking-cinema text-bone animate-intro"
+          className="font-display uppercase text-4xl sm:text-6xl md:text-7xl leading-[0.92] tracking-cinema text-bone animate-intro"
           style={{ animationDelay: "120ms" }}
         >
           SAW in
           <br />
           <span className="text-goldlit text-glow drop-shadow-gold-lg">
-            numbers.
+            numbers
           </span>
+          <Caret className="ml-2 align-baseline" />
         </h1>
         <p
-          className="mt-8 max-w-2xl text-bone/55 leading-relaxed animate-intro"
+          className="mt-8 max-w-2xl text-bone/55 leading-relaxed font-mono text-sm animate-intro"
           style={{ animationDelay: "240ms" }}
         >
           Live, anonymized aggregate of every agent on the network. Aggregated
@@ -128,111 +141,122 @@ export default async function DashboardPage() {
 
       {stats ? (
         <>
-          <Reveal className="mb-6">
+          <Reveal className="mb-5">
             <div className="flex items-center gap-4">
-              <span className="font-display uppercase text-lg tracking-[0.25em] text-bone/70">
+              <span className="font-display uppercase text-base sm:text-lg tracking-[0.25em] text-bone/80">
                 Network telemetry
               </span>
-              <span className="h-px flex-1 bg-gradient-to-r from-ash/80 to-transparent" />
-              <span className="font-mono text-[10px] uppercase tracking-widest text-bone/30">
-                01 — primary
+              <span className="h-px flex-1 bg-gradient-to-r from-ash to-transparent" />
+              <span className="font-mono text-[10px] uppercase tracking-widest text-gold/60">
+                [01] primary
               </span>
             </div>
           </Reveal>
-          <section className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-ash/40 border border-ash/40 mb-16">
-            <Reveal delay={0} className="h-full">
-              <Card
-                index="00"
-                label="Handlers"
-                value={String(stats.handlers ?? 0)}
-                hint="unique sign-ins to date"
-              />
-            </Reveal>
-            <Reveal delay={80} className="h-full">
-              <Card
-                index="01"
-                label="Active operatives"
-                value={String(stats.activeAgents ?? 0)}
-                hint="auto-wake enabled"
-                live
-              />
-            </Reveal>
-            <Reveal delay={160} className="h-full">
-              <Card
-                index="02"
-                label="Wakes · 7d"
-                value={String(stats.wakes7d ?? 0)}
-                hint="cron + manual"
-              />
-            </Reveal>
-            <Reveal delay={240} className="h-full">
-              <Card
-                index="03"
-                label="Items executed"
-                value={String(stats.itemsExecuted ?? 0)}
-                hint="browser-dispatched · SOL leg on-chain"
-              />
-            </Reveal>
-          </section>
+          <TerminalPanel label="agents.live" className="mb-14">
+            <section className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-ash/40">
+              <Reveal delay={0} className="h-full">
+                <Card
+                  index="00"
+                  label="Handlers"
+                  value={String(stats.handlers ?? 0)}
+                  hint="unique sign-ins to date"
+                />
+              </Reveal>
+              <Reveal delay={80} className="h-full">
+                <Card
+                  index="01"
+                  label="Active operatives"
+                  value={String(stats.activeAgents ?? 0)}
+                  hint="auto-wake enabled"
+                  live
+                />
+              </Reveal>
+              <Reveal delay={160} className="h-full">
+                <Card
+                  index="02"
+                  label="Wakes · 7d"
+                  value={String(stats.wakes7d ?? 0)}
+                  hint="cron + manual"
+                />
+              </Reveal>
+              <Reveal delay={240} className="h-full">
+                <Card
+                  index="03"
+                  label="Items executed"
+                  value={String(stats.itemsExecuted ?? 0)}
+                  hint="browser-dispatched · SOL leg on-chain"
+                />
+              </Reveal>
+            </section>
+          </TerminalPanel>
 
-          <Reveal className="mb-6">
+          <Reveal className="mb-5">
             <div className="flex items-center gap-4">
-              <span className="font-display uppercase text-lg tracking-[0.25em] text-bone/70">
+              <span className="font-display uppercase text-base sm:text-lg tracking-[0.25em] text-bone/80">
                 Yield &amp; flow
               </span>
-              <span className="h-px flex-1 bg-gradient-to-r from-ash/80 to-transparent" />
-              <span className="font-mono text-[10px] uppercase tracking-widest text-bone/30">
-                02 — economics
+              <span className="h-px flex-1 bg-gradient-to-r from-ash to-transparent" />
+              <span className="font-mono text-[10px] uppercase tracking-widest text-gold/60">
+                [02] economics
               </span>
             </div>
           </Reveal>
-          <section className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-ash/40 border border-ash/40 mb-16">
-            <Reveal delay={0} className="h-full">
-              <Card
-                index="04"
-                label="Opportunities surfaced"
-                value={String(stats.opportunitiesSurfaced ?? 0)}
-                hint="proactive scans → cards"
-              />
-            </Reveal>
-            <Reveal delay={80} className="h-full">
-              <Card
-                index="05"
-                label="Total fees · all time"
-                value={`${lamportsToSol(stats.totalFeesLamports ?? 0)} SOL`}
-                hint={`${lamportsToSol(stats.fees24hLamports ?? 0)} SOL in last 24h`}
-                emphasis
-              />
-            </Reveal>
-            <Reveal delay={160} className="h-full">
-              <Card
-                index="06"
-                label="SAW credits sold"
-                value={`${lamportsToSol(stats.creditsTopupLamports ?? 0)} SOL`}
-                hint={`${stats.creditsRemaining ?? 0} calls still unused`}
-              />
-            </Reveal>
-          </section>
+          <TerminalPanel label="fee_ledger.agg" className="mb-14">
+            <section className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-ash/40">
+              <Reveal delay={0} className="h-full">
+                <Card
+                  index="04"
+                  label="Opportunities surfaced"
+                  value={String(stats.opportunitiesSurfaced ?? 0)}
+                  hint="proactive scans → cards"
+                />
+              </Reveal>
+              <Reveal delay={80} className="h-full">
+                <Card
+                  index="05"
+                  label="Total fees · all time"
+                  value={`${lamportsToSol(stats.totalFeesLamports ?? 0)} SOL`}
+                  hint={`${lamportsToSol(stats.fees24hLamports ?? 0)} SOL in last 24h`}
+                  emphasis
+                />
+              </Reveal>
+              <Reveal delay={160} className="h-full">
+                <Card
+                  index="06"
+                  label="SAW credits sold"
+                  value={`${lamportsToSol(stats.creditsTopupLamports ?? 0)} SOL`}
+                  hint={`${stats.creditsRemaining ?? 0} calls still unused`}
+                />
+              </Reveal>
+            </section>
+          </TerminalPanel>
         </>
       ) : (
         <Reveal>
-          <section className="relative border border-rust/40 bg-ink/40 p-6 mb-16">
-            <p className="stamp mb-3 text-rust">Signal lost</p>
-            <p className="text-bone/60 text-sm">
-              Stats endpoint unavailable. Try refreshing in a few seconds.
-            </p>
-          </section>
+          <TerminalPanel label="signal" className="mb-14 border-rust/50">
+            <div className="p-6">
+              <p className="stamp mb-3 text-rust border-rust/50">Signal lost</p>
+              <p className="text-bone/60 text-sm font-mono">
+                Stats endpoint unavailable. Try refreshing in a few seconds.
+              </p>
+            </div>
+          </TerminalPanel>
         </Reveal>
       )}
 
       <Reveal>
-        <section className="relative border border-ash/60 bg-ink/40 p-6 sm:p-8 mb-16 overflow-hidden">
+        <TerminalPanel label="methodology" className="mb-14">
+          <section className="relative p-6 sm:p-8 overflow-hidden">
           <span
             className="pointer-events-none absolute inset-y-0 left-0 w-px bg-gradient-to-b from-gold/60 via-gold/10 to-transparent"
             aria-hidden
           />
-          <p className="stamp mb-5">Methodology</p>
-          <p className="text-bone/70 text-sm leading-relaxed mb-4 max-w-3xl">
+          <div className="mb-5">
+            <CommandLine prompt="#">
+              <span className="text-bone/60">man saw-stats</span>
+            </CommandLine>
+          </div>
+          <p className="text-bone/70 text-sm leading-relaxed mb-4 max-w-3xl font-mono">
             Numbers update at most once per minute (cache). Each agent runs on a
             cron-based wake cycle (default 1h, configurable) — see{" "}
             <a
@@ -245,7 +269,7 @@ export default async function DashboardPage() {
             </a>
             .
           </p>
-          <p className="text-bone/45 text-xs leading-relaxed max-w-3xl">
+          <p className="text-bone/45 text-xs leading-relaxed max-w-3xl font-mono">
             Fees: 55 bps on agent-executed swaps (devnet mock leg), collected
             today. The 5% net-weekly-PnL and 1% APY AUM lines are modeled and
             land when portfolio accounting ships. See{" "}
@@ -259,15 +283,16 @@ export default async function DashboardPage() {
             </a>
             .
           </p>
-        </section>
+          </section>
+        </TerminalPanel>
       </Reveal>
 
-      <footer className="flex items-center gap-3 border-t border-ash/40 pt-5 font-mono text-[11px] uppercase tracking-widest text-bone/40">
-        <span className="text-gold/70">●</span>
+      <footer className="flex items-center gap-3 border-t border-ash pt-5 font-mono text-[11px] uppercase tracking-widest text-bone/40">
+        <span className="text-phosphor">●</span>
         Devnet · v1 build in progress
         {stats?.updatedAt && (
           <>
-            <span className="text-bone/20">·</span>
+            <span className="text-ash">·</span>
             <span>updated {new Date(stats.updatedAt).toLocaleTimeString()}</span>
           </>
         )}
@@ -294,13 +319,13 @@ function Card({
   return (
     <div className="group relative h-full bg-obsidian p-6 transition-colors hover:bg-ink/60">
       {/* corner index — classified telemetry tag */}
-      <span className="absolute top-4 right-5 font-mono text-[10px] tracking-widest text-bone/25">
-        {index}
+      <span className="absolute top-4 right-5 font-mono text-[10px] tracking-widest text-gold/30">
+        [{index}]
       </span>
       <div className="flex items-center gap-2 mb-4">
         {live && (
           <span
-            className="h-1.5 w-1.5 rounded-full bg-goldlit shadow-glow animate-glow-pulse"
+            className="h-1.5 w-1.5 rounded-full bg-phosphor shadow-glow animate-glow-pulse"
             aria-hidden
           />
         )}

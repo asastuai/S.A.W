@@ -51,6 +51,43 @@ export function Mascot({
       className={`sawm-root relative inline-block max-w-full ${floatClass}`}
       style={{ width: size, height: size }}
     >
+      {/* Operator avatar reticule — corner brackets framing the operative as a
+          terminal video feed. Pure chrome; does not affect pose logic. */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute left-0 top-0 z-20 font-mono text-[10px] leading-none text-gold/40"
+      >
+        ┌
+      </span>
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute right-0 top-0 z-20 font-mono text-[10px] leading-none text-gold/40"
+      >
+        ┐
+      </span>
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 left-0 z-20 font-mono text-[10px] leading-none text-gold/40"
+      >
+        └
+      </span>
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 right-0 z-20 font-mono text-[10px] leading-none text-gold/40"
+      >
+        ┘
+      </span>
+
+      {/* Live-feed status tag — phosphor when active, dimmed when asleep. */}
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute -top-3 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap font-mono text-[8px] uppercase tracking-[0.25em] ${
+          pose === "sleeping" ? "text-bone/30" : "text-phosphor"
+        }`}
+      >
+        {pose === "sleeping" ? "◦ standby" : `● op·${pose}`}
+      </span>
+
       {/* EXECUTING active accent — pulsing ring + an orbiting scan dot */}
       {showExecRing && (
         <>
@@ -123,15 +160,15 @@ export function Mascot({
         {/* collar / coat */}
         <path
           d="M 28 82 Q 50 76 72 82 L 74 100 L 26 100 Z"
-          fill="#1a1a1a"
-          stroke="#c9a96e"
+          fill="#14161b"
+          stroke="#f0b429"
           strokeWidth="0.8"
         />
         {/* collar lapels (subtle V) */}
         <path
           d="M 42 80 L 50 88 L 58 80"
           fill="none"
-          stroke="#c9a96e"
+          stroke="#f0b429"
           strokeWidth="0.6"
           opacity="0.6"
         />
@@ -141,42 +178,42 @@ export function Mascot({
           cx="50"
           cy="55"
           r="20"
-          fill="#1a1a1a"
-          stroke="#c9a96e"
+          fill="#14161b"
+          stroke="#f0b429"
           strokeWidth="0.8"
         />
 
         {/* hat brim */}
-        <ellipse cx="50" cy="34" rx="30" ry="3" fill="#0a0a0a" stroke="#c9a96e" strokeWidth="0.8" />
+        <ellipse cx="50" cy="34" rx="30" ry="3" fill="#0c0d11" stroke="#f0b429" strokeWidth="0.8" />
         {/* hat crown */}
         <path
           d="M 35 34 L 36 14 Q 36 11 39 11 L 61 11 Q 64 11 64 14 L 65 34 Z"
-          fill="#0a0a0a"
-          stroke="#c9a96e"
+          fill="#0c0d11"
+          stroke="#f0b429"
           strokeWidth="0.8"
         />
         {/* hat band */}
-        <rect x="35" y="29" width="30" height="3" fill="#c9a96e" opacity="0.5" />
+        <rect x="35" y="29" width="30" height="3" fill="#f0b429" opacity="0.5" />
 
         {/* eyes — group blinks */}
         <g className="origin-center animate-mascot-blink" style={{ transformOrigin: "50px 53px" }}>
-          <circle cx="43" cy="53" r="2" fill="#c9a96e" />
-          <circle cx="57" cy="53" r="2" fill="#c9a96e" />
+          <circle cx="43" cy="53" r="2" fill="#f0b429" />
+          <circle cx="57" cy="53" r="2" fill="#f0b429" />
           {/* eye glints */}
-          <circle cx="43.7" cy="52.3" r="0.6" fill="#e8e4d8" />
-          <circle cx="57.7" cy="52.3" r="0.6" fill="#e8e4d8" />
+          <circle cx="43.7" cy="52.3" r="0.6" fill="#d6d2c4" />
+          <circle cx="57.7" cy="52.3" r="0.6" fill="#d6d2c4" />
         </g>
 
         {/* mouth — changes by pose */}
         {pose === "speaking" ? (
-          <ellipse cx="50" cy="64" rx="3" ry="2" fill="#0a0a0a" stroke="#c9a96e" strokeWidth="0.5" />
+          <ellipse cx="50" cy="64" rx="3" ry="2" fill="#0c0d11" stroke="#f0b429" strokeWidth="0.5" />
         ) : pose === "thinking" ? (
-          <line x1="46" y1="64" x2="54" y2="64" stroke="#c9a96e" strokeWidth="0.8" />
+          <line x1="46" y1="64" x2="54" y2="64" stroke="#f0b429" strokeWidth="0.8" />
         ) : (
           <path
             d="M 46 64 Q 50 65.5 54 64"
             fill="none"
-            stroke="#c9a96e"
+            stroke="#f0b429"
             strokeWidth="0.8"
             strokeLinecap="round"
           />
@@ -187,7 +224,7 @@ export function Mascot({
           <text
             x="50"
             y="93"
-            fill="#c9a96e"
+            fill="#f0b429"
             fontFamily="serif"
             fontSize="6"
             textAnchor="middle"
@@ -325,16 +362,16 @@ export function Mascot({
         @keyframes sawm-exec-bright {
           0%,
           100% {
-            filter: drop-shadow(0 0 0 rgba(201, 169, 110, 0));
+            filter: drop-shadow(0 0 0 rgba(240, 180, 41, 0));
           }
           50% {
-            filter: drop-shadow(0 0 5px rgba(201, 169, 110, 0.65));
+            filter: drop-shadow(0 0 5px rgba(240, 180, 41, 0.65));
           }
         }
 
         /* executing — pulsing accent ring */
         .sawm-exec-ring {
-          border: 1px solid rgba(201, 169, 110, 0.5);
+          border: 1px solid rgba(240, 180, 41, 0.5);
           animation: sawm-exec-ring 1.2s ease-out infinite;
         }
         @keyframes sawm-exec-ring {
@@ -361,12 +398,12 @@ export function Mascot({
           }
         }
         .sawm-exec-dot {
-          box-shadow: 0 0 5px rgba(201, 169, 110, 0.8);
+          box-shadow: 0 0 5px rgba(240, 180, 41, 0.8);
         }
 
         /* listening — slow attentive ring that draws focus inward */
         .sawm-listen-ring {
-          border: 1px solid rgba(201, 169, 110, 0.4);
+          border: 1px solid rgba(240, 180, 41, 0.4);
           animation: sawm-listen-ring 2.6s ease-in-out infinite;
         }
         @keyframes sawm-listen-ring {
@@ -389,11 +426,11 @@ export function Mascot({
           0%,
           100% {
             opacity: 0.6;
-            text-shadow: 0 0 0 rgba(201, 169, 110, 0);
+            text-shadow: 0 0 0 rgba(240, 180, 41, 0);
           }
           50% {
             opacity: 1;
-            text-shadow: 0 0 8px rgba(201, 169, 110, 0.6);
+            text-shadow: 0 0 8px rgba(240, 180, 41, 0.6);
           }
         }
 

@@ -1,0 +1,23 @@
+feat(design): Operator Console reskin across land + demo
+
+Full from-scratch reskin to a terminal-operator aesthetic. Skin only —
+backend, logic, props, and on-chain wiring untouched (tsc + next build green).
+
+Foundation:
+- Fonts: Oswald/Inter -> Martian Mono (display) + IBM Plex Mono (body/mono).
+- Tokens (same names, new values): gold -> electric amber #f0b429, added
+  phosphor #5ad19a; obsidian/ink/smoke/ash/bone/rust retuned. Removed vignette.
+- Terminal chrome components: StatusHeader (live timecode), BootSequence,
+  Caret, Readout, CommandLine, TerminalPanel.
+
+Pages:
+- Landing: hero = boot sequence + prompt, protocol panels [01][02][03],
+  ship log as `git log`, dossier as `--help` manifest.
+- Demo: the real console — chat = interactive terminal, reel = `tail -f intel`,
+  schedule = cron jobs, handler controls = OVERRIDE PANEL.
+- Secondary pages (dashboard/press/treasury/agent/connect) adopt the chrome.
+
+Built by a multi-agent team (1 foundation + 5 parallel page agents + 1 verify).
+Spec: docs/superpowers/specs/2026-06-10-saw-operator-console-redesign.md
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>

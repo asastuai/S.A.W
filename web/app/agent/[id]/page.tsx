@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { Reveal } from "@/components/reveal";
+import { TerminalPanel } from "@/components/terminal/terminal-panel";
+import { Readout } from "@/components/terminal/readout";
+import { CommandLine } from "@/components/terminal/command-line";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 30;
@@ -99,14 +102,14 @@ export default async function AgentProfilePage({
 
   return (
     <main className="relative min-h-screen bg-obsidian px-4 sm:px-6 py-8 max-w-5xl mx-auto overflow-hidden">
-      <header className="flex items-center justify-between mb-16 border-b border-ash/60 pb-4">
+      <header className="flex items-center justify-between mb-14 border-b border-ash pb-4">
         <Link
           href="/"
           className="font-display text-2xl tracking-[0.35em] uppercase hover:text-gold transition-colors"
         >
           S A W
         </Link>
-        <nav className="flex gap-6 text-sm uppercase tracking-widest text-bone/60">
+        <nav className="flex gap-6 font-mono text-xs uppercase tracking-widest text-bone/60">
           <Link href="/demo" className="hover:text-gold transition-colors">Demo</Link>
           <Link href="/dashboard" className="hover:text-gold transition-colors">Dashboard</Link>
           <Link href="/treasury" className="hover:text-gold transition-colors">Treasury</Link>
@@ -133,6 +136,27 @@ export default async function AgentProfilePage({
               {agent.active ? "Status · Active" : "Status · Dormant"}
             </span>
           </div>
+
+          <div className="mb-5 animate-intro" style={{ animationDelay: "80ms" }}>
+            <CommandLine>
+              whoami{" "}
+              <span className="text-gold/80">--id</span>{" "}
+              <span className="text-bone/70">{agent.id.slice(0, 8)}</span>
+            </CommandLine>
+          </div>
+
+          <Readout
+            className="mb-6 animate-intro"
+            items={[
+              { label: "persona", value: agent.persona, tone: "gold" },
+              { label: "cluster", value: "devnet" },
+              {
+                label: "auto-wake",
+                value: agent.active ? "online" : "silent",
+                tone: agent.active ? "phosphor" : "bone",
+              },
+            ]}
+          />
 
           <div
             className="flex items-start gap-4 sm:gap-6 mb-4 animate-intro"
@@ -175,11 +199,13 @@ export default async function AgentProfilePage({
       </section>
 
       {/* OPERATIVE RECORD — field stats */}
-      <Reveal className="mb-16">
-        <div className="flex items-center gap-4 mb-6">
+      <Reveal className="mb-14">
+        <div className="flex items-center gap-4 mb-5">
+          <span className="font-mono text-xs text-gold/60 tracking-widest">[ps]</span>
           <p className="stamp">Operative Record</p>
           <span className="h-px flex-1 bg-gradient-to-r from-gold/40 to-transparent" />
         </div>
+        <TerminalPanel label="record.field">
         <section className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-ash/40">
           <Card index="01" label="Wakes" value={String(stats.wakes)} />
           <Card index="02" label="Items executed" value={`${stats.itemsDone} / ${stats.itemsTotal}`} />
@@ -206,27 +232,35 @@ export default async function AgentProfilePage({
             hint={agent.active ? "auto-wake interval" : "silent mode"}
           />
         </section>
+        </TerminalPanel>
       </Reveal>
 
       {/* ON-CHAIN IDENTITIES — classified ledger */}
       <Reveal delay={120} className="mb-10">
-        <section className="relative border border-ash/70 bg-gradient-to-b from-smoke/40 to-transparent p-6 sm:p-8 shadow-glow">
-          <span
-            aria-hidden
-            className="absolute left-0 top-0 h-full w-px bg-gradient-to-b from-gold/60 via-gold/20 to-transparent"
-          />
-          <div className="flex items-center gap-4 mb-6">
-            <p className="stamp">On-chain identities</p>
-            <span className="h-px flex-1 bg-gradient-to-r from-ash to-transparent" />
-          </div>
-          <div className="space-y-3 text-xs">
-            <Row label="Agent keypair" value={agent.agent_pubkey} />
-            <Row label="Wallet PDA" value={agent.wallet_pda} />
-          </div>
-        </section>
+        <div className="flex items-center gap-4 mb-5">
+          <span className="font-mono text-xs text-gold/60 tracking-widest">[id]</span>
+          <p className="stamp">On-chain identities</p>
+          <span className="h-px flex-1 bg-gradient-to-r from-ash to-transparent" />
+        </div>
+        <TerminalPanel
+          label="keys"
+          className="relative bg-gradient-to-b from-smoke/40 to-transparent shadow-glow"
+        >
+          <section className="relative p-6 sm:p-8">
+            <span
+              aria-hidden
+              className="absolute left-0 top-0 h-full w-px bg-gradient-to-b from-gold/60 via-gold/20 to-transparent"
+            />
+            <div className="space-y-3 text-xs">
+              <Row label="Agent keypair" value={agent.agent_pubkey} />
+              <Row label="Wallet PDA" value={agent.wallet_pda} />
+            </div>
+          </section>
+        </TerminalPanel>
       </Reveal>
 
-      <footer className="font-mono text-xs uppercase tracking-[0.25em] text-bone/30 border-t border-ash/40 pt-4">
+      <footer className="flex items-center gap-3 font-mono text-xs uppercase tracking-[0.25em] text-bone/30 border-t border-ash pt-4">
+        <span className="text-phosphor">●</span>
         Public, anonymized. Handler identity never shown.
       </footer>
     </main>

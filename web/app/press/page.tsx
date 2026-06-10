@@ -1,5 +1,9 @@
 import Link from "next/link";
 import { Reveal } from "@/components/reveal";
+import { TerminalPanel } from "@/components/terminal/terminal-panel";
+import { Readout } from "@/components/terminal/readout";
+import { CommandLine } from "@/components/terminal/command-line";
+import { Caret } from "@/components/terminal/caret";
 
 export const metadata = {
   title: "SAW — Press Kit",
@@ -11,14 +15,14 @@ export default function PressPage() {
   return (
     <main className="relative min-h-screen bg-obsidian">
       <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto">
-        <header className="flex items-center justify-between mb-16 border-b border-ash/70 pb-4">
+        <header className="flex items-center justify-between mb-14 border-b border-ash pb-4">
           <Link
             href="/"
             className="font-display text-2xl tracking-[0.35em] text-bone hover:text-gold transition-colors"
           >
             S A W
           </Link>
-          <nav className="flex gap-6 text-sm uppercase tracking-widest text-bone/60">
+          <nav className="flex gap-6 font-mono text-xs uppercase tracking-widest text-bone/60">
             <Link href="/demo" className="hover:text-gold transition-colors">Demo</Link>
             <Link href="/dashboard" className="hover:text-gold transition-colors">Dashboard</Link>
             <Link href="/treasury" className="hover:text-gold transition-colors">Treasury</Link>
@@ -27,7 +31,7 @@ export default function PressPage() {
         </header>
 
         {/* DOSSIER COVER — title card */}
-        <section className="relative mb-24">
+        <section className="relative mb-20">
           <div className="flex items-center gap-4 mb-6 animate-intro" style={{ animationDelay: "60ms" }}>
             <span className="stamp text-gold/90 border border-gold/30 px-3 py-1">
               Classified — Eyes only
@@ -37,35 +41,42 @@ export default function PressPage() {
             </span>
           </div>
 
-          <p
-            className="stamp mb-5 text-bone/55 animate-intro"
+          <div
+            className="mb-6 animate-intro"
             style={{ animationDelay: "120ms" }}
           >
-            For evaluators, press, and design partners
-          </p>
+            <CommandLine>
+              cat press-kit.md{" "}
+              <span className="text-gold/80">--audience</span> evaluators,press,partners
+            </CommandLine>
+          </div>
 
           <h1
-            className="font-display uppercase text-5xl sm:text-7xl md:text-8xl leading-[0.92] tracking-cinema text-bone animate-intro"
+            className="font-display uppercase text-4xl sm:text-6xl md:text-7xl leading-[0.92] tracking-cinema text-bone animate-intro"
             style={{ animationDelay: "180ms" }}
           >
             Press{" "}
             <span className="text-goldlit text-glow drop-shadow-gold-lg animate-glow-pulse">
               kit
             </span>
-            .
+            <Caret className="ml-2 align-baseline" />
           </h1>
 
           <p
-            className="mt-7 text-bone/65 max-w-2xl text-lg leading-relaxed animate-intro"
+            className="mt-7 text-bone/65 max-w-2xl text-base leading-relaxed font-mono animate-intro"
             style={{ animationDelay: "260ms" }}
           >
             SAW is the missing wallet layer for AI agents on Solana. One sentence,
             one demo, one repo, public on devnet.
           </p>
 
-          <div
-            className="mt-8 h-px w-40 bg-gradient-to-r from-gold/70 to-transparent animate-intro"
-            style={{ animationDelay: "340ms" }}
+          <Readout
+            className="mt-8 animate-intro"
+            items={[
+              { label: "build", value: "v1.3", tone: "gold" },
+              { label: "cluster", value: "devnet" },
+              { label: "status", value: "public", tone: "phosphor" },
+            ]}
           />
         </section>
 
@@ -236,9 +247,12 @@ export default function PressPage() {
           </Reveal>
         </div>
 
-        <footer className="text-bone/40 text-xs mt-20 pt-6 border-t border-ash/70 flex items-center justify-between font-mono uppercase tracking-widest">
-          <span>Updated 2026-06-04 · v1.3</span>
-          <span className="text-gold/40">End of dossier</span>
+        <footer className="text-bone/40 text-xs mt-20 pt-6 border-t border-ash flex items-center justify-between font-mono uppercase tracking-widest">
+          <span className="flex items-center gap-2">
+            <span className="text-phosphor">●</span>
+            Updated 2026-06-04 · v1.3
+          </span>
+          <span className="text-gold/50">EOF · end of dossier</span>
         </footer>
       </div>
     </main>
@@ -257,13 +271,15 @@ function Section({
   return (
     <section>
       <div className="flex items-baseline gap-4 mb-5">
-        <span className="font-mono text-xs text-gold/50 tracking-widest pt-1">{index}</span>
-        <h2 className="font-display uppercase text-2xl sm:text-3xl tracking-cinema text-bone leading-none">
+        <span className="font-mono text-xs text-gold/60 tracking-widest pt-1">[{index}]</span>
+        <h2 className="font-display uppercase text-xl sm:text-2xl tracking-cinema text-bone leading-none">
           {title}
         </h2>
-        <span className="hidden sm:block flex-1 h-px bg-gradient-to-r from-ash/60 to-transparent self-center" />
+        <span className="hidden sm:block flex-1 h-px bg-gradient-to-r from-ash to-transparent self-center" />
       </div>
-      <div className="pl-0 sm:pl-9">{children}</div>
+      <TerminalPanel label={`§${index}`}>
+        <div className="p-5 sm:p-7">{children}</div>
+      </TerminalPanel>
     </section>
   );
 }

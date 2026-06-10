@@ -6,6 +6,7 @@ import type { ScheduleItem, ScheduleStatus } from "@/lib/schedule";
 import { describeTrigger, summarize } from "@/lib/schedule";
 import { DEMO_DECIMALS } from "@/lib/saw";
 import { CreatorNote } from "@/components/creator-note";
+import { Caret } from "@/components/terminal/caret";
 
 const AGENT_WALLET_PROGRAM = AGENT_WALLET_PROGRAM_ID.toBase58();
 const shortKey = (k: string) => `${k.slice(0, 4)}…${k.slice(-4)}`;
@@ -55,20 +56,40 @@ export function ScheduleView({
     .sort((a, b) => b.scheduledFor - a.scheduledFor);
 
   return (
-    <div className="border border-ash bg-ink">
+    <div className="relative border border-ash bg-ink">
+      {/* Corner bracket marks — TUI frame for the crontab view. */}
+      <span aria-hidden="true" className="pointer-events-none absolute -left-px -top-px font-mono text-[10px] leading-none text-gold/40">┌</span>
+      <span aria-hidden="true" className="pointer-events-none absolute -right-px -top-px font-mono text-[10px] leading-none text-gold/40">┐</span>
+      <span aria-hidden="true" className="pointer-events-none absolute -bottom-px -left-px font-mono text-[10px] leading-none text-gold/40">└</span>
+      <span aria-hidden="true" className="pointer-events-none absolute -bottom-px -right-px font-mono text-[10px] leading-none text-gold/40">┘</span>
+
       <div className="border-b border-ash px-4 py-3 flex items-start justify-between gap-3">
         <div>
-          <div className="text-xs uppercase tracking-widest text-gold flex items-center gap-2">
-            Today's schedule
+          <div className="font-mono text-xs text-gold flex items-center gap-2">
+            <span className="select-none text-gold/60">$</span>
+            saw jobs <span className="text-bone/70">--list</span>
+            <Caret />
             <CreatorNote
               text="Two views now: the list, and a horizontal timeline of what's queued (toggle top-right). Hover or tap ⊙ a queued item to preview the exact on-chain instruction it will fire — program, instruction, recipient, amount in base units, and whether it auto-executes or routes to your signature. Items are ordered by schedule time; move one by editing its trigger."
               position="bottom-right"
             />
           </div>
-          <div className="text-xs text-bone/50 mt-0.5">
-            {stats.queued} queued · {stats.done} done
-            {stats.awaiting > 0 ? ` · ${stats.awaiting} awaiting you` : ""}
-            {stats.failed > 0 ? ` · ${stats.failed} failed` : ""}
+          <div className="font-mono text-xs text-bone/50 mt-1 flex flex-wrap gap-x-1.5">
+            <span><span className="text-phosphor">{stats.queued}</span> queued</span>
+            <span className="text-ash">·</span>
+            <span><span className="text-gold/70">{stats.done}</span> done</span>
+            {stats.awaiting > 0 && (
+              <>
+                <span className="text-ash">·</span>
+                <span className="text-rust">{stats.awaiting} awaiting you</span>
+              </>
+            )}
+            {stats.failed > 0 && (
+              <>
+                <span className="text-ash">·</span>
+                <span className="text-rust/70">{stats.failed} failed</span>
+              </>
+            )}
           </div>
         </div>
         <div className="flex border border-ash shrink-0">
@@ -76,7 +97,7 @@ export function ScheduleView({
             <button
               key={v}
               onClick={() => setView(v)}
-              className={`text-[10px] uppercase tracking-widest px-2.5 py-1 transition ${
+              className={`font-mono text-[10px] uppercase tracking-widest px-2.5 py-1 transition ${
                 view === v
                   ? "bg-gold text-ink"
                   : "text-bone/50 hover:text-gold"
@@ -90,13 +111,17 @@ export function ScheduleView({
 
       <div className="p-4 space-y-2 max-h-[600px] overflow-y-auto">
         {upcoming.length === 0 && past.length === 0 && (
-          <div className="text-center py-10 px-4">
-            <div className="text-4xl text-bone/20 mb-3">∅</div>
-            <div className="text-bone/60 text-sm mb-2">No items scheduled yet.</div>
-            <div className="text-bone/40 text-xs leading-relaxed max-w-xs mx-auto">
-              Try: <span className="text-gold">"buy 0.05 SOL if it dips 1%"</span>{" "}
-              or <span className="text-gold">"swap 30 USDC for BONK now"</span> in
-              the chat.
+          <div className="py-8 px-2 font-mono">
+            <div className="text-bone/40 text-xs mb-1">
+              <span className="text-gold/60 mr-1">$</span>saw jobs --list
+            </div>
+            <div className="text-bone/60 text-xs mb-3">
+              <span className="text-bone/30 mr-1">&gt;</span>crontab is empty · 0 jobs queued
+            </div>
+            <div className="text-bone/40 text-xs leading-relaxed">
+              <span className="text-phosphor"># hint:</span> drop a job from the chat —{" "}
+              <span className="text-gold">"buy 0.05 SOL if it dips 1%"</span>{" "}
+              or <span className="text-gold">"swap 30 USDC for BONK now"</span>.
             </div>
           </div>
         )}
@@ -127,8 +152,8 @@ export function ScheduleView({
 
         {past.length > 0 && (
           <>
-            <div className="text-xs uppercase tracking-widest text-bone/30 pt-3 pb-1 border-t border-ash mt-3">
-              Done · {past.length}
+            <div className="font-mono text-xs text-bone/30 pt-3 pb-1 border-t border-ash mt-3">
+              <span className="text-bone/40"># </span>history · {past.length} exited
             </div>
             {past.slice(0, 12).map((item) => (
               <Row
@@ -220,22 +245,22 @@ function Row({
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
             {item.jupiterSwap && (
-              <span className="text-gold text-xs uppercase tracking-widest border border-gold/40 px-1.5 py-0.5 bg-gold/10">
+              <span className="font-mono text-gold text-xs uppercase tracking-widest border border-gold/40 px-1.5 py-0.5 bg-gold/10">
                 ⇄ jupiter
               </span>
             )}
             {!item.jupiterSwap && item.toAddress && (
-              <span className="text-gold text-xs uppercase tracking-widest border border-gold/40 px-1.5 py-0.5">
+              <span className="font-mono text-gold text-xs uppercase tracking-widest border border-gold/40 px-1.5 py-0.5">
                 ↗ transfer
               </span>
             )}
             {!item.toAddress && !item.jupiterSwap && item.vendor.toUpperCase().startsWith("SWAP") && (
-              <span className="text-gold text-xs uppercase tracking-widest border border-gold/40 px-1.5 py-0.5">
+              <span className="font-mono text-gold text-xs uppercase tracking-widest border border-gold/40 px-1.5 py-0.5">
                 ⇄ swap
               </span>
             )}
             {isYieldPick && (
-              <span className="text-gold text-xs uppercase tracking-widest border border-gold/40 px-1.5 py-0.5 bg-gold/10">
+              <span className="font-mono text-gold text-xs uppercase tracking-widest border border-gold/40 px-1.5 py-0.5 bg-gold/10">
                 ✦ yield · {aprMatch![1]}%
               </span>
             )}
@@ -247,12 +272,14 @@ function Row({
               {isYieldPick && projectName ? projectName : item.vendor}
             </span>
             {overThreshold && item.status === "queued" && (
-              <span className="text-rust text-[10px] uppercase tracking-widest">
+              <span className="font-mono text-rust text-[10px] uppercase tracking-widest">
                 ⚠ over threshold
               </span>
             )}
           </div>
-          <div className="text-bone/50 text-xs italic mt-0.5">"{item.reason}"</div>
+          <div className="font-mono text-bone/50 text-xs mt-0.5">
+            <span className="text-bone/30 select-none"># </span>{item.reason}
+          </div>
           {item.toAddress && (
             <div className="text-bone/40 text-[10px] mt-0.5 font-mono">
               to{" "}
@@ -267,17 +294,19 @@ function Row({
             </div>
           )}
           {conditional && isUpcoming && (
-            <div className="text-gold/70 text-xs mt-1">▸ {describeTrigger(item)}</div>
+            <div className="font-mono text-gold/70 text-xs mt-1">▸ watch: {describeTrigger(item)}</div>
           )}
           {item.errorMsg && (
-            <div className="text-rust text-xs mt-1">{item.errorMsg}</div>
+            <div className="font-mono text-rust text-xs mt-1">
+              <span className="text-rust/60 select-none">! </span>{item.errorMsg}
+            </div>
           )}
           {showPreview && (
             <TxPreview item={item} overThreshold={overThreshold} />
           )}
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
-          <span className="text-bone/60 text-xs">{timeText}</span>
+          <span className="font-mono text-bone/60 text-xs">{timeText}</span>
           {statusBadge}
           {item.sig && (
             <a
@@ -294,37 +323,37 @@ function Row({
               onClick={() => setPinned((p) => !p)}
               aria-pressed={pinned}
               title="Preview the on-chain tx that will fire"
-              className={`text-[10px] uppercase tracking-widest px-2 py-1 border transition ${
+              className={`font-mono text-[10px] uppercase tracking-widest px-2 py-1 border transition ${
                 pinned || hovered
                   ? "text-gold border-gold/60 bg-gold/10"
                   : "text-bone/50 border-bone/30 hover:text-gold hover:border-gold/60"
               }`}
             >
-              ⊙ preview tx
+              ⊙ --dry-run
             </button>
           )}
           {!readOnly && isUpcoming && item.status === "queued" && onExecute && (
             <button
               onClick={() => onExecute(item.id)}
-              className="text-gold border border-gold/60 hover:bg-gold hover:text-ink text-[10px] uppercase tracking-widest px-2 py-1 transition"
+              className="font-mono text-gold border border-gold/60 hover:bg-gold hover:text-ink text-[10px] uppercase tracking-widest px-2 py-1 transition"
             >
-              ▶ execute now
+              ▶ run --now
             </button>
           )}
           {!readOnly && isUpcoming && item.status === "queued" && onRemove && (
             <button
               onClick={() => onRemove(item.id)}
-              className="text-rust/80 border border-rust/50 hover:bg-rust hover:text-ink text-[10px] uppercase tracking-widest px-2 py-1 transition"
+              className="font-mono text-rust/80 border border-rust/50 hover:bg-rust hover:text-ink text-[10px] uppercase tracking-widest px-2 py-1 transition"
             >
-              ✕ cancel
+              ✕ kill
             </button>
           )}
           {!readOnly && !isUpcoming && onRemove && (
             <button
               onClick={() => onRemove(item.id)}
-              className="text-bone/40 border border-bone/20 hover:border-rust hover:text-rust text-[10px] uppercase tracking-widest px-2 py-1 transition"
+              className="font-mono text-bone/40 border border-bone/20 hover:border-rust hover:text-rust text-[10px] uppercase tracking-widest px-2 py-1 transition"
             >
-              ✕ clear
+              ✕ rm
             </button>
           )}
         </div>
@@ -378,9 +407,10 @@ function TxPreview({
     : { warn: false, text: "auto · within daily + per-tx caps" };
 
   return (
-    <div className="mt-2 border border-gold/30 bg-ink/60 p-2 text-[10px] font-mono leading-relaxed animate-fade-in">
-      <div className="text-gold/70 uppercase tracking-widest mb-1 not-italic">
-        tx preview · simulated, signs on execute
+    <div className="mt-2 border border-gold/30 bg-obsidian/60 p-2 text-[10px] font-mono leading-relaxed animate-fade-in">
+      <div className="text-gold/70 uppercase tracking-widest mb-1.5 not-italic border-b border-gold/15 pb-1">
+        <span className="text-gold/50">$</span> saw tx --dry-run{" "}
+        <span className="text-bone/40 normal-case tracking-normal">// simulated, signs on execute</span>
       </div>
       <Kv k="program" v={program} />
       <Kv k="ix" v={instruction} />
@@ -500,7 +530,7 @@ function TimelineNode({
           className={`w-3.5 h-3.5 rounded-full border border-ink z-10 ${dotCls}`}
         />
       </div>
-      <div className="text-center text-[10px] uppercase tracking-widest text-bone/50 mb-2">
+      <div className="text-center font-mono text-[10px] uppercase tracking-widest text-bone/50 mb-2">
         {timeText}
       </div>
       <div
@@ -514,15 +544,15 @@ function TimelineNode({
       >
         <div className="flex items-center gap-1 mb-1 flex-wrap">
           {item.jupiterSwap ? (
-            <span className="text-gold text-[9px] uppercase tracking-widest border border-gold/40 px-1 bg-gold/10">
+            <span className="font-mono text-gold text-[9px] uppercase tracking-widest border border-gold/40 px-1 bg-gold/10">
               ⇄ jup
             </span>
           ) : item.toAddress ? (
-            <span className="text-gold text-[9px] uppercase tracking-widest border border-gold/40 px-1">
+            <span className="font-mono text-gold text-[9px] uppercase tracking-widest border border-gold/40 px-1">
               ↗ xfer
             </span>
           ) : (
-            <span className="text-gold text-[9px] uppercase tracking-widest border border-gold/40 px-1">
+            <span className="font-mono text-gold text-[9px] uppercase tracking-widest border border-gold/40 px-1">
               ⇄ swap
             </span>
           )}
@@ -531,17 +561,17 @@ function TimelineNode({
         <div className="font-display text-sm text-bone truncate">
           {fmtAmount(item.amount)}
         </div>
-        <div className="text-bone/60 truncate">→ {item.vendor}</div>
+        <div className="font-mono text-bone/60 truncate">→ {item.vendor}</div>
         {conditional && (
           <div
-            className="text-gold/70 text-[10px] mt-1 truncate"
+            className="font-mono text-gold/70 text-[10px] mt-1 truncate"
             title={describeTrigger(item)}
           >
             ▸ {describeTrigger(item)}
           </div>
         )}
         {overThreshold && item.status === "queued" && (
-          <div className="text-rust text-[9px] uppercase tracking-widest mt-1">
+          <div className="font-mono text-rust text-[9px] uppercase tracking-widest mt-1">
             ⚠ over threshold
           </div>
         )}
@@ -550,7 +580,7 @@ function TimelineNode({
             {onExecute && (
               <button
                 onClick={() => onExecute(item.id)}
-                className="flex-1 text-gold border border-gold/60 hover:bg-gold hover:text-ink text-[9px] uppercase tracking-widest py-1 transition"
+                className="flex-1 font-mono text-gold border border-gold/60 hover:bg-gold hover:text-ink text-[9px] uppercase tracking-widest py-1 transition"
               >
                 ▶ now
               </button>
@@ -558,7 +588,7 @@ function TimelineNode({
             {onRemove && (
               <button
                 onClick={() => onRemove(item.id)}
-                className="text-rust/80 border border-rust/50 hover:bg-rust hover:text-ink text-[9px] uppercase tracking-widest px-1.5 py-1 transition"
+                className="font-mono text-rust/80 border border-rust/50 hover:bg-rust hover:text-ink text-[9px] uppercase tracking-widest px-1.5 py-1 transition"
               >
                 ✕
               </button>
@@ -572,17 +602,17 @@ function TimelineNode({
 
 function StatusBadge({ s }: { s: ScheduleStatus }) {
   const map: Record<ScheduleStatus, { text: string; cls: string }> = {
-    queued: { text: "Queued", cls: "text-bone/60 border-bone/30" },
-    executing: { text: "Executing", cls: "text-gold border-gold animate-pulse" },
-    done: { text: "Done", cls: "text-gold/70 border-gold/40" },
-    failed: { text: "Failed", cls: "text-rust border-rust/60" },
-    skipped: { text: "Skipped", cls: "text-bone/40 border-bone/20" },
-    "awaiting-approval": { text: "You", cls: "text-rust border-rust" },
-    denied: { text: "Denied", cls: "text-rust/60 border-rust/40" },
+    queued: { text: "queued", cls: "text-bone/60 border-bone/30" },
+    executing: { text: "● running", cls: "text-gold border-gold animate-pulse" },
+    done: { text: "✓ exit 0", cls: "text-phosphor border-phosphor/40" },
+    failed: { text: "✕ exit 1", cls: "text-rust border-rust/60" },
+    skipped: { text: "skipped", cls: "text-bone/40 border-bone/20" },
+    "awaiting-approval": { text: "⚠ sign", cls: "text-rust border-rust" },
+    denied: { text: "denied", cls: "text-rust/60 border-rust/40" },
   };
   const { text, cls } = map[s];
   return (
-    <span className={`text-[10px] uppercase tracking-widest border px-1.5 py-0.5 ${cls}`}>
+    <span className={`font-mono text-[10px] uppercase tracking-widest border px-1.5 py-0.5 ${cls}`}>
       {text}
     </span>
   );

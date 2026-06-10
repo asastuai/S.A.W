@@ -9,33 +9,36 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
-        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "monospace"],
-        display: ["var(--font-display)", "ui-serif", "Georgia", "serif"],
+        sans: ["var(--font-sans)", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+        mono: ["var(--font-sans)", "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "monospace"],
+        display: ["var(--font-display)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       colors: {
-        ink: "#0a0a0a",
-        obsidian: "#060608", // deepest cinematic black (hero backdrops)
-        smoke: "#1a1a1a",
-        ash: "#2a2a2a",
-        bone: "#e8e4d8",
-        cream: "#f4f0e6",
-        rust: "#b7410e",
-        gold: "#c9a96e",
-        goldlit: "#e7c98a", // brighter gold for glow highlights
+        ink: "#0c0d11", // panel base
+        obsidian: "#070708", // site base bg (operator console black)
+        smoke: "#14161b", // elevated panels / inputs
+        ash: "#262a32", // borders
+        bone: "#d6d2c4", // body text (cool terminal)
+        cream: "#f2eee2", // bright text
+        rust: "#d4512e", // warnings (more alive)
+        gold: "#f0b429", // brand / action (electric amber)
+        goldlit: "#ffd567", // glow highlight
+        phosphor: "#5ad19a", // system ok / online / readouts
       },
       letterSpacing: {
         cinema: "-0.02em",
       },
       boxShadow: {
-        glow: "0 0 24px -4px rgba(201, 169, 110, 0.45)",
-        "glow-lg": "0 0 56px -8px rgba(201, 169, 110, 0.5)",
+        glow: "0 0 24px -4px rgba(240, 180, 41, 0.45)",
+        "glow-lg": "0 0 56px -8px rgba(240, 180, 41, 0.5)",
       },
       dropShadow: {
-        gold: "0 0 10px rgba(201, 169, 110, 0.55)",
-        "gold-lg": "0 0 22px rgba(201, 169, 110, 0.6)",
+        gold: "0 0 10px rgba(240, 180, 41, 0.55)",
+        "gold-lg": "0 0 22px rgba(240, 180, 41, 0.6)",
       },
       animation: {
+        "caret": "caret 1.05s steps(1) infinite",
+        "boot-in": "boot-in 260ms ease-out both",
         "scan-line": "scan-line 3s linear infinite",
         "flicker": "flicker 4s linear infinite",
         "fade-in": "fade-in 200ms ease-out",
@@ -53,6 +56,16 @@ const config: Config = {
         "mascot-pop": "mascot-pop 1s ease-in-out infinite",
       },
       keyframes: {
+        // Blinking block cursor for the operator console.
+        caret: {
+          "0%, 50%": { opacity: "1" },
+          "50.01%, 100%": { opacity: "0" },
+        },
+        // Boot reveal: content resolves in after a sequence finishes typing.
+        "boot-in": {
+          "0%": { opacity: "0", transform: "translateY(4px)" },
+          "100%": { opacity: "1", transform: "none" },
+        },
         "scan-line": {
           "0%": { transform: "translateY(-100%)" },
           "100%": { transform: "translateY(100vh)" },

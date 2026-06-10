@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { Caret } from "@/components/terminal/caret";
+import { Readout } from "@/components/terminal/readout";
 
 /**
  * The handler's override surface. These are the owner-only powers the
@@ -31,30 +33,54 @@ export function HandlerControlsModal({
   const [confirm, setConfirm] = useState<null | "revoke" | "withdraw">(null);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 backdrop-blur-sm animate-fade-in p-4">
-      <div className="w-full max-w-md bg-ink border border-gold p-6 sm:p-8 animate-slide-up max-h-[90vh] overflow-y-auto">
-        <div className="flex items-start justify-between mb-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-obsidian/85 backdrop-blur-sm animate-fade-in p-4">
+      <div className="relative w-full max-w-md bg-ink border border-rust/70 shadow-[0_0_56px_-8px_rgba(212,81,46,0.4)] p-6 sm:p-8 animate-slide-up max-h-[90vh] overflow-y-auto">
+        {/* Corner bracket marks — danger frame for the override surface. */}
+        <span aria-hidden="true" className="pointer-events-none absolute -left-px -top-px font-mono text-[10px] leading-none text-rust/60">┌</span>
+        <span aria-hidden="true" className="pointer-events-none absolute -right-px -top-px font-mono text-[10px] leading-none text-rust/60">┐</span>
+        <span aria-hidden="true" className="pointer-events-none absolute -bottom-px -left-px font-mono text-[10px] leading-none text-rust/60">└</span>
+        <span aria-hidden="true" className="pointer-events-none absolute -bottom-px -right-px font-mono text-[10px] leading-none text-rust/60">┘</span>
+        {/* Inlaid danger label riding the top border. */}
+        <span className="pointer-events-none absolute -top-[7px] left-5 bg-ink px-1 font-mono text-[10px] uppercase tracking-widest text-rust">
+          <span aria-hidden="true" className="text-rust/50">┤</span> override panel <span aria-hidden="true" className="text-rust/50">├</span>
+        </span>
+
+        <div className="flex items-start justify-between mb-5">
           <div>
-            <p className="stamp mb-2">Handler controls</p>
-            <h2 className="font-display text-2xl">Hold the override</h2>
+            <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-rust mb-2">⚠ owner authority · root</p>
+            <h2 className="font-display text-2xl uppercase tracking-tight">
+              Hold the override<Caret className="ml-1" />
+            </h2>
           </div>
           <button
             onClick={onClose}
             disabled={busy}
-            className="text-bone/40 hover:text-bone text-xl leading-none"
+            aria-label="close override panel"
+            className="font-mono text-bone/40 hover:text-rust text-base leading-none border border-ash hover:border-rust/60 px-2 py-1 transition disabled:opacity-40"
           >
-            ×
+            esc ×
           </button>
         </div>
 
-        <p className="text-bone/50 text-xs leading-relaxed mb-6">
-          These are owner-only, on-chain powers. Each one is signed by{" "}
-          <span className="text-gold">your</span> wallet in Phantom — the agent
-          key can never reach them. Current agent:{" "}
-          <span className="font-mono text-bone/70">
-            {agentKey.slice(0, 4)}…{agentKey.slice(-4)}
-          </span>
-        </p>
+        <div className="border border-ash bg-smoke/40 px-3 py-2 mb-5">
+          <p className="text-bone/55 text-[11px] leading-relaxed font-mono">
+            <span className="text-gold">$</span> saw override --session{" "}
+            <span className="text-phosphor">authenticated</span>
+            <br />
+            owner-signed on-chain powers. each instruction is signed by{" "}
+            <span className="text-gold">your</span> wallet in Phantom — the agent
+            key can never reach them.
+          </p>
+          <div className="mt-2 pt-2 border-t border-ash/60">
+            <Readout
+              items={[
+                { label: "agent", value: `${agentKey.slice(0, 4)}…${agentKey.slice(-4)}`, tone: "bone" },
+                { label: "scope", value: "owner-only", tone: "gold" },
+                { label: "chain", value: "devnet", tone: "phosphor" },
+              ]}
+            />
+          </div>
+        </div>
 
         <div className="space-y-3">
           {/* Edit policy */}
@@ -63,10 +89,11 @@ export function HandlerControlsModal({
             disabled={busy}
             className="w-full text-left border border-ash hover:border-gold p-4 transition group disabled:opacity-40"
           >
-            <div className="text-sm uppercase tracking-widest text-bone group-hover:text-gold transition">
-              ✎ Edit policy
+            <div className="font-mono text-sm text-bone group-hover:text-gold transition">
+              <span className="select-none text-gold/60 group-hover:text-gold">$</span>{" "}
+              saw policy <span className="text-gold">--edit</span>
             </div>
-            <div className="text-[11px] text-bone/40 mt-1 leading-tight">
+            <div className="text-[11px] text-bone/40 mt-1.5 leading-tight font-mono">
               Change daily cap, per-tx cap, approval threshold, and the
               recipient allowlist. Enforced on-chain.
             </div>
@@ -78,10 +105,11 @@ export function HandlerControlsModal({
             disabled={busy}
             className="w-full text-left border border-ash hover:border-gold p-4 transition group disabled:opacity-40"
           >
-            <div className="text-sm uppercase tracking-widest text-bone group-hover:text-gold transition">
-              ⟳ Rotate agent
+            <div className="font-mono text-sm text-bone group-hover:text-gold transition">
+              <span className="select-none text-gold/60 group-hover:text-gold">$</span>{" "}
+              saw agent <span className="text-gold">--rotate</span>
             </div>
-            <div className="text-[11px] text-bone/40 mt-1 leading-tight">
+            <div className="text-[11px] text-bone/40 mt-1.5 leading-tight font-mono">
               Swap the agent to a fresh keypair (and fund it). Keeps the funds
               and history; a compromised key stops working.
             </div>
@@ -102,12 +130,14 @@ export function HandlerControlsModal({
             <button
               onClick={() => setConfirm("revoke")}
               disabled={busy}
-              className="w-full text-left border border-rust/40 hover:border-rust p-4 transition group disabled:opacity-40"
+              className="w-full text-left border border-rust/40 hover:border-rust hover:bg-rust/5 p-4 transition group disabled:opacity-40"
             >
-              <div className="text-sm uppercase tracking-widest text-rust/90 group-hover:text-rust transition">
-                ⊘ Revoke agent
+              <div className="font-mono text-sm text-rust/90 group-hover:text-rust transition">
+                <span className="select-none text-rust/60 group-hover:text-rust">$</span>{" "}
+                saw agent <span className="font-semibold text-rust">--revoke</span>{" "}
+                <span className="text-rust/50 text-[10px] uppercase tracking-widest">[danger]</span>
               </div>
-              <div className="text-[11px] text-bone/40 mt-1 leading-tight">
+              <div className="text-[11px] text-bone/40 mt-1.5 leading-tight font-mono">
                 Freeze the agent immediately. Funds stay put; nothing can move
                 until you rotate in a new key.
               </div>
@@ -129,12 +159,14 @@ export function HandlerControlsModal({
             <button
               onClick={() => setConfirm("withdraw")}
               disabled={busy}
-              className="w-full text-left border border-rust/40 hover:border-rust p-4 transition group disabled:opacity-40"
+              className="w-full text-left border border-rust/40 hover:border-rust hover:bg-rust/5 p-4 transition group disabled:opacity-40"
             >
-              <div className="text-sm uppercase tracking-widest text-rust/90 group-hover:text-rust transition">
-                ⤴ Emergency withdraw
+              <div className="font-mono text-sm text-rust/90 group-hover:text-rust transition">
+                <span className="select-none text-rust/60 group-hover:text-rust">$</span>{" "}
+                saw withdraw <span className="font-semibold text-rust">--emergency --all</span>{" "}
+                <span className="text-rust/50 text-[10px] uppercase tracking-widest">[kill-switch]</span>
               </div>
-              <div className="text-[11px] text-bone/40 mt-1 leading-tight">
+              <div className="text-[11px] text-bone/40 mt-1.5 leading-tight font-mono">
                 Pull the full wallet balance back to you, bypassing policy. The
                 kill switch.
               </div>
@@ -144,13 +176,22 @@ export function HandlerControlsModal({
 
         {(busy || message) && (
           <div
-            className={`mt-6 text-xs leading-relaxed ${
+            className={`mt-6 border-t border-ash pt-3 font-mono text-xs leading-relaxed ${
               message?.toLowerCase().includes("failed")
                 ? "text-rust"
                 : "text-gold"
             }`}
           >
-            {busy ? "Working… confirm in Phantom." : message}
+            <span aria-hidden="true" className="mr-1 text-bone/40">
+              &gt;
+            </span>
+            {busy ? (
+              <>
+                Working… confirm in Phantom.<Caret className="ml-1" />
+              </>
+            ) : (
+              message
+            )}
           </div>
         )}
       </div>
@@ -171,21 +212,24 @@ function ConfirmRow({
 }) {
   return (
     <div className="border border-rust p-4 bg-rust/5">
-      <div className="text-xs text-bone/80 mb-3 leading-relaxed">{label}</div>
+      <div className="text-xs text-bone/80 mb-3 leading-relaxed font-mono">
+        <span className="text-rust mr-1">⚠</span>
+        {label}
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={onCancel}
           disabled={busy}
-          className="border border-bone/30 text-bone/60 py-2 uppercase tracking-widest text-[10px] hover:border-bone hover:text-bone disabled:opacity-30"
+          className="font-mono border border-bone/30 text-bone/60 py-2 uppercase tracking-widest text-[10px] hover:border-bone hover:text-bone disabled:opacity-30 transition"
         >
-          Cancel
+          abort
         </button>
         <button
           onClick={onConfirm}
           disabled={busy}
-          className="bg-rust text-ink py-2 uppercase tracking-widest text-[10px] hover:bg-bone disabled:opacity-30"
+          className="font-mono bg-rust text-ink py-2 uppercase tracking-widest text-[10px] hover:bg-goldlit disabled:opacity-30 transition"
         >
-          Confirm
+          confirm ↵
         </button>
       </div>
     </div>
@@ -237,19 +281,31 @@ export function PolicyEditorModal({
   const valid = dailyN !== null && perTxN !== null && thresholdN !== null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 backdrop-blur-sm animate-fade-in p-4">
-      <div className="w-full max-w-md bg-ink border border-gold p-6 sm:p-8 animate-slide-up max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-obsidian/85 backdrop-blur-sm animate-fade-in p-4">
+      <div className="relative w-full max-w-md bg-ink border border-gold shadow-glow p-6 sm:p-8 animate-slide-up max-h-[90vh] overflow-y-auto">
+        {/* Corner bracket marks — TUI frame for the policy editor. */}
+        <span aria-hidden="true" className="pointer-events-none absolute -left-px -top-px font-mono text-[10px] leading-none text-gold/40">┌</span>
+        <span aria-hidden="true" className="pointer-events-none absolute -right-px -top-px font-mono text-[10px] leading-none text-gold/40">┐</span>
+        <span aria-hidden="true" className="pointer-events-none absolute -bottom-px -left-px font-mono text-[10px] leading-none text-gold/40">└</span>
+        <span aria-hidden="true" className="pointer-events-none absolute -bottom-px -right-px font-mono text-[10px] leading-none text-gold/40">┘</span>
+        <span className="pointer-events-none absolute -top-[7px] left-5 bg-ink px-1 font-mono text-[10px] uppercase tracking-widest text-gold">
+          <span aria-hidden="true" className="text-gold/40">┤</span> set_policy <span aria-hidden="true" className="text-gold/40">├</span>
+        </span>
+
         <div className="flex items-start justify-between mb-6">
           <div>
-            <p className="stamp mb-2">Edit policy</p>
-            <h2 className="font-display text-2xl">Set the boundaries</h2>
+            <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-gold mb-2">$ saw policy --edit</p>
+            <h2 className="font-display text-2xl uppercase tracking-tight">
+              Set the boundaries<Caret className="ml-1" />
+            </h2>
           </div>
           <button
             onClick={onClose}
             disabled={busy}
-            className="text-bone/40 hover:text-bone text-xl leading-none"
+            aria-label="close policy editor"
+            className="font-mono text-bone/40 hover:text-bone text-base leading-none border border-ash hover:border-gold/60 px-2 py-1 transition disabled:opacity-40"
           >
-            ×
+            esc ×
           </button>
         </div>
 
@@ -277,11 +333,11 @@ export function PolicyEditorModal({
           />
 
           <div>
-            <label className="text-xs uppercase tracking-widest text-bone/50 mb-2 block">
-              Recipient allowlist
+            <label className="font-mono text-xs uppercase tracking-widest text-bone/50 mb-2 block">
+              <span className="text-gold/60">--</span> recipient allowlist
             </label>
             <div className="text-[11px] text-bone/40 mb-2 font-mono">
-              kept: {lockedRecipient.slice(0, 8)}…{lockedRecipient.slice(-6)}{" "}
+              <span className="text-phosphor">kept:</span> {lockedRecipient.slice(0, 8)}…{lockedRecipient.slice(-6)}{" "}
               <span className="text-bone/30">(demo recipient)</span>
             </div>
             <textarea
@@ -290,17 +346,20 @@ export function PolicyEditorModal({
               disabled={busy}
               rows={3}
               placeholder="Add more addresses, one per line. Unlisted destinations always escalate to your approval."
-              className="w-full bg-ink border border-ash px-3 py-2 text-bone text-xs font-mono focus:border-gold outline-none resize-none"
+              className="w-full bg-smoke border border-ash px-3 py-2 text-bone text-xs font-mono focus:border-gold outline-none resize-none"
             />
           </div>
         </div>
 
         {message && (
           <div
-            className={`mt-4 text-xs ${
+            className={`mt-4 border-t border-ash pt-3 font-mono text-xs ${
               message.toLowerCase().includes("failed") ? "text-rust" : "text-gold"
             }`}
           >
+            <span aria-hidden="true" className="mr-1 text-bone/40">
+              &gt;
+            </span>
             {message}
           </div>
         )}
@@ -309,9 +368,9 @@ export function PolicyEditorModal({
           <button
             onClick={onClose}
             disabled={busy}
-            className="border border-bone/30 text-bone/60 py-3 uppercase tracking-widest text-xs hover:border-bone hover:text-bone disabled:opacity-30"
+            className="font-mono border border-bone/30 text-bone/60 py-3 uppercase tracking-widest text-xs hover:border-bone hover:text-bone disabled:opacity-30 transition"
           >
-            Cancel
+            abort
           </button>
           <button
             onClick={() =>
@@ -327,9 +386,9 @@ export function PolicyEditorModal({
               })
             }
             disabled={busy || !valid}
-            className="bg-gold text-ink py-3 uppercase tracking-widest text-xs hover:bg-bone disabled:opacity-30"
+            className="font-mono bg-gold text-ink py-3 uppercase tracking-widest text-xs hover:bg-goldlit disabled:opacity-30 transition"
           >
-            {busy ? "Signing…" : "Save on-chain"}
+            {busy ? "signing…" : "commit on-chain ↵"}
           </button>
         </div>
       </div>
@@ -352,8 +411,8 @@ function Field({
 }) {
   return (
     <div>
-      <label className="text-xs uppercase tracking-widest text-bone/50 mb-1 block">
-        {label}
+      <label className="font-mono text-xs uppercase tracking-widest text-bone/50 mb-1 block">
+        <span className="text-gold/60">--</span> {label}
       </label>
       <input
         type="number"
@@ -362,9 +421,9 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="w-full bg-ink border border-ash px-3 py-2 text-bone font-display text-lg focus:border-gold outline-none"
+        className="w-full bg-smoke border border-ash px-3 py-2 text-bone font-display text-lg focus:border-gold outline-none"
       />
-      <div className="text-[10px] text-bone/40 mt-1">{hint}</div>
+      <div className="text-[10px] text-bone/40 mt-1 font-mono">{hint}</div>
     </div>
   );
 }

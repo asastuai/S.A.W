@@ -4,15 +4,15 @@
 
 @layer base {
   body {
-    background: #0a0a0a;
-    color: #e8e4d8;
-    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    background: #070708;
+    color: #d6d2c4;
+    font-family: var(--font-sans), ui-monospace, SFMono-Regular, Menlo, monospace;
     -webkit-font-smoothing: antialiased;
   }
 
   ::selection {
-    background: #c9a96e;
-    color: #0a0a0a;
+    background: #f0b429;
+    color: #070708;
   }
 
   /* Noir scrollbars — thin and themed, so scroll areas (the briefing chat,
@@ -34,7 +34,7 @@
     background-clip: padding-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #c9a96e; /* gold */
+    background: #f0b429; /* gold */
     background-clip: padding-box;
   }
   ::-webkit-scrollbar-corner {
@@ -67,23 +67,9 @@
     animation: grain-drift 8s steps(6) infinite;
   }
 
-  /* Cinematic vignette — darkened edges frame the content like a film still. */
-  .vignette::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 1;
-    background: radial-gradient(
-      130% 130% at 50% 35%,
-      transparent 60%,
-      rgba(0, 0, 0, 0.5) 100%
-    );
-  }
-
   .stamp {
-    border: 1px solid #c9a96e;
-    color: #c9a96e;
+    border: 1px solid #f0b429;
+    color: #f0b429;
     font-family: var(--font-mono, ui-monospace), monospace;
     font-size: 0.7rem;
     letter-spacing: 0.2em;
@@ -102,7 +88,7 @@
     background: linear-gradient(
       90deg,
       transparent,
-      rgba(201, 169, 110, 0.4),
+      rgba(240, 180, 41, 0.4),
       transparent
     );
     animation: scan-line 8s linear infinite;
@@ -110,9 +96,9 @@
     z-index: 1;
   }
 
-  /* Gold text glow for cinematic accents. */
+  /* Gold text glow for operator-console accents. */
   .text-glow {
-    text-shadow: 0 0 18px rgba(201, 169, 110, 0.45);
+    text-shadow: 0 0 18px rgba(240, 180, 41, 0.45);
   }
 }
 
@@ -131,12 +117,12 @@
   }
 }
 
-/* Override wallet adapter UI to match the cinematic-noir aesthetic */
+/* Override wallet adapter UI to match the Operator Console aesthetic */
 .wallet-adapter-button {
   background: transparent !important;
-  border: 1px solid #c9a96e !important;
-  color: #c9a96e !important;
-  font-family: ui-monospace, monospace !important;
+  border: 1px solid #f0b429 !important;
+  color: #f0b429 !important;
+  font-family: var(--font-sans), ui-monospace, monospace !important;
   font-size: 0.85rem !important;
   letter-spacing: 0.1em !important;
   text-transform: uppercase !important;
@@ -147,8 +133,8 @@
 }
 
 .wallet-adapter-button:hover {
-  background: #c9a96e !important;
-  color: #0a0a0a !important;
+  background: #f0b429 !important;
+  color: #070708 !important;
 }
 
 .wallet-adapter-button-trigger {
@@ -156,12 +142,12 @@
 }
 
 .wallet-adapter-modal-wrapper {
-  background: #1a1a1a !important;
-  border: 1px solid #c9a96e !important;
+  background: #14161b !important;
+  border: 1px solid #f0b429 !important;
   border-radius: 0 !important;
 }
 
 .wallet-adapter-modal-title {
-  color: #e8e4d8 !important;
-  font-family: var(--font-display), ui-serif, Georgia, serif !important;
+  color: #f2eee2 !important;
+  font-family: var(--font-sans), ui-monospace, monospace !important;
 }
