@@ -119,6 +119,30 @@ git commit -m "spike: Drift devnet probe — SDK locked, atomicity findings"
 
 ---
 
+### Task 1b (ADDENDUM 2026-06-11): Localnet Drift — el entorno que reemplaza a devnet
+
+**Contexto del pivot:** el spike (Task 1, commits 84b1ff2 + 1b33a74) probó que Drift devnet
+está roto on-chain: programa congelado ~19-abr con las ixs user-facing deshabilitadas
+(`SpotMarketNotFound` incluso con remaining_accounts vacío), oráculos 69 días stale.
+Decisión de Juan: **local validator con el programa real de Drift mainnet clonado.**
+SDK lockeado: `@drift-labs/sdk@2.156.0` (en sync con mainnet).
+
+**Files:**
+- Create: `scripts/localnet-drift/setup.sh` — dump + arranque del validator
+- Create: `scripts/localnet-drift/init-markets.ts` — inicialización de state/markets/oráculo
+- Create: `scripts/localnet-drift/README.md` — cómo levantar el entorno en 1 comando
+- Modify: `docs/superpowers/specs/2026-06-11-drift-devnet-findings.md` — sección "localnet" con lo verificado
+
+- [ ] **Step 1:** `solana program dump dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH drift.so --url mainnet-beta` + identificar accounts a clonar (state account de Drift, spot market USDC, perp market SOL-PERP, oráculo Pyth SOL) — preferir `--clone` de accounts mainnet sobre re-inicializar admin-side cuando sea viable.
+- [ ] **Step 2:** `solana-test-validator --bpf-program dRifty... drift.so --clone <accounts> --url mainnet-beta` + script de arranque reproducible.
+- [ ] **Step 3:** mock USDC mint local + fondeo del keypair de prueba (mint authority local — acá NO hay faucet; documentar el flujo).
+- [ ] **Step 4:** re-correr `scripts/drift-probe.ts` apuntando a `http://127.0.0.1:8899` → deposit + placeOrders([entry, SL, TP]) atómico VERDE con tx signatures locales.
+- [ ] **Step 5:** documentar en findings + commit `feat(localnet): Drift mainnet-clone validator para e2e local`.
+
+**Nota para Tasks 4 y 7:** donde el plan dice "devnet" leer "localnet Drift" — `DRIFT_ENV=localnet`, `DRIFT_RPC_URL=http://127.0.0.1:8899`. El guard `isDriftEnabled()` acepta `devnet|localnet` (nunca mainnet sin flag explícito). Los oracle reads usan el oráculo clonado/mockeado local.
+
+---
+
 ### Task 2: Migración DB 0014 — perp en scheduled_items + trading keys + perp_policy
 
 **Files:**

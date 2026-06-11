@@ -21,7 +21,7 @@ con stop-loss/take-profit como failsafes nativos del venue.
 | Fork | Decisión | Por qué |
 |---|---|---|
 | Venue | **Drift Protocol** (Solana-native, wallet-signed) | El agente firma con su keypair bajo policy; tiene devnet; cero API keys; narrativa Solana/SendAI intacta. En Solana la wallet ES la credencial — no hay API keys que guardar ni robar. |
-| Objetivo v1 | **Devnet end-to-end** | Demo completa con collateral de prueba. Cero riesgo, máximo valor de pitch. Mainnet después, flag-gated (mismo patrón que Jupiter spot). |
+| Objetivo v1 | **Local validator end-to-end** (pivot 2026-06-11; antes "devnet") | Demo completa con collateral de prueba contra `solana-test-validator` con el programa REAL de Drift mainnet clonado. Cero riesgo, fills reales. **Por qué el pivot**: Drift devnet está roto on-chain — programa congelado ~19-abr con ixs deshabilitadas, oráculos 69 días stale (ver `2026-06-11-drift-devnet-findings.md` §10/§12). Mainnet después, flag-gated. |
 | Scope v1 | **Ciclo completo** | Abrir (market + condicional) + cerrar + SL/TP adjuntos. Un agente que abre y no cierra es media historia; con leverage sin stop es mala señal. |
 | Enforcement | **Híbrido en fases (C)** | Fase 1: policy espejada off-chain (patrón `policy.ts` UTC-day existente). Fase 2: gate on-chain vía CPI agent_wallet → Drift. Diseñado desde día 1 para migrar sin retrabajo. |
 
