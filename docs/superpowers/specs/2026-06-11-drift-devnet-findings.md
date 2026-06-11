@@ -239,6 +239,41 @@ const priceUSD = convertToNumber(oracleData.price, PRICE_PRECISION);
 // oracleData.hasSufficientNumberOfDataPoints: boolean
 ```
 
+### Oracle price con costo mínimo (sin DriftClient.subscribe)
+
+Leer el oracle NUNCA cuesta SOL (es un account read, no una tx). El "costo" es solo carga RPC. Verificadas dos alternativas más livianas que el subscribe completo:
+
+**Opción A — 1 solo RPC call, sin DriftClient** (verificada: devuelve exactamente el mismo precio que el subscribe completo, $80.016688):
+```typescript
+import { PythLazerClient, DevnetPerpMarkets, PRICE_PRECISION, convertToNumber } from '@drift-labs/sdk';
+
+const solPerp = DevnetPerpMarkets.find(m => m.baseAssetSymbol === 'SOL')!;
+// solPerp.oracle = 3m6i4RFWEDw2Ft4tFHPJtYgmpPe21k56M3FHeWYrgGBz (PythLazer)
+const client = new PythLazerClient(connection);
+const data = await client.getOraclePriceData(solPerp.oracle);  // 1x getAccountInfo (~640ms)
+const priceUSD = convertToNumber(data.price, PRICE_PRECISION);
+// También existe client.getOraclePriceDataFromBuffer(buffer) para parsear
+// un buffer que ya tengas (0 RPC adicional si lo bajaste en batch)
+```
+
+**Opción B — 0 RPC, HTTP puro (Pyth Hermes)** — verificada pero CON TRAMPA:
+```typescript
+const feedId = solPerp.pythFeedId; // 0xef0d8b6f...
+const res = await fetch(`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}`);
+const p = (await res.json()).parsed[0].price;
+const priceUSD = Number(p.price) * 10 ** p.expo;
+```
+
+> **TRAMPA verificada empíricamente**: Hermes devolvió $66.906 (precio SOL real, live) mientras el oracle on-chain de devnet marcaba $80.016688 en slot 453770296 — **el oracle devnet está stale/freezado**. Para decisiones de trading contra Drift devnet hay que usar la Opción A (el precio on-chain es el que el programa usa para triggers, fills y liquidaciones). Hermes solo sirve como referencia del precio real; en mainnet ambos convergen.
+
+**Comparación de costos** (todo es 0 SOL):
+
+| Método | RPC load | Precio que ve el programa Drift |
+|--------|----------|----------------------------------|
+| DriftClient.subscribe + getOracleDataForPerpMarket | polling continuo (~1 req/s por account) | ✅ sí |
+| PythLazerClient.getOraclePriceData (Opción A) | 1 getAccountInfo por lectura | ✅ sí |
+| Pyth Hermes HTTP (Opción B) | 0 | ❌ no (feed live, no el estado devnet) |
+
 ### Unrealized PnL:
 ```typescript
 const user = driftClient.getUser(0);  // subAccountId = 0
