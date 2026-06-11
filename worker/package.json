@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@asastuai/saw-sdk": "workspace:*",
+    "@drift-labs/sdk": "2.156.0",
     "@solana/web3.js": "^1.98.4",
     "@supabase/supabase-js": "^2.45.0",
     "@trigger.dev/sdk": "^3.3.0",
@@ -17,6 +18,7 @@
   "devDependencies": {
     "@trigger.dev/build": "^3.3.0",
     "@types/node": "^22.19.18",
+    "tsx": "^4.22.4",
     "typescript": "^5.7.3"
   }
 }
