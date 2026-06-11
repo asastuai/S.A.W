@@ -17,14 +17,15 @@ export function relPointer(
   return {
     mx,
     my,
-    nx: (mx - rect.width / 2) / (rect.width / 2),
-    ny: (my - rect.height / 2) / (rect.height / 2),
+    nx: rect.width ? (mx - rect.width / 2) / (rect.width / 2) : 0,
+    ny: rect.height ? (my - rect.height / 2) / (rect.height / 2) : 0,
   };
 }
 
 /** Target de mirada del hologram (spec: clamp ±0.45 rad yaw / ±0.25 rad pitch).
  *  ny positivo (cursor abajo) → pitch negativo (mirar abajo). */
 export function lookTarget(nx: number, ny: number): { yaw: number; pitch: number } {
+  // ny=0 produce pitch -0 (idéntico a 0 para CSS/three) — el test usa Object.is por eso.
   return { yaw: clamp(nx, -1, 1) * 0.45, pitch: clamp(ny, -1, 1) * -0.25 };
 }
 
@@ -38,7 +39,7 @@ export function scrambleFrame(text: string, progress: number, rng: () => number)
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
     if (i < settled || c === " ") out += c;
-    else out += SCRAMBLE_CHARSET[Math.floor(rng() * SCRAMBLE_CHARSET.length)];
+    else out += SCRAMBLE_CHARSET[Math.floor(rng() * SCRAMBLE_CHARSET.length) % SCRAMBLE_CHARSET.length];
   }
   return out;
 }

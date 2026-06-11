@@ -22,6 +22,10 @@ describe("relPointer", () => {
   it("fuera del rect → nx/ny > 1 (sin clamp — near zone los usa)", () => {
     expect(relPointer(rect, 400, 100).nx).toBe(2);
   });
+  it("rect de tamaño cero (elemento oculto) → nx/ny = 0, sin Infinity/NaN", () => {
+    const hidden = { left: 0, top: 0, width: 0, height: 0 } as DOMRect;
+    expect(relPointer(hidden, 50, 50)).toEqual({ mx: 50, my: 50, nx: 0, ny: 0 });
+  });
 });
 
 describe("lookTarget", () => {
