@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Reveal } from "@/components/reveal";
+import { Spotlight } from "@/components/fx/spotlight";
 import { BootSequence } from "@/components/terminal/boot-sequence";
 import { Caret } from "@/components/terminal/caret";
 import { CommandLine } from "@/components/terminal/command-line";
@@ -231,21 +232,23 @@ function HowItWorks() {
         <div className="grid gap-5 md:grid-cols-3">
           {steps.map((s, i) => (
             <Reveal key={s.n} delay={i * 120}>
-              <TerminalPanel
-                label={`[${s.n}]`}
-                className="group h-full p-7 pt-9 transition-colors hover:bg-smoke"
-              >
-                <div className="mb-5 font-display text-5xl text-gold/30 transition-colors group-hover:text-gold/70 group-hover:text-glow">
-                  {s.n}
-                </div>
-                <p className="mb-4 font-mono text-[11px] text-phosphor/80">
-                  <CommandLine prompt="$">{s.cmd}</CommandLine>
-                </p>
-                <h3 className="mb-3 font-display text-xl uppercase tracking-wide text-bone">
-                  {s.title}
-                </h3>
-                <p className="font-mono text-sm leading-relaxed text-bone/60">{s.body}</p>
-              </TerminalPanel>
+              <Spotlight brackets className="h-full">
+                <TerminalPanel
+                  label={`[${s.n}]`}
+                  className="group h-full p-7 pt-9 transition-colors hover:bg-smoke"
+                >
+                  <div className="mb-5 font-display text-5xl text-gold/30 transition-colors group-hover:text-gold/70 group-hover:text-glow">
+                    {s.n}
+                  </div>
+                  <p className="mb-4 font-mono text-[11px] text-phosphor/80">
+                    <CommandLine prompt="$">{s.cmd}</CommandLine>
+                  </p>
+                  <h3 className="mb-3 font-display text-xl uppercase tracking-wide text-bone">
+                    {s.title}
+                  </h3>
+                  <p className="font-mono text-sm leading-relaxed text-bone/60">{s.body}</p>
+                </TerminalPanel>
+              </Spotlight>
             </Reveal>
           ))}
         </div>
@@ -531,26 +534,24 @@ function FeatureGrid() {
         <div className="grid gap-5 md:grid-cols-2">
           {features.map((f, i) => (
             <Reveal key={f.tag} delay={(i % 2) * 100 + Math.floor(i / 2) * 80}>
-              <TerminalPanel
-                label={f.tag}
-                className="group relative h-full overflow-hidden p-7 pt-9 transition-colors hover:bg-smoke"
-              >
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute -right-12 -top-12 h-32 w-32 rounded-full bg-gold/0 blur-2xl transition-colors duration-500 group-hover:bg-gold/[0.08]"
-                />
-                <p className="relative mb-3 font-mono text-[11px] text-phosphor/70">
-                  <CommandLine prompt="$">
-                    saw <span className="text-gold/80">{f.flag}</span>
-                  </CommandLine>
-                </p>
-                <h3 className="relative mb-3 font-display text-xl uppercase tracking-wide text-bone">
-                  {f.title}
-                </h3>
-                <p className="relative font-mono text-sm leading-relaxed text-bone/60">
-                  {f.body}
-                </p>
-              </TerminalPanel>
+              <Spotlight brackets className="h-full">
+                <TerminalPanel
+                  label={f.tag}
+                  className="group relative h-full overflow-hidden p-7 pt-9 transition-colors hover:bg-smoke"
+                >
+                  <p className="relative mb-3 font-mono text-[11px] text-phosphor/70">
+                    <CommandLine prompt="$">
+                      saw <span className="text-gold/80">{f.flag}</span>
+                    </CommandLine>
+                  </p>
+                  <h3 className="relative mb-3 font-display text-xl uppercase tracking-wide text-bone">
+                    {f.title}
+                  </h3>
+                  <p className="relative font-mono text-sm leading-relaxed text-bone/60">
+                    {f.body}
+                  </p>
+                </TerminalPanel>
+              </Spotlight>
             </Reveal>
           ))}
         </div>
