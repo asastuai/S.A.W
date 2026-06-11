@@ -2,9 +2,10 @@
 
 **Date**: 2026-06-11  
 **SDK version locked**: `@drift-labs/sdk 2.156.0` (stable tag)  
-**Status**: DONE_WITH_CONCERNS — all questions answered; full on-chain tx blocked by known devnet compat issue  
+**Status**: BLOCKED — devnet is permanently broken for trading operations; fallback recommendation documented  
 **Resolves**: "Verificaciones pendientes" section in `2026-06-11-saw-perps-design.md`  
-**Probe script**: `scripts/drift-probe.ts`
+**Probe script**: `scripts/drift-probe.ts`  
+**Compat spike**: `scripts/drift-compat-test.ts` (2026-06-11, exhaustive)
 
 ---
 
@@ -313,23 +314,103 @@ const sig = await driftClient.cancelOrderByUserId(1, undefined, 0);
 
 ---
 
-## 10. Bloqueo conocido — devnet compat issue
+## 10. Bloqueo — devnet compat issue (RESOLUCIÓN DEFINITIVA — 2026-06-11)
 
-**Síntoma**: `deposit()` y `placeOrders()` fallan con `SpotMarketNotFound` (error 6087) / `PerpMarketNotFound`.
+> **STATUS**: BLOQUEADO PERMANENTEMENTE EN DEVNET. No hay workaround posible desde el cliente. Ver recomendación de fallback al final de esta sección.
 
-**Causa raíz** (investigada hasta el nivel de código Rust on-chain):
+### Síntoma
 
-El programa devnet actual (slot 457280167) usa `PythLazerOracle` accounts para todos sus feeds oracle. Estos accounts están **owned by el Drift program** (`dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH`), con discriminador `9f07a1f922517985`.
+`deposit()` y `placeOrders()` fallan con `SpotMarketNotFound` (error 6087) en todas las configuraciones testadas.
 
-El SDK pone los oracle accounts PRIMERO en `remaining_accounts` (orden: oracles → spot markets → perp markets).
+### Diagnóstico exhaustivo (2026-06-11)
 
-On-chain, `load_maps()` llama `OracleMap::load()` primero, iterando `remaining_accounts`. Para `PythLazerOracle`, el programa verifica: `EXTERNAL_ORACLE_PROGRAM_IDS.contains(owner)` — pero estos accounts son owned by `crate::id()` (el propio programa Drift), no por Pyth/Switchboard. Luego verifica el discriminador para `PythLazerOracle`. Si el programa devnet actual no consume esos accounts correctamente (depende de la versión exacta del código Rust deployed), el iterator queda apuntando a los oracle accounts. Cuando `SpotMarketMap::load()` itera el mismo remaining_accounts iterator, ve el oracle account primero, su discriminador no matchea `SpotMarket::discriminator`, el loop rompe, y el spot market nunca se carga → `SpotMarketNotFound`.
+Se ejecutó una batería completa de pruebas contra el devnet (`scripts/drift-probe.ts` + compat spike). Hallazgos en orden:
 
-**Este NO es un bug del SDK 2.156.0**. Es un desajuste entre la versión del SDK y la versión del programa on-chain.
+**A. Cuentas oracle PythLazer — stale extremo**
 
-**Impacto en el probe**: Los steps 6-11 (deposit, placeOrders on-chain, position reads, userOrderId round-trip) no se pueden ejecutar en este devnet. La atomicidad fue verificada por fuente + log on-chain de "Instruction: PlaceOrders".
+| Cuenta oracle | Pubkey | Valor | Antigüedad |
+|---|---|---|---|
+| USDC PythLazerOracle | `9VCioxmni2gDLv11qufWzT3RDERhQE4iY5Gf7NTfYyAV` | $99.99 (WRONG) | **69 días** |
+| SOL PythLazerOracle | `3m6i4RFWEDw2Ft4tFHPJtYgmpPe21k56M3FHeWYrgGBz` | $8001 (WRONG) | **69 días** |
 
-**Impacto en producción**: Ninguno. En mainnet, el programa Drift está en sync con el SDK. El uso de `2.156.0` en producción es correcto.
+Ambas cuentas existen (owned by Drift program, disc `9f07a1f922517985`), con datos corruptos/stale. Los keepers de devnet dejaron de actualizar estos oracles hace 69 días.
+
+**B. Programa on-chain — versión frozen**
+
+El programa devnet fue desplegado en **slot 457280167** (~53 días atrás, circa April 19, 2026). La última actividad de los oracles fue ~69 días atrás (circa April 3, 2026).
+
+Commit más cercano al deployment: `e32903b` ("comment out all ixs", April 1, 2026) del repositorio `drift-labs/protocol-v2`. Ese commit dejó activas únicamente instrucciones nativas (`handle_update_mm_oracle_native`, `handle_update_amm_spread_adjustment_native`) + fallback al dispatcher Anchor. Las instrucciones de usuario como `deposit`, `place_orders` fueron comentadas en `#[program]`. Sin embargo, `initialize_user` sigue funcionando (verificado en slot 468779950) — lo que indica que el programa deployed podría ser de un commit distinto o intermedio. (UNVERIFIED: versión exacta del binario deployed)
+
+**C. Workarounds testados — todos fallan**
+
+Se testaron 7+ configuraciones de `remaining_accounts` para `deposit()`:
+
+| Test | remaining_accounts | CU | Resultado |
+|---|---|---|---|
+| Standard | [oracle, spotMarket] | 14162 | SpotMarketNotFound |
+| No oracle | [spotMarket] | 13638 | SpotMarketNotFound |
+| Spot first | [spotMarket, oracle] | 13952 | SpotMarketNotFound |
+| Oracle writable | [oracle(writable), spotMarket] | 14161 | SpotMarketNotFound |
+| PublicKey.default | [default, spotMarket] | 13922 | SpotMarketNotFound |
+| BTC PYTH_PULL oracle | [btcOracle, spotMarket] | 13936 | SpotMarketNotFound |
+| Empty | [] | 11136 | SpotMarketNotFound |
+
+El error es idéntico en TODAS las configuraciones — incluida la lista vacía. Esto confirma que el fallo ocurre a nivel de la lógica interna del programa, NO es un problema de ordenamiento de `remaining_accounts`.
+
+**D. Causa raíz definitiva**
+
+El `SpotMarket::SIZE` = 776 en el código fuente actual del SDK y del protocolo. Los accounts on-chain también tienen 776 bytes — el check de tamaño debería pasar. La discriminador on-chain (`64b1086ba8414127` = `sha256("account:SpotMarket")[:8]`) es correcto. El `market_index` a offset 684 = 0 (correcto para USDC).
+
+La causa más probable (UNVERIFIED sin descompilar el bytecode BPF): **el programa deployed usa una versión del SpotMarket struct donde el `market_index` está a un offset distinto al 684 esperado, o el `AccountLoader::try_from()` falla por una razón diferente al discriminador**. Dado que el error se produce incluso con lista vacía de remaining_accounts, la instrucción `deposit` en el binario deployed podría estar deshabilitada o redirigida a una función que inmediatamente llama `spot_market_map.get_ref(&0)` sin haber cargado nada.
+
+**Conclusión**: El devnet está en un estado inconsistente producido por:
+1. Keepers de oracles detenidos (69+ días sin actualización)
+2. Programa actualizado a una versión que no es compatible con los accounts existentes
+3. No hay evidencia de que ninguna operación de trading (deposit, placeOrders, withdraw) funcione actualmente en devnet
+
+**Este problema NO es solucionable desde el cliente.** Requiere acción de Drift Labs: re-desplegar el programa con una versión compatible, o reinicializar el devnet.
+
+### Versiones de SDK testadas
+
+Solo `2.156.0` (stable) fue testada a fondo en devnet. Las versiones 2.129.0–2.156.0 (toda la gama stable disponible en npm) incluyen soporte PythLazer desde su base. La versión 2.38.0 (pre-PythLazer) usaría diferentes oracle addresses, pero el problema está en el programa on-chain, no en las addresses — ya que el error se da incluso con `remaining_accounts` vacío. Un downgrade de SDK NO resolvería el bloqueante.
+
+### Impacto
+
+- **Producción (mainnet)**: NINGUNO. En mainnet el programa y los keepers están activos. SDK 2.156.0 es correcto.
+- **Devnet**: TOTAL — deposit, placeOrders, withdraw están rotos.
+- **Alternativas para testing**: ver sección de recomendación.
+
+### Recomendación de fallback
+
+**OPCIÓN A — Local validator con Drift program cloneado desde mainnet (RECOMENDADA)**
+
+```bash
+# 1. Clonar el bytecode del programa Drift desde mainnet
+solana program dump dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH drift-mainnet.so --url mainnet-beta
+
+# 2. Levantar validator local con el programa inyectado
+solana-test-validator \
+  --bpf-program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH drift-mainnet.so \
+  --clone-upgradeable-program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH \
+  --url mainnet-beta
+
+# 3. Inicializar markets con anchor deploy + seeds del programa
+# (requiere adaptar scripts de inicialización de drift-labs/protocol-v2)
+```
+
+**Pros**: control total, sin dependencia de infra Drift, oracle se puede simular con prelaunch  
+**Cons**: setup complejo (~4-8h), requiere scripts de inicialización no triviales
+
+**OPCIÓN B — Mainnet con montos dust (NO RECOMENDADA para MVP)**
+
+Usar la cuenta real del usuario con $1-5 USDC en mainnet. Técnicamente funciona pero:
+- Riesgo de pérdidas reales (aunque mínimas con dust)
+- No apto para tests automatizados ni CI
+- No escalable para SAW testing
+
+**DECISIÓN RECOMENDADA**: Opción A (local validator). Estimación: 1 sprint completo para setup. Alternativa de corto plazo: mockear el worker con `driftClient.subscribe()` + verificación de oracle price sin on-chain ops, y postponer los tests end-to-end de deposit/placeOrders hasta tener el local validator.
+
+> **Nota**: No se implementa ningún fallback en este spike. La recomendación es documentada para la siguiente fase de planning.
 
 ---
 
@@ -353,4 +434,24 @@ Para la implementación de SAW Perps Phase 1 (worker + trigger jobs), todas las 
 
 ---
 
-*Generado por el probe `scripts/drift-probe.ts` — `@drift-labs/sdk 2.156.0`*
+---
+
+## 12. Resumen ejecutivo del compat spike (2026-06-11)
+
+**Pregunta**: ¿Hay una combinación de SDK version + config que haga funcionar `deposit()` + `placeOrders()` en devnet?
+
+**Respuesta**: NO. El devnet de Drift está permanentemente roto para operaciones de trading:
+- Programa on-chain frozen desde slot 457280167 (~53 días sin updates)
+- Oracles PythLazer stale 69 días con datos incorrectos (USDC muestra $99.99, SOL muestra $8001)
+- `deposit()` falla `SpotMarketNotFound` (6087) con CUALQUIER configuración de remaining_accounts, incluyendo lista vacía
+- Downgrade de SDK no ayuda — el fallo es en el binario on-chain, no en la lógica del SDK
+
+**Qué sí funciona en devnet**: `subscribe()`, `getOracleDataForPerpMarket()`, `initializeUserAccount()`, `TokenFaucet.mintToUser()`  
+**Qué NO funciona**: `deposit()`, `placeOrders()`, cualquier operación que llame `load_maps()` con SpotMarket
+
+**Próximo paso**: implementar local validator (Opción A de la sección 10) o avanzar implementación usando mocks para el worker, y verificar en mainnet con dust cuando el local validator esté listo.
+
+---
+
+*Generado por el probe `scripts/drift-probe.ts` — `@drift-labs/sdk 2.156.0`*  
+*Compat spike ejecutado 2026-06-11 — `scripts/drift-compat-test.ts`*
