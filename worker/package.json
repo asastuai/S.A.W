@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "trigger dev",
-    "deploy": "trigger deploy"
+    "deploy": "trigger deploy",
+    "test": "vitest run"
   },
   "dependencies": {
     "@asastuai/saw-sdk": "workspace:*",
@@ -19,6 +20,7 @@
     "@trigger.dev/build": "^3.3.0",
     "@types/node": "^22.19.18",
     "tsx": "^4.22.4",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.7"
   }
 }
