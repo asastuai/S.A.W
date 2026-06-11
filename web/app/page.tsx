@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Reveal } from "@/components/reveal";
 import { Spotlight } from "@/components/fx/spotlight";
+import { Tilt } from "@/components/fx/tilt";
 import { BootSequence } from "@/components/terminal/boot-sequence";
 import { Caret } from "@/components/terminal/caret";
 import { CommandLine } from "@/components/terminal/command-line";
@@ -342,20 +343,24 @@ function Personas() {
           <div className="grid gap-5 sm:grid-cols-3 lg:grid-cols-1">
             {skills.map((s, i) => (
               <Reveal key={s.title} delay={220 + i * 120}>
-                <TerminalPanel className="group h-full p-6 transition-colors hover:bg-smoke">
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className="text-2xl text-gold transition-transform group-hover:scale-110 group-hover:text-goldlit group-hover:drop-shadow-gold">
-                      {s.glyph}
-                    </span>
-                    <span className="font-mono text-[10px] uppercase tracking-widest text-phosphor/70">
-                      {s.cap}
-                    </span>
-                  </div>
-                  <h4 className="mb-2 font-display text-lg uppercase tracking-wide text-bone">
-                    {s.title}
-                  </h4>
-                  <p className="font-mono text-sm leading-relaxed text-bone/60">{s.body}</p>
-                </TerminalPanel>
+                <Tilt className="h-full">
+                  <Spotlight className="h-full">
+                    <TerminalPanel className="group h-full p-6 transition-colors hover:bg-smoke">
+                      <div className="mb-3 flex items-center justify-between">
+                        <span className="text-2xl text-gold transition-transform group-hover:scale-110 group-hover:text-goldlit group-hover:drop-shadow-gold">
+                          {s.glyph}
+                        </span>
+                        <span className="font-mono text-[10px] uppercase tracking-widest text-phosphor/70">
+                          {s.cap}
+                        </span>
+                      </div>
+                      <h4 className="mb-2 font-display text-lg uppercase tracking-wide text-bone">
+                        {s.title}
+                      </h4>
+                      <p className="font-mono text-sm leading-relaxed text-bone/60">{s.body}</p>
+                    </TerminalPanel>
+                  </Spotlight>
+                </Tilt>
               </Reveal>
             ))}
           </div>
