@@ -2,13 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthError, requireAuth } from "@/lib/auth";
 import { getHandlerByPrivy } from "@/lib/db/handlers";
 import { listAgentsForHandler } from "@/lib/db/agents";
-import { createScheduledItem, updateScheduledItemStatus, removeScheduledItem } from "@/lib/db/schedule";
-import type { ActionType, TriggerKind, ScheduledStatus } from "@/lib/db/types";
+import {
+  createScheduledItem,
+  updateScheduledItemStatus,
+  removeScheduledItem,
+  sumMarginExecutedTodayUTC,
+  countOpenPerpPositions,
+} from "@/lib/db/schedule";
+import type { ActionType, TriggerKind, ScheduledStatus, Agent } from "@/lib/db/types";
+import {
+  evaluatePerpPolicy,
+  deriveUserOrderId,
+  DEFAULT_PERP_POLICY,
+  type PerpIntent,
+} from "@/lib/perp-policy";
 
 export const runtime = "nodejs";
 
 const ALLOWED_TRIGGERS: TriggerKind[] = ["time", "dip", "below", "above"];
-const ALLOWED_ACTIONS: ActionType[] = ["pay", "swap"];
+const ALLOWED_ACTIONS: ActionType[] = ["pay", "swap", "perp-open", "perp-close"];
 const ALLOWED_STATUSES: ScheduledStatus[] = [
   "queued",
   "executing",
@@ -29,14 +41,15 @@ const ALLOWED_STATUSES: ScheduledStatus[] = [
  * Update status of an existing item.
  */
 
-async function getOwnedAgentOr404(req: NextRequest, agentId: string) {
+/** Verify ownership and return the agent row (needed for perp_policy). */
+async function getOwnedAgentOr404(req: NextRequest, agentId: string): Promise<Agent> {
   const claims = await requireAuth(req);
   const handler = await getHandlerByPrivy(claims.privy_user_id);
   if (!handler) throw new HttpError(404, "handler not found");
   const owned = await listAgentsForHandler(handler.id);
-  if (!owned.some((a) => a.id === agentId)) {
-    throw new HttpError(404, "agent not found");
-  }
+  const agent = owned.find((a) => a.id === agentId);
+  if (!agent) throw new HttpError(404, "agent not found");
+  return agent;
 }
 
 class HttpError extends Error {
@@ -50,21 +63,160 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    await getOwnedAgentOr404(req, params.id);
+    const agent = await getOwnedAgentOr404(req, params.id);
 
     const body = (await req.json().catch(() => ({}))) as any;
     if (!ALLOWED_ACTIONS.includes(body.actionType)) {
       return NextResponse.json({ error: "invalid actionType" }, { status: 400 });
     }
+
+    const trigger = body.trigger ?? { kind: "time" };
+    if (!ALLOWED_TRIGGERS.includes(trigger.kind)) {
+      return NextResponse.json({ error: "invalid trigger kind" }, { status: 400 });
+    }
+
+    // ── perp-specific branch ────────────────────────────────────────────────
+    if (body.actionType === "perp-open") {
+      const perp = body.perp;
+      if (!perp || typeof perp.market !== "string" || !perp.market) {
+        return NextResponse.json({ error: "perp.market required for perp-open" }, { status: 400 });
+      }
+      if (perp.side !== "long" && perp.side !== "short") {
+        return NextResponse.json({ error: "perp.side must be 'long' or 'short'" }, { status: 400 });
+      }
+      if (typeof perp.leverage !== "number" || perp.leverage < 1 || perp.leverage > 20) {
+        return NextResponse.json({ error: "perp.leverage must be a number between 1 and 20" }, { status: 400 });
+      }
+      if (typeof perp.marginUsdc !== "number" || perp.marginUsdc <= 0) {
+        return NextResponse.json({ error: "perp.marginUsdc must be a positive number" }, { status: 400 });
+      }
+      if (perp.stopLoss !== null && perp.stopLoss !== undefined && typeof perp.stopLoss !== "number") {
+        return NextResponse.json({ error: "perp.stopLoss must be a number or null" }, { status: 400 });
+      }
+      if (perp.takeProfit !== null && perp.takeProfit !== undefined && typeof perp.takeProfit !== "number") {
+        return NextResponse.json({ error: "perp.takeProfit must be a number or null" }, { status: 400 });
+      }
+
+      // Server-side policy evaluation
+      const intent: PerpIntent = {
+        market: perp.market,
+        side: perp.side,
+        leverage: perp.leverage,
+        marginUsdc: perp.marginUsdc,
+        stopLoss: perp.stopLoss ?? null,
+        takeProfit: perp.takeProfit ?? null,
+      };
+      const policy = agent.perp_policy ?? DEFAULT_PERP_POLICY;
+      const [dailyMarginUsedUsdc, openPositions] = await Promise.all([
+        sumMarginExecutedTodayUTC(params.id),
+        countOpenPerpPositions(params.id),
+      ]);
+      const verdict = evaluatePerpPolicy(intent, policy, { dailyMarginUsedUsdc, openPositions });
+
+      if (verdict.verdict === "denied") {
+        return NextResponse.json({ error: "policy denied", reason: verdict.reason }, { status: 422 });
+      }
+
+      // Determine the item id (use client-provided or generate one server-side)
+      const itemId = typeof body.id === "string" ? body.id : crypto.randomUUID();
+      // Derive userOrderId server-side from the persisted item id
+      const userOrderId = deriveUserOrderId(itemId);
+
+      // Legacy NOT-NULL conventions:
+      //   amount = Math.round(marginUsdc * 1e6)   (micro-USDC, keeps existing NOT NULL)
+      //   scheduledFor = body.scheduledFor ?? Date.now()  (price triggers dominate)
+      //   vendor = null
+      //   asset = "SOL"
+      const scheduledForMs: number =
+        typeof body.scheduledFor === "number" ? body.scheduledFor : Date.now();
+
+      const item = await createScheduledItem({
+        id: itemId,
+        agentId: params.id,
+        actionType: "perp-open",
+        vendor: null,
+        amount: Math.round(perp.marginUsdc * 1e6),
+        asset: "SOL",
+        toAsset: null,
+        reason: typeof body.reason === "string" ? body.reason : null,
+        scheduledFor: new Date(scheduledForMs),
+        trigger: {
+          kind: trigger.kind,
+          basisPrice: trigger.basisPrice,
+          dropPct: trigger.dropPct,
+          targetPrice: trigger.price ?? trigger.targetPrice,
+          deadline: trigger.deadline ? new Date(trigger.deadline) : undefined,
+        },
+        perp: {
+          market: perp.market,
+          side: perp.side,
+          leverage: perp.leverage,
+          marginUsdc: perp.marginUsdc,
+          stopLoss: perp.stopLoss ?? null,
+          takeProfit: perp.takeProfit ?? null,
+          userOrderId,
+        },
+      });
+
+      // If policy required approval, update status and inform the caller
+      if (verdict.verdict === "requires-approval") {
+        await updateScheduledItemStatus(item.id, "awaiting-approval");
+        return NextResponse.json({
+          item: { ...item, status: "awaiting-approval" },
+          policyVerdict: verdict.verdict,
+          reason: verdict.reason,
+        });
+      }
+
+      return NextResponse.json({ item, policyVerdict: verdict.verdict });
+    }
+
+    if (body.actionType === "perp-close") {
+      const perp = body.perp;
+      if (!perp || typeof perp.market !== "string" || !perp.market) {
+        return NextResponse.json({ error: "perp.market required for perp-close" }, { status: 400 });
+      }
+
+      const scheduledForMs: number =
+        typeof body.scheduledFor === "number" ? body.scheduledFor : Date.now();
+
+      const item = await createScheduledItem({
+        id: typeof body.id === "string" ? body.id : undefined,
+        agentId: params.id,
+        actionType: "perp-close",
+        vendor: null,
+        amount: 0,
+        asset: "SOL",
+        toAsset: null,
+        reason: typeof body.reason === "string" ? body.reason : null,
+        scheduledFor: new Date(scheduledForMs),
+        trigger: {
+          kind: trigger.kind,
+          basisPrice: trigger.basisPrice,
+          dropPct: trigger.dropPct,
+          targetPrice: trigger.price ?? trigger.targetPrice,
+          deadline: trigger.deadline ? new Date(trigger.deadline) : undefined,
+        },
+        perp: {
+          market: perp.market,
+          side: null,
+          leverage: null,
+          marginUsdc: null,
+          stopLoss: null,
+          takeProfit: null,
+          userOrderId: null,
+        },
+      });
+
+      return NextResponse.json({ item });
+    }
+
+    // ── pay / swap branch (unchanged behavior — additive only) ──────────────
     if (typeof body.amount !== "number" || body.amount <= 0) {
       return NextResponse.json({ error: "amount must be positive number" }, { status: 400 });
     }
     if (typeof body.scheduledFor !== "number") {
       return NextResponse.json({ error: "scheduledFor (ms) required" }, { status: 400 });
-    }
-    const trigger = body.trigger ?? { kind: "time" };
-    if (!ALLOWED_TRIGGERS.includes(trigger.kind)) {
-      return NextResponse.json({ error: "invalid trigger kind" }, { status: 400 });
     }
 
     const item = await createScheduledItem({

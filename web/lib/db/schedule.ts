@@ -12,6 +12,18 @@ export async function listScheduleForAgent(agentId: string): Promise<ScheduledIt
   return (data as ScheduledItem[]) ?? [];
 }
 
+/** Perp descriptor for createScheduledItem. All fields nullable to support
+ *  perp-close (which only needs market). */
+export type PerpInsertBlock = {
+  market: string;
+  side: "long" | "short" | null;
+  leverage: number | null;
+  marginUsdc: number | null;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  userOrderId: number | null;
+};
+
 export async function createScheduledItem(input: {
   /** Optional client-provided uuid so the browser item and the DB row share
    *  the same id. Lets remove/patch target the row by the id the client holds
@@ -32,6 +44,8 @@ export async function createScheduledItem(input: {
     targetPrice?: number;
     deadline?: Date;
   };
+  /** Present for perp-open and perp-close; absent for pay/swap. */
+  perp?: PerpInsertBlock;
 }): Promise<ScheduledItem> {
   const db = supabaseAdmin();
   const { data, error } = await db
@@ -51,11 +65,73 @@ export async function createScheduledItem(input: {
       trigger_drop_pct: input.trigger.dropPct ?? null,
       trigger_target_price: input.trigger.targetPrice ?? null,
       trigger_deadline: input.trigger.deadline?.toISOString() ?? null,
+      // perp descriptor — null for non-perp action types
+      perp_market: input.perp?.market ?? null,
+      perp_side: input.perp?.side ?? null,
+      perp_leverage: input.perp?.leverage ?? null,
+      perp_margin_usdc: input.perp?.marginUsdc ?? null,
+      perp_stop_loss: input.perp?.stopLoss ?? null,
+      perp_take_profit: input.perp?.takeProfit ?? null,
+      perp_user_order_id: input.perp?.userOrderId ?? null,
     })
     .select("*")
     .single();
   if (error || !data) throw new Error(`createScheduledItem: ${error?.message}`);
   return data as ScheduledItem;
+}
+
+/**
+ * Sum of perp_margin_usdc for done perp-open items executed today (UTC).
+ * Used by the route to evaluate the dailyMarginBudget policy gate.
+ */
+export async function sumMarginExecutedTodayUTC(agentId: string): Promise<number> {
+  const todayUTC = new Date();
+  todayUTC.setUTCHours(0, 0, 0, 0);
+
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("scheduled_items")
+    .select("perp_margin_usdc")
+    .eq("agent_id", agentId)
+    .eq("action_type", "perp-open")
+    .eq("status", "done")
+    .gte("executed_at", todayUTC.toISOString());
+
+  if (error) throw new Error(`sumMarginExecutedTodayUTC: ${error.message}`);
+  const rows = (data as Array<{ perp_margin_usdc: number | null }> | null) ?? [];
+  return rows.reduce((acc, r) => acc + (r.perp_margin_usdc ?? 0), 0);
+}
+
+/**
+ * Approximate count of open perp positions for an agent.
+ * Formula: max(0, count(perp-open done) - count(perp-close done)).
+ * This is a simple approximation documented as such — it does not account for
+ * partial closes or cross-market position tracking.
+ */
+export async function countOpenPerpPositions(agentId: string): Promise<number> {
+  const db = supabaseAdmin();
+
+  const [opensResult, closesResult] = await Promise.all([
+    db
+      .from("scheduled_items")
+      .select("id", { count: "exact", head: true })
+      .eq("agent_id", agentId)
+      .eq("action_type", "perp-open")
+      .eq("status", "done"),
+    db
+      .from("scheduled_items")
+      .select("id", { count: "exact", head: true })
+      .eq("agent_id", agentId)
+      .eq("action_type", "perp-close")
+      .eq("status", "done"),
+  ]);
+
+  if (opensResult.error) throw new Error(`countOpenPerpPositions (opens): ${opensResult.error.message}`);
+  if (closesResult.error) throw new Error(`countOpenPerpPositions (closes): ${closesResult.error.message}`);
+
+  const opens = (opensResult as any).count ?? 0;
+  const closes = (closesResult as any).count ?? 0;
+  return Math.max(0, opens - closes);
 }
 
 export async function updateScheduledItemStatus(

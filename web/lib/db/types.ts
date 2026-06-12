@@ -1,10 +1,11 @@
 /**
- * Hand-authored TypeScript types matching db/migrations/0001_init.sql.
- *
- * Once the Supabase project exists, replace with auto-generated types via:
+ * Hand-authored TypeScript types matching db/migrations/0001_init.sql and later
+ * migrations.  Once the Supabase project exists, replace with auto-generated
+ * types via:
  *   supabase gen types typescript --project-id <ref> > web/lib/db/generated.ts
  * then re-export from here.
  */
+import type { PerpPolicyParams } from "@/lib/perp-policy";
 
 export type Provider =
   | "groq"
@@ -17,7 +18,7 @@ export type Provider =
   | "kimi";
 export type Persona = "operative" | "greedie" | "conservador" | "estable";
 export type TriggerKind = "time" | "dip" | "below" | "above";
-export type ActionType = "pay" | "swap";
+export type ActionType = "pay" | "swap" | "perp-open" | "perp-close";
 export type ScheduledStatus =
   | "queued"
   | "executing"
@@ -74,6 +75,8 @@ export interface Agent {
   created_at: string;
   last_wake_at: string | null;
   next_wake_at: string | null;
+  /** Off-chain perp policy (Fase 1). Defaults to DEFAULT_PERP_POLICY via DB default. */
+  perp_policy: PerpPolicyParams;
 }
 
 export interface ScheduledItem {
@@ -96,6 +99,14 @@ export interface ScheduledItem {
   error_message: string | null;
   created_at: string;
   executed_at: string | null;
+  // ── perp descriptor (0014_perps.sql) — null for pay/swap items ──
+  perp_market: string | null;
+  perp_side: "long" | "short" | null;
+  perp_leverage: number | null;
+  perp_margin_usdc: number | null;
+  perp_stop_loss: number | null;
+  perp_take_profit: number | null;
+  perp_user_order_id: number | null;
 }
 
 export interface Opportunity {
