@@ -345,3 +345,145 @@ describe("sumMarginExecutedTodayUTC", () => {
     expect(result).toBe(425);
   });
 });
+
+
+// ── reconcileStuckExecuting tests ─────────────────────────────────────────────
+
+describe("reconcileStuckExecuting", () => {
+  it("marks a stuck-executing row (older than 10 min) as failed with reconcile message", async () => {
+    const updatedRows: Array<Record<string, unknown>> = [];
+    const chain: Record<string, unknown> = {};
+    chain["eq"] = vi.fn(() => chain);
+    chain["lt"] = vi.fn(() => chain);
+    chain["select"] = vi.fn().mockResolvedValue({ data: [{ id: "stuck-item-001" }], error: null });
+
+    const db = {
+      from: vi.fn((_table: string) => ({
+        update: vi.fn((vals: Record<string, unknown>) => {
+          updatedRows.push(vals);
+          return chain;
+        }),
+      })),
+    };
+
+    const { reconcileStuckExecuting } = await import("./dispatch-perp.js");
+    await reconcileStuckExecuting(db as any, "agent-uuid-0001");
+
+    expect(updatedRows).toHaveLength(1);
+    const payload = updatedRows[0];
+    expect(payload["status"]).toBe("failed");
+    expect(typeof payload["error_message"]).toBe("string");
+    expect((payload["error_message"] as string).toLowerCase()).toContain("reconciled");
+    expect((payload["error_message"] as string).toLowerCase()).toContain("stuck");
+  });
+
+  it("never auto-retries: status set to failed, never queued or executing", async () => {
+    const updatedRows: Array<Record<string, unknown>> = [];
+    const chain: Record<string, unknown> = {};
+    chain["eq"] = vi.fn(() => chain);
+    chain["lt"] = vi.fn(() => chain);
+    chain["select"] = vi.fn().mockResolvedValue({ data: [{ id: "stuck-001" }], error: null });
+
+    const db = {
+      from: vi.fn((_table: string) => ({
+        update: vi.fn((vals: Record<string, unknown>) => {
+          updatedRows.push(vals);
+          return chain;
+        }),
+      })),
+    };
+
+    const { reconcileStuckExecuting } = await import("./dispatch-perp.js");
+    await reconcileStuckExecuting(db as any, "agent-uuid-0001");
+
+    for (const row of updatedRows) {
+      expect(row["status"]).not.toBe("queued");
+      expect(row["status"]).not.toBe("executing");
+      expect(row["status"]).toBe("failed");
+    }
+  });
+});
+
+
+// ── Fix M-2: oracle gap guard for dip triggers ────────────────────────────────
+
+describe("dispatchPerpItem — dip trigger oracle gap guard (M-2)", () => {
+  it("dip trigger: oracle far below computed dip target (>1.5%) => skipped with gap reason", async () => {
+    // dip trigger: basisPrice=100, dropPct=5 => target = 95.0
+    // oracle = 92.0 => gap = |92 - 95| / 95 = 3.16% > 1.5%
+    // oracle(92) < target(95) => beyondTrigger for dip => skipped
+    const db = makeDb([{ id: "test-item-uuid-0001" }]);
+    const adapter = makeMockAdapter({
+      getOraclePrice: vi.fn().mockResolvedValue(92.0),
+    });
+
+    const result = await dispatchPerpItem({
+      db: db as any,
+      adapter,
+      item: makePerpOpenItem({
+        trigger_kind: "dip",
+        trigger_target_price: null,
+        trigger_basis_price: 100,
+        trigger_drop_pct: 5,
+      }),
+      policy: DEFAULT_PERP_POLICY,
+      dailyMarginUsedUsdc: 0,
+      openPositions: 0,
+    });
+
+    expect(result.outcome).toBe("skipped");
+    expect(adapter.openPerp).not.toHaveBeenCalled();
+  });
+
+  it("dip trigger: oracle near computed dip target (within 1.5%) => proceeds past gap guard", async () => {
+    // dip trigger: basisPrice=100, dropPct=5 => target = 95.0
+    // oracle = 94.6 => gap = |94.6 - 95| / 95 = 0.42% < 1.5% => NOT skipped by gap guard
+    const db = makeDb([{ id: "test-item-uuid-0001" }]);
+    const adapter = makeMockAdapter({
+      getOraclePrice: vi.fn().mockResolvedValue(94.6),
+    });
+
+    const result = await dispatchPerpItem({
+      db: db as any,
+      adapter,
+      item: makePerpOpenItem({
+        trigger_kind: "dip",
+        trigger_target_price: null,
+        trigger_basis_price: 100,
+        trigger_drop_pct: 5,
+      }),
+      policy: DEFAULT_PERP_POLICY,
+      dailyMarginUsedUsdc: 0,
+      openPositions: 0,
+    });
+
+    // Should NOT be skipped by gap guard — proceeds to done (happy path)
+    expect(result.outcome).toBe("done");
+  });
+
+  it("dip trigger: oracle above computed dip target => NOT skipped (price not yet through dip)", async () => {
+    // dip trigger: basisPrice=100, dropPct=5 => target = 95.0
+    // oracle = 96.0 (above target) => gap = 1.05% but oracle > target => beyondTrigger(dip) is false
+    const db = makeDb([{ id: "test-item-uuid-0001" }]);
+    const adapter = makeMockAdapter({
+      getOraclePrice: vi.fn().mockResolvedValue(96.0),
+    });
+
+    const result = await dispatchPerpItem({
+      db: db as any,
+      adapter,
+      item: makePerpOpenItem({
+        trigger_kind: "dip",
+        trigger_target_price: null,
+        trigger_basis_price: 100,
+        trigger_drop_pct: 5,
+      }),
+      policy: DEFAULT_PERP_POLICY,
+      dailyMarginUsedUsdc: 0,
+      openPositions: 0,
+    });
+
+    // oracle above target: beyondTrigger(dip) = false => not skipped by gap guard
+    expect(result.outcome).not.toBe("skipped");
+  });
+});

@@ -17,7 +17,7 @@ import { supabaseAdmin } from "../lib/supabase.ts";
 import { describeMarket, getMarketSnapshot } from "../lib/market.ts";
 import { isVenueEnabled, makeAdrenaAdapter } from "../lib/venue.ts";
 import { DEFAULT_PERP_POLICY } from "../lib/perp-policy.ts";
-import { dispatchPerpItem, sumMarginExecutedTodayUTC } from "../lib/dispatch-perp.ts";
+import { dispatchPerpItem, sumMarginExecutedTodayUTC, reconcileStuckExecuting } from "../lib/dispatch-perp.ts";
 import { loadTradingKeypair } from "../lib/trading-key.ts";
 import type { PerpPolicyParams } from "../lib/perp-policy.ts";
 
@@ -96,6 +96,11 @@ export const agentWakeJob = schedules.task({
         // 1. Market snapshot
         const snap = await getMarketSnapshot("SOL");
         logger.log("market", { snapshot: describeMarket(snap) });
+
+        // 2a. Reconcile stuck-executing items (I-1 hardening)
+        // Before processing new items, mark any items stuck in 'executing' for
+        // >10min as 'failed'. Protects against worker-died-mid-dispatch invisibility.
+        await reconcileStuckExecuting(db, a.id);
 
         // 2. Check pending price triggers
         const { data: pending } = await db

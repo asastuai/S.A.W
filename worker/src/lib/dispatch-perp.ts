@@ -47,6 +47,9 @@ export type DispatchResult = {
     | "denied"
     | "skipped"
     | "failed";
+  /** Terminal error_message (same value written to the DB row). Present for
+   *  denied/skipped/failed outcomes; undefined for done and claimed-elsewhere. */
+  error_message?: string;
 };
 
 // ── Main dispatch function ────────────────────────────────────────────────────
@@ -78,7 +81,8 @@ export async function dispatchPerpItem(input: DispatchInput): Promise<DispatchRe
       .from("scheduled_items")
       .update({ status, ...extra })
       .eq("id", item["id"]);
-    return { outcome: status };
+    const errorMsg = extra["error_message"] as string | undefined;
+    return { outcome: status, ...(errorMsg !== undefined ? { error_message: errorMsg } : {}) };
   };
 
   try {
@@ -130,10 +134,9 @@ export async function dispatchPerpItem(input: DispatchInput): Promise<DispatchRe
     // If the oracle drifted >1.5% BEYOND the trigger direction since the trigger
     // fired, we are entering late and badly priced. Skip, do not enter.
     const oracle = await adapter.getOraclePrice(intent.market);
-    const trigPrice =
-      item["trigger_target_price"] != null
-        ? Number(item["trigger_target_price"])
-        : oracle; // time-based triggers have no price target; use oracle (gap = 0)
+    // For dip triggers, trigger_target_price is null — use effectiveTriggerPrice()
+    // to compute basis*(1-drop/100). For time triggers, oracle is returned (gap = 0).
+    const trigPrice = effectiveTriggerPrice(item, oracle);
 
     const gapPct = Math.abs(oracle - trigPrice) / trigPrice;
     if (
@@ -179,6 +182,37 @@ export async function dispatchPerpItem(input: DispatchInput): Promise<DispatchRe
   }
 }
 
+// ── effectiveTriggerPrice ────────────────────────────────────────────────────
+
+/**
+ * Returns the effective trigger price to use in the oracle gap guard.
+ *
+ * - below/above: trigger_target_price (the explicit price level).
+ * - dip: computed as trigger_basis_price * (1 - trigger_drop_pct / 100).
+ *   Before M-2 fix this fell through to oracle, making the gap guard a no-op
+ *   for all dip triggers.
+ * - time (or malformed): oracle (gap = 0, never skipped by gap guard).
+ *
+ * Exported for unit testing.
+ */
+export function effectiveTriggerPrice(
+  item: Record<string, unknown>,
+  oracle: number,
+): number {
+  if (item["trigger_target_price"] != null) {
+    return Number(item["trigger_target_price"]);
+  }
+  if (
+    item["trigger_kind"] === "dip" &&
+    item["trigger_basis_price"] != null &&
+    item["trigger_drop_pct"] != null
+  ) {
+    return Number(item["trigger_basis_price"]) * (1 - Number(item["trigger_drop_pct"]) / 100);
+  }
+  // time triggers or malformed dip rows: no price target, gap = 0
+  return oracle;
+}
+
 // ── Oracle gap direction helper ───────────────────────────────────────────────
 
 /**
@@ -199,6 +233,59 @@ function beyondTrigger(
   if (triggerKind === "below" || triggerKind === "dip") return oracle < trigPrice;
   if (triggerKind === "above") return oracle > trigPrice;
   return false;
+}
+
+/** Items in 'executing' for longer than this are considered stuck (worker died). */
+const STUCK_EXECUTING_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+
+// ── reconcileStuckExecuting ───────────────────────────────────────────────────
+
+/**
+ * Janitor: finds this agent's scheduled_items stuck in 'executing' status for
+ * longer than STUCK_EXECUTING_THRESHOLD_MS and marks them 'failed'.
+ *
+ * WHY: If the worker process dies between the atomic claim (status='executing')
+ * and the terminal status write (done/failed/skipped), the row stays 'executing'
+ * forever. It is SAFE (never re-picked, no double-send) but invisible. This
+ * janitor surfaces it to a human for manual verification.
+ *
+ * TIMESTAMP HEURISTIC: scheduled_items has no 'claimed_at' column. We use
+ * created_at (the time the item was inserted into the queue, not when it was
+ * claimed). This is a conservative over-estimate — for items that sat in
+ * 'queued' a long time before firing, created_at may be much older than the
+ * actual claim time. The threshold (10 min) is intentionally large enough that
+ * a brand-new item fired immediately is still never falsely reconciled.
+ * SAFETY: reconcile runs at the START of a wake, before this wake dispatches,
+ * and dispatchPerpItem is awaited synchronously within a wake — so a row is only
+ * ever 'executing' here if a PRIOR wake died mid-dispatch. Residual edge: if
+ * agent_wake instances ever overlap (concurrent wakes), a long in-flight dispatch
+ * whose item was queued >threshold ago could be marked 'failed' while its tx is
+ * still landing. Acceptable for now (the failure mode is already safe — M-5 blocks
+ * double-send), tracked as a follow-up: add a 'claimed_at' column for an exact
+ * heuristic instead of created_at.
+ *
+ * NEVER auto-retries. A tx may have landed — a human must check.
+ *
+ * Called by agent-wake.ts BEFORE processing pending items.
+ */
+export async function reconcileStuckExecuting(
+  db: SupabaseClient,
+  agentId: string,
+): Promise<void> {
+  const threshold = new Date(Date.now() - STUCK_EXECUTING_THRESHOLD_MS);
+  const thresholdIso = threshold.toISOString();
+
+  await db
+    .from("scheduled_items")
+    .update({
+      status: "failed",
+      error_message:
+        "reconciled: stuck in executing (worker died mid-dispatch?) — verify position manually",
+    })
+    .eq("agent_id", agentId)
+    .eq("status", "executing")
+    .lt("created_at", thresholdIso)
+    .select("id");
 }
 
 // ── sumMarginExecutedTodayUTC ─────────────────────────────────────────────────
