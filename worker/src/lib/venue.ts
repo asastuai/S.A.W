@@ -201,15 +201,22 @@ export interface VenueAdapter {
 
 /**
  * Returns true when the venue is enabled.
+ *
  * VENUE==="adrena" AND one of:
  *   - VENUE_ENV==="localnet"
  *   - VENUE_ENV==="devnet"
  *   - VENUE_ENV==="mainnet-dust" AND VENUE_ALLOW_MAINNET_DUST==="true"
+ *
+ * VENUE==="sur" AND one of:
+ *   - VENUE_ENV==="localnet"
+ *   - VENUE_ENV==="devnet"
+ *   - VENUE_ENV==="mainnet-dust" AND VENUE_ALLOW_MAINNET_DUST==="true"
+ *   (same gating as adrena — mainnet-dust requires explicit opt-in flag)
  */
 export function isVenueEnabled(): boolean {
   const venue = process.env["VENUE"];
   const env = process.env["VENUE_ENV"];
-  if (venue !== "adrena") return false;
+  if (venue !== "adrena" && venue !== "sur") return false;
   if (env === "localnet" || env === "devnet") return true;
   if (env === "mainnet-dust" && process.env["VENUE_ALLOW_MAINNET_DUST"] === "true") return true;
   return false;

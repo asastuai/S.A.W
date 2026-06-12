@@ -1,0 +1,1782 @@
+{
+  "address": "28pVZVVY2MyxmukdDTcz85zD88TsfDBhqovgU6ARW6SX",
+  "metadata": {
+    "name": "perp_engine",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "SUR Protocol — PerpEngine. Solana port of PerpEngine.sol (core subset). v0.2 ships with Market + Position state, openPosition / closePosition / updateMarkPrice. Funding, liquidation eligibility, OI caps, margin tiers, cross/isolated modes, price impact land in v0.3 (Liquidator + AutoDeleveraging as separate programs mirror Solidity)."
+  },
+  "instructions": [
+    {
+      "name": "accept_ownership",
+      "discriminator": [
+        172,
+        23,
+        43,
+        13,
+        238,
+        213,
+        85,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "engine_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  103,
+                  105,
+                  110,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending_owner",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "add_market",
+      "discriminator": [
+        41,
+        137,
+        185,
+        126,
+        69,
+        139,
+        254,
+        55
+      ],
+      "accounts": [
+        {
+          "name": "engine_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  103,
+                  105,
+                  110,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "market_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "engine_config"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "market_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "initial_margin_bps",
+          "type": "u64"
+        },
+        {
+          "name": "maintenance_margin_bps",
+          "type": "u64"
+        },
+        {
+          "name": "max_position_size",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "bootstrap_engine_pool",
+      "discriminator": [
+        124,
+        237,
+        57,
+        229,
+        201,
+        38,
+        16,
+        106
+      ],
+      "accounts": [
+        {
+          "name": "engine_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  103,
+                  105,
+                  110,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  103,
+                  105,
+                  110,
+                  101,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "perp_vault_program"
+        },
+        {
+          "name": "vault_config",
+          "writable": true
+        },
+        {
+          "name": "usdc_vault",
+          "writable": true
+        },
+        {
+          "name": "authority_usdc",
+          "writable": true
+        },
+        {
+          "name": "engine_pool_balance",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "engine_config"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "close_position",
+      "discriminator": [
+        123,
+        134,
+        81,
+        0,
+        49,
+        68,
+        98,
+        98
+      ],
+      "accounts": [
+        {
+          "name": "engine_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  103,
+                  105,
+                  110,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "operator_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "operator",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "fill_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "engine_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  103,
+                  105,
+                  110,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Pre-funded by owner with rent for downstream init_if_needed. Must be",
+            "pre-registered as operator on perp_vault (one-time set_operator call).",
+            "Holds engine_pool AccountBalance (margin + counterparty pool) on vault."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  103,
+                  105,
+                  110,
+                  101,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "perp_vault"
+        },
+        {
+          "name": "oracle_router"
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "liquidate_position",
+      "discriminator": [
+        187,
+        74,
+        229,
+        149,
+        102,
+        81,
+        221,
+        68
+      ],
+      "accounts": [
+        {
+          "name": "engine_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  103,
+                  105,
+                  110,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "operator_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "operator",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "open_position",
+      "discriminator": [
+        135,
+        128,
+        47,
+        77,
+        15,
+        152,
+        240,
+        49
+      ],
+      "accounts": [
+        {
+          "name": "engine_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  103,
+                  105,
+                  110,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "trader"
+        },
+        {
+          "name": "operator_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "operator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "size_delta",
+          "type": "i64"
+        },
+        {
+          "name": "fill_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "pause",
+      "discriminator": [
+        211,
+        22,
+        221,
+        251,
+        74,
+        121,
+        193,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "engine_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  103,
+                  105,
+                  110,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "engine_config"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "set_insurance_fund_balance",
+      "discriminator": [
+        125,
+        49,
+        119,
+        62,
+        10,
+        40,
+        144,
+        199
+      ],
+      "accounts": [
+        {
+          "name": "engine_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  103,
+                  105,
+                  110,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "engine_config"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "balance",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_operator",
+      "discriminator": [
+        238,
+        153,
+        101,
+        169,
+        243,
+        131,
+        36,
+        1
+      ],
+      "accounts": [
+        {
+          "name": "engine_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  103,
+                  105,
+                  110,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "operator_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "engine_config"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "operator",
+          "type": "pubkey"
+        },
+        {
+          "name": "status",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "transfer_ownership",
+      "discriminator": [
+        65,
+        177,
+        215,
+        73,
+        53,
+        45,
+        99,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "engine_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  103,
+                  105,
+                  110,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "engine_config"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_owner",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "unpause",
+      "discriminator": [
+        169,
+        144,
+        4,
+        38,
+        10,
+        141,
+        188,
+        255
+      ],
+      "accounts": [
+        {
+          "name": "engine_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  103,
+                  105,
+                  110,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "engine_config"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "update_mark_price",
+      "discriminator": [
+        45,
+        127,
+        122,
+        166,
+        7,
+        30,
+        90,
+        45
+      ],
+      "accounts": [
+        {
+          "name": "engine_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  110,
+                  103,
+                  105,
+                  110,
+                  101,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "operator_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "operator",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_mark_price",
+          "type": "u64"
+        },
+        {
+          "name": "new_index_price",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "EngineConfig",
+      "discriminator": [
+        10,
+        197,
+        172,
+        236,
+        51,
+        169,
+        22,
+        207
+      ]
+    },
+    {
+      "name": "Market",
+      "discriminator": [
+        219,
+        190,
+        213,
+        55,
+        0,
+        227,
+        198,
+        154
+      ]
+    },
+    {
+      "name": "Operator",
+      "discriminator": [
+        219,
+        31,
+        188,
+        145,
+        69,
+        139,
+        204,
+        117
+      ]
+    },
+    {
+      "name": "Position",
+      "discriminator": [
+        170,
+        188,
+        143,
+        228,
+        122,
+        64,
+        247,
+        208
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "BadDebt",
+      "discriminator": [
+        192,
+        33,
+        54,
+        41,
+        223,
+        158,
+        37,
+        34
+      ]
+    },
+    {
+      "name": "LiquidationDistributed",
+      "discriminator": [
+        41,
+        230,
+        102,
+        209,
+        243,
+        135,
+        127,
+        93
+      ]
+    },
+    {
+      "name": "MarkPriceUpdated",
+      "discriminator": [
+        7,
+        90,
+        41,
+        114,
+        164,
+        146,
+        198,
+        36
+      ]
+    },
+    {
+      "name": "MarketAdded",
+      "discriminator": [
+        170,
+        8,
+        231,
+        175,
+        249,
+        85,
+        111,
+        175
+      ]
+    },
+    {
+      "name": "OperatorUpdated",
+      "discriminator": [
+        28,
+        104,
+        226,
+        145,
+        253,
+        229,
+        17,
+        245
+      ]
+    },
+    {
+      "name": "OwnershipTransferStarted",
+      "discriminator": [
+        183,
+        253,
+        239,
+        246,
+        140,
+        179,
+        133,
+        105
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "discriminator": [
+        172,
+        61,
+        205,
+        183,
+        250,
+        50,
+        38,
+        98
+      ]
+    },
+    {
+      "name": "PauseStatusChanged",
+      "discriminator": [
+        79,
+        144,
+        205,
+        195,
+        9,
+        152,
+        146,
+        91
+      ]
+    },
+    {
+      "name": "PositionClosed",
+      "discriminator": [
+        157,
+        163,
+        227,
+        228,
+        13,
+        97,
+        138,
+        121
+      ]
+    },
+    {
+      "name": "PositionModified",
+      "discriminator": [
+        2,
+        251,
+        140,
+        65,
+        176,
+        78,
+        250,
+        126
+      ]
+    },
+    {
+      "name": "PositionOpened",
+      "discriminator": [
+        237,
+        175,
+        243,
+        230,
+        147,
+        117,
+        101,
+        121
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NotOwner",
+      "msg": "Caller is not owner"
+    },
+    {
+      "code": 6001,
+      "name": "NotPendingOwner",
+      "msg": "Caller is not pending owner"
+    },
+    {
+      "code": 6002,
+      "name": "NotOperator",
+      "msg": "Caller is not an authorized operator"
+    },
+    {
+      "code": 6003,
+      "name": "PausedError",
+      "msg": "Engine is paused"
+    },
+    {
+      "code": 6004,
+      "name": "NotPaused",
+      "msg": "Engine is not paused"
+    },
+    {
+      "code": 6005,
+      "name": "ZeroAmount",
+      "msg": "Zero amount"
+    },
+    {
+      "code": 6006,
+      "name": "ZeroAddress",
+      "msg": "Zero address"
+    },
+    {
+      "code": 6007,
+      "name": "MarketNotFound",
+      "msg": "Market not found"
+    },
+    {
+      "code": 6008,
+      "name": "MarketAlreadyExists",
+      "msg": "Market already exists"
+    },
+    {
+      "code": 6009,
+      "name": "MarketNotActive",
+      "msg": "Market is not active"
+    },
+    {
+      "code": 6010,
+      "name": "InsufficientMargin",
+      "msg": "Insufficient margin"
+    },
+    {
+      "code": 6011,
+      "name": "NoPosition",
+      "msg": "No position"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidPrice",
+      "msg": "Invalid price"
+    },
+    {
+      "code": 6013,
+      "name": "MaxPositionExceeded",
+      "msg": "Max position size exceeded"
+    },
+    {
+      "code": 6014,
+      "name": "StalePrice",
+      "msg": "Stale price (last update older than max age)"
+    },
+    {
+      "code": 6015,
+      "name": "PositionNotLiquidatable",
+      "msg": "Position is not liquidatable (equity >= maintenance margin)"
+    },
+    {
+      "code": 6016,
+      "name": "InvalidParam",
+      "msg": "Invalid parameter"
+    },
+    {
+      "code": 6017,
+      "name": "MathOverflow",
+      "msg": "Math overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "BadDebt",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "trader",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Shortfall amount (absolute). Solidity: loss - releasedMargin (close)",
+              "or -effectiveMargin (liquidate)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "via_liquidation",
+            "docs": [
+              "Liquidation = true; ordinary close with bad debt = false."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EngineConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "authority_bump",
+            "docs": [
+              "Bump for the engine_authority PDA — used to sign CPIs into perp_vault."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "perp_vault",
+            "docs": [
+              "Pubkey of the perp_vault program (for CPI on settlement)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "oracle_router",
+            "docs": [
+              "Pubkey of the oracle_router program (only this program may push prices)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "engine_pool",
+            "docs": [
+              "Canonical engine margin pool: the engine_authority's AccountBalance PDA on",
+              "perp_vault. Set once at bootstrap_engine_pool. Every margin/PnL CPI requires",
+              "the passed engine_pool_balance == this key (audit Gate 0a: C-1/H-2/N-1 fix)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "insurance_fund_balance",
+            "docs": [
+              "Canonical insurance-fund AccountBalance PDA on perp_vault. Set by the owner",
+              "via set_insurance_fund_balance. Liquidation routes insurance flows only to",
+              "this key (audit N-4 fix). Pubkey::default() = unset (enforcement skipped)."
+            ],
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LiquidationDistributed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "trader",
+            "type": "pubkey"
+          },
+          {
+            "name": "keeper",
+            "type": "pubkey"
+          },
+          {
+            "name": "keeper_reward",
+            "type": "u64"
+          },
+          {
+            "name": "insurance_payout",
+            "type": "u64"
+          },
+          {
+            "name": "bad_debt",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarkPriceUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "old_price",
+            "type": "u64"
+          },
+          {
+            "name": "new_price",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Market",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "market_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "initial_margin_bps",
+            "docs": [
+              "5% = 500 — required margin to open (= max 20x leverage)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "maintenance_margin_bps",
+            "docs": [
+              "2.5% = 250 — below this is liquidatable (consumed by Liquidator program v0.3)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_position_size",
+            "docs": [
+              "Max position size per trader (SIZE_PRECISION units)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "mark_price",
+            "docs": [
+              "Mark price (6 decimals) — used for PnL + maintenance margin"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "index_price",
+            "docs": [
+              "Index price (6 decimals) — used for funding (v0.3)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "last_price_update",
+            "type": "i64"
+          },
+          {
+            "name": "open_interest_long",
+            "docs": [
+              "Open interest in size units"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "open_interest_short",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketAdded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "initial_margin_bps",
+            "type": "u64"
+          },
+          {
+            "name": "maintenance_margin_bps",
+            "type": "u64"
+          },
+          {
+            "name": "max_position_size",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Operator",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "operator",
+            "type": "pubkey"
+          },
+          {
+            "name": "authorized",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OperatorUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "operator",
+            "type": "pubkey"
+          },
+          {
+            "name": "status",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OwnershipTransferStarted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "current_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_owner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "previous_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_owner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PauseStatusChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "is_paused",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Position",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "market_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "trader",
+            "type": "pubkey"
+          },
+          {
+            "name": "size",
+            "docs": [
+              "Signed size — positive=long, negative=short, zero=no position"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "entry_price",
+            "docs": [
+              "Average entry price (6 decimals)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "margin",
+            "docs": [
+              "Locked margin in USDC (6 decimals)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "last_updated",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PositionClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "trader",
+            "type": "pubkey"
+          },
+          {
+            "name": "closed_size",
+            "type": "i64"
+          },
+          {
+            "name": "exit_price",
+            "type": "u64"
+          },
+          {
+            "name": "realized_pnl",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PositionModified",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "trader",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_size",
+            "type": "i64"
+          },
+          {
+            "name": "new_size",
+            "type": "i64"
+          },
+          {
+            "name": "new_entry_price",
+            "type": "u64"
+          },
+          {
+            "name": "new_margin",
+            "type": "u64"
+          },
+          {
+            "name": "realized_pnl",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PositionOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "trader",
+            "type": "pubkey"
+          },
+          {
+            "name": "size",
+            "type": "i64"
+          },
+          {
+            "name": "entry_price",
+            "type": "u64"
+          },
+          {
+            "name": "margin",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}
