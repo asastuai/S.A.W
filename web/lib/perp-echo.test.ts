@@ -1,5 +1,5 @@
 // web/lib/perp-echo.test.ts — Task 6: structured echo builder tests (spec verbatim)
-import { describe, it, expect } from "vitest";
+import { it, expect } from "vitest";
 import { buildPerpEcho } from "./perp-echo";
 
 it("arma el echo estructurado de la spec", () => {

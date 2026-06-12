@@ -78,7 +78,9 @@ type ActionAdd = {
     /** Perp order descriptor — present when action_type is perp-open or perp-close */
     perpOrder?: {
       market: string;
-      side: "long" | "short";
+      /** Present for open orders. Omitted for close orders — close is reduce-only;
+       *  the actual side is determined at dispatch from the real open position. */
+      side?: "long" | "short";
       leverage: number;
       marginUsdc: number;
       stopLoss: number | null;
@@ -1298,8 +1300,8 @@ export async function POST(req: NextRequest) {
             const marginUsdc = Number(args.marginUsdc);
             const reason = String(args.reason || `open ${side} ${market}`);
 
-            if (!Number.isFinite(leverage) || leverage <= 0) {
-              toolResult = "Invalid leverage — must be a positive number.";
+            if (!Number.isInteger(leverage) || leverage < 1 || leverage > 20) {
+              toolResult = "Invalid leverage — must be an integer between 1 and 20.";
               break;
             }
             if (!Number.isFinite(marginUsdc) || marginUsdc <= 0) {
@@ -1316,21 +1318,28 @@ export async function POST(req: NextRequest) {
                 ? Number(args.takeProfit)
                 : null;
 
-            // Build trigger
-            let perpTrigger: { kind: "time" } | { kind: "below"; asset?: string; price: number } | { kind: "above"; asset?: string; price: number } | { kind: "dip"; basisPrice: number; dropPct: number } = { kind: "time" };
+            // Build trigger — all conditional branches carry `asset` to satisfy the Trigger discriminated union.
+            let perpTrigger: Trigger = { kind: "time" };
             if (args.trigger && args.trigger.kind) {
               const tk = args.trigger;
               if ((tk.kind === "below" || tk.kind === "above") && Number.isFinite(Number(tk.price))) {
-                perpTrigger = { kind: tk.kind, asset: tk.asset ?? "SOL", price: Number(tk.price) };
+                perpTrigger = { kind: tk.kind, asset: String(tk.asset ?? "SOL"), price: Number(tk.price) };
               } else if (tk.kind === "dip" && Number.isFinite(Number(tk.basisPrice)) && Number.isFinite(Number(tk.dropPct))) {
-                perpTrigger = { kind: "dip", basisPrice: Number(tk.basisPrice), dropPct: Number(tk.dropPct) };
+                perpTrigger = { kind: "dip", asset: String(tk.asset ?? "SOL"), basisPrice: Number(tk.basisPrice), dropPct: Number(tk.dropPct) };
               }
             }
 
             const intent = { market, side, leverage, marginUsdc, stopLoss, takeProfit };
 
-            // Policy pre-check (advisory UX — authoritative check is server-side
-            // at schedule route (Task 5) and at fire time (Task 7)).
+            // Policy pre-check — ADVISORY ONLY.
+            // This chat route is persona/session-based; there is no DB agent id in scope,
+            // so we cannot query real cumulative margin or open-position counts here.
+            // policyCtx is intentionally zeroed: this check catches hard per-trade limit
+            // violations (leverage cap, single-trade margin limit) but will NOT surface
+            // daily-budget or max-positions breaches.
+            // The AUTHORITATIVE budget + position check runs server-side in the schedule
+            // route (Task 5) and at fire time (Task 7), where a real agent id and DB
+            // access are available. Do NOT rely on this verdict for enforcement.
             const perpPolicy = body.persona.policy.perpPolicy ?? DEFAULT_PERP_POLICY;
             const policyCtx = { dailyMarginUsedUsdc: 0, openPositions: 0 };
             const verdict = evaluatePerpPolicy(intent, perpPolicy, policyCtx);
@@ -1369,7 +1378,7 @@ export async function POST(req: NextRequest) {
                 amount: Math.round(marginUsdc * 10 ** DEMO_DECIMALS),
                 scheduledFor: Date.now(),
                 reason,
-                trigger: perpTrigger.kind === "time" ? { kind: "time" } : perpTrigger as any,
+                trigger: perpTrigger,
                 perpOrder: { market, side, leverage, marginUsdc, stopLoss, takeProfit, intendedStatus },
               },
             });
@@ -1391,8 +1400,9 @@ export async function POST(req: NextRequest) {
                 reason,
                 trigger: { kind: "time" },
                 perpOrder: {
+                  // side is intentionally omitted — close is reduce-only; the actual
+                  // side is determined at dispatch from the real open position.
                   market,
-                  side: "long", // placeholder — close is reduce-only; actual side from open position
                   leverage: 0,
                   marginUsdc: 0,
                   stopLoss: null,
