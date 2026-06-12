@@ -49,9 +49,10 @@ const PENDING_AWAITING = {
       perp_leverage: 5,
       perp_margin_usdc: 100,
       status: "awaiting-approval",
+      // Real API field names (positions/route.ts): asset is derived from
+      // perp_market, the threshold is trigger_target_price.
       trigger_kind: "below",
-      trigger_asset: "BTC",
-      trigger_price: 62000,
+      trigger_target_price: 62000,
     },
   ],
 };
@@ -202,6 +203,11 @@ test.describe("PositionsPanel", () => {
     const awaitingBadge = page.getByTestId("awaiting-badge").first();
     await expect(awaitingBadge).toBeVisible();
     await expect(awaitingBadge).toContainText("awaiting-approval");
+
+    // Trigger label renders from real API fields (perp_market → asset,
+    // trigger_target_price → threshold). Guards against the field-name
+    // regression where the panel read non-existent trigger_asset/trigger_price.
+    await expect(pendingRow).toContainText("BTC ≤ $62000.00");
 
     // Approve button visible
     const approveBtn = page.getByTestId("approve-button").first();

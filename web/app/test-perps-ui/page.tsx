@@ -13,7 +13,11 @@
 import { PositionsPanel } from "@/components/positions-panel";
 import { VenueCard } from "@/components/venue-card";
 
-export const PERPS_TEST_AGENT_ID = "test-agent-perps-ui";
+// Fixed agent id for the e2e harness. NOT exported — Next.js page files may only
+// export reserved names (default, metadata, etc.); a named export here breaks the
+// typed-routes build (TS2344). The Playwright spec defines its own matching
+// constant (web/tests/e2e/perps-ui.spec.ts: AGENT_ID).
+const PERPS_TEST_AGENT_ID = "test-agent-perps-ui";
 
 export default function TestPerpsUiPage() {
   return (

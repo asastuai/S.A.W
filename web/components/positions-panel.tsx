@@ -26,12 +26,13 @@ export type ScheduledItemView = {
   perp_leverage: number | null;
   perp_margin_usdc: number | null;
   status: string;
-  // trigger fields — mirrors DB schema from Task 5
+  // Trigger fields — mirrors the API contract from Task 8 (positions/route.ts).
+  // NOTE: there is NO trigger_asset / trigger_price column. The asset is derived
+  // from perp_market; the threshold price is trigger_target_price.
   trigger_kind?: string;
-  trigger_asset?: string;
-  trigger_price?: number;
-  trigger_basis_price?: number;
-  trigger_drop_pct?: number;
+  trigger_target_price?: number | null;
+  trigger_basis_price?: number | null;
+  trigger_drop_pct?: number | null;
 };
 
 type PositionsResponse = {
@@ -50,18 +51,27 @@ function fmtPnl(n: number): string {
   return `${sign}$${n.toFixed(2)}`;
 }
 
+/** Derive the display asset symbol from a perp market string ("SOL-PERP" → "SOL"). */
+function assetFromMarket(market: string | undefined): string {
+  if (!market) return "asset";
+  return market.replace(/-PERP$/i, "");
+}
+
 /**
  * Describe a trigger from raw DB fields (ScheduledItemView).
- * Mirrors describeTrigger from lib/schedule.ts but works on the DB view shape.
+ * Mirrors describeTrigger from lib/schedule.ts but works on the API view shape.
+ * The asset is derived from perp_market; the threshold is trigger_target_price
+ * (below/above) or trigger_basis_price + trigger_drop_pct (dip).
  */
 function describePendingTrigger(item: ScheduledItemView): string {
-  const { trigger_kind: kind, trigger_asset: asset } = item;
+  const kind = item.trigger_kind;
+  const asset = assetFromMarket(item.perp_market);
   if (!kind || kind === "time") return "on next wake";
-  if (kind === "below" && asset && item.trigger_price != null)
-    return `${asset} ≤ $${item.trigger_price.toFixed(2)}`;
-  if (kind === "above" && asset && item.trigger_price != null)
-    return `${asset} ≥ $${item.trigger_price.toFixed(2)}`;
-  if (kind === "dip" && asset && item.trigger_basis_price != null && item.trigger_drop_pct != null) {
+  if (kind === "below" && item.trigger_target_price != null)
+    return `${asset} ≤ $${item.trigger_target_price.toFixed(2)}`;
+  if (kind === "above" && item.trigger_target_price != null)
+    return `${asset} ≥ $${item.trigger_target_price.toFixed(2)}`;
+  if (kind === "dip" && item.trigger_basis_price != null && item.trigger_drop_pct != null) {
     const target = item.trigger_basis_price * (1 - item.trigger_drop_pct / 100);
     return `${asset} drops to $${target.toFixed(2)} (-${item.trigger_drop_pct}% from $${item.trigger_basis_price.toFixed(2)})`;
   }
