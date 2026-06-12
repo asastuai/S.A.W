@@ -3,6 +3,7 @@ import { Reveal } from "@/components/reveal";
 import { Spotlight } from "@/components/fx/spotlight";
 import { Tilt } from "@/components/fx/tilt";
 import { Magnetic } from "@/components/fx/magnetic";
+import { DecodeText } from "@/components/fx/decode-text";
 import { BootSequence } from "@/components/terminal/boot-sequence";
 import { Caret } from "@/components/terminal/caret";
 import { CommandLine } from "@/components/terminal/command-line";
@@ -168,7 +169,7 @@ function Hero() {
           <div className="relative mx-auto max-w-3xl border-l-2 border-rust/60 bg-rust/[0.06] p-5 pl-6 font-mono text-xs leading-relaxed text-bone/70">
             <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.3em] text-rust">
               <span aria-hidden className="mr-1 text-rust/60">!!</span>
-              Alpha disclosure
+              <DecodeText text="Alpha disclosure" />
             </p>
             <p>
               SAW is live on Solana devnet only. The Anchor programs passed a
@@ -219,7 +220,7 @@ function HowItWorks() {
           <div className="mb-12 flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.3em] text-gold/70">
-                <CommandLine prompt="$">man saw-protocol</CommandLine>
+                <CommandLine prompt="$"><DecodeText text="man saw-protocol" /></CommandLine>
               </p>
               <h2 className="font-display text-4xl uppercase tracking-cinema text-bone sm:text-5xl md:text-6xl">
                 The protocol.
@@ -290,7 +291,7 @@ function Personas() {
       <div className="mx-auto max-w-6xl">
         <Reveal>
           <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.3em] text-gold/70">
-            <CommandLine prompt="$">whoami</CommandLine>
+            <CommandLine prompt="$"><DecodeText text="whoami" /></CommandLine>
           </p>
           <h2 className="mb-4 font-display text-4xl uppercase tracking-cinema text-bone sm:text-5xl md:text-6xl">
             The operative.
@@ -423,7 +424,7 @@ function ShipLog() {
       <div className="mx-auto max-w-6xl">
         <Reveal>
           <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.3em] text-gold/70">
-            <CommandLine prompt="$">git log --oneline --decorate</CommandLine>
+            <CommandLine prompt="$"><DecodeText text="git log --oneline --decorate" /></CommandLine>
           </p>
           <h2 className="mb-4 font-display text-4xl uppercase tracking-cinema text-bone sm:text-5xl md:text-6xl">
             The ship log.
@@ -525,7 +526,7 @@ function FeatureGrid() {
           <div className="mb-12 flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.3em] text-gold/70">
-                <CommandLine prompt="$">saw --help</CommandLine>
+                <CommandLine prompt="$"><DecodeText text="saw --help" /></CommandLine>
               </p>
               <h2 className="font-display text-4xl uppercase tracking-cinema text-bone sm:text-5xl md:text-6xl">
                 The dossier.
