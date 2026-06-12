@@ -5,6 +5,8 @@ import { Reveal } from "@/components/reveal";
 import { TerminalPanel } from "@/components/terminal/terminal-panel";
 import { Readout } from "@/components/terminal/readout";
 import { CommandLine } from "@/components/terminal/command-line";
+import { PositionsPanel } from "@/components/positions-panel";
+import { VenueCard } from "@/components/venue-card";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 30;
@@ -257,6 +259,26 @@ export default async function AgentProfilePage({
             </div>
           </section>
         </TerminalPanel>
+      </Reveal>
+
+      {/* PERPS VENUE — trading keypair + float balance */}
+      <Reveal delay={200} className="mb-10">
+        <div className="flex items-center gap-4 mb-5">
+          <span className="font-mono text-xs text-gold/60 tracking-widest">[perp]</span>
+          <p className="stamp">Perps Venue</p>
+          <span className="h-px flex-1 bg-gradient-to-r from-ash to-transparent" />
+        </div>
+        <VenueCard agentId={agent.id} />
+      </Reveal>
+
+      {/* OPEN POSITIONS — live perp positions + pending conditional entries */}
+      <Reveal delay={240} className="mb-14">
+        <div className="flex items-center gap-4 mb-5">
+          <span className="font-mono text-xs text-gold/60 tracking-widest">[pos]</span>
+          <p className="stamp">Open Positions</p>
+          <span className="h-px flex-1 bg-gradient-to-r from-gold/40 to-transparent" />
+        </div>
+        <PositionsPanel agentId={agent.id} />
       </Reveal>
 
       <footer className="flex items-center gap-3 font-mono text-xs uppercase tracking-[0.25em] text-bone/30 border-t border-ash pt-4">
