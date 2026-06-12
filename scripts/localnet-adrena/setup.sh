@@ -155,12 +155,12 @@ else
 fi
 
 # ── Step 1b: Patch Oracle PDA timestamps ─────────────────────────────────────
-# The cloned Oracle PDA has timestamps ~60 days old. The Adrena program has a
-# staleness check and rejects prices with old timestamps (error 6088: MissingOraclePrice).
-# We fetch the oracle data from mainnet, update all price timestamps and the
-# account-level updatedAt to the current wall-clock time, then inject the patched
-# account via --account instead of --clone. Prices stay at their cloned values;
-# only the timestamps are refreshed so the staleness check passes.
+# The cloned Oracle PDA has timestamps in the past. The Adrena program has a
+# staleness check:  block_time - oracle.prices[i].timestamp < threshold
+# We set timestamps 4 hours IN THE FUTURE so they stay valid for 4+ hours of
+# validator runtime — the staleness check produces a negative difference and
+# the program always accepts the price as fresh. Prices stay at cloned values;
+# only the timestamps are patched. Account injected via --account (not --clone).
 ORACLE_PATCHED_JSON="${SCRIPT_DIR}/oracle-patched.json"
 log "Patching Oracle PDA timestamps (fetching from mainnet)..."
 ORACLE_DATA=$(curl -s -X POST "${MAINNET_RPC}" \
@@ -189,10 +189,18 @@ const oraclePubkey = process.env.ORACLE_PUBKEY;
 const outPath = process.env.ORACLE_PATCHED_JSON;
 
 const bytes = Buffer.from(base64Data, "base64");
-const now = BigInt(Math.floor(Date.now() / 1000));
+// Set timestamps 4 hours IN THE FUTURE so oracle stays fresh throughout the
+// validator session. The Adrena program checks:
+//   block_time - oracle.prices[i].timestamp < staleness_threshold
+// The block clock starts near wall-clock and advances normally. By setting
+// oracle timestamps in the future, the staleness check always passes:
+//   block_time - (now + 4h) = -(4h - elapsed) < 0  → always "fresh"
+// This avoids the MissingOraclePrice (6088) error for the entire session.
+const FOUR_HOURS = 4 * 60 * 60;
+const futureTs = BigInt(Math.floor(Date.now() / 1000) + FOUR_HOURS);
 
 // Update Oracle.updatedAt (offset 16, i64 LE)
-bytes.writeBigInt64LE(now, 16);
+bytes.writeBigInt64LE(futureTs, 16);
 
 // Update each OraclePrice.timestamp (all 50 slots)
 const headerSize = 24;
@@ -204,7 +212,7 @@ for (let i = 0; i < 50; i++) {
   const price = bytes.readBigUInt64LE(offset);
   const nameLen = bytes[offset + 63];
   if (price > 0n || nameLen > 0) {
-    bytes.writeBigInt64LE(now, offset + 16);
+    bytes.writeBigInt64LE(futureTs, offset + 16);
     updated++;
   }
 }
@@ -220,7 +228,7 @@ const patchedAccount = {
   }
 };
 fs.writeFileSync(outPath, JSON.stringify(patchedAccount, null, 2));
-console.log("Oracle patched: " + updated + " price slots updated to ts=" + now.toString());
+console.log("Oracle patched: " + updated + " price slots updated to ts=" + futureTs.toString() + " (+" + FOUR_HOURS + "s future)");
 PATCH_ORACLE_JS
   PATCH_EXIT=$?
   if [[ ${PATCH_EXIT} -ne 0 ]]; then

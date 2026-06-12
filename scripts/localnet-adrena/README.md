@@ -136,36 +136,33 @@ Instructions build correctly, pool/custody readable, position PDA derivable.
 The collateral gap is a funding issue, not an architectural issue. The mainnet dust run
 (Task 1d final step, out of scope here) validates end-to-end with real funds.
 
-## Oracle Staleness
+## Oracle Staleness — RESOLVED
 
-**Situation**: Cloned Pyth oracle accounts are frozen snapshots from clone time. The Adrena
-program has a staleness guard — if oracle data is too old, open/close instructions fail.
+**Root cause (found)**: The Adrena program checks oracle freshness as:
+  `block_time - oracle.prices[i].timestamp < staleness_threshold`
+The validator's block clock starts at current wall-clock and advances normally.
+The oracle timestamps in the cloned account are old, so `block_time - ts` quickly
+exceeds the threshold → error 6088 `MissingOraclePrice`.
 
-**Adrena oracle architecture**: The program uses a custom Oracle PDA
-(`GEm9TZP7BL8rTz1JDy6X74PL595zr1putA9BXC8ehDmU`, seeds `["oracle"]`) that aggregates
-prices from multiple feeds. The on-chain Pyth feed accounts (7UVim..., Axaxy...) are
-inputs to this aggregation. The staleness check may be on the Oracle PDA data, not
-directly on the Pyth feed timestamps.
+**Solution (implemented in setup.sh)**: Patch the Oracle PDA (`GEm9TZP7BL8rTz1JDy6X74PL595zr1putA9BXC8ehDmU`)
+with timestamps set **4 hours in the future** before injecting it via `--account`:
 
-**Mitigation A** — Re-run setup.sh before each session (fresh clone, newer timestamps):
-```bash
-pkill -f solana-test-validator && rm -rf test-ledger
-bash scripts/localnet-adrena/setup.sh
+```
+block_time - (now + 4h) = -(4h - elapsed) < 0   → always "fresh"
 ```
 
-**Mitigation B** — Warp the validator clock forward:
-```bash
-# After validator starts, fast-forward clock to bypass staleness window
-# Note: --warp-slot only works at validator startup, not post-start
-solana-test-validator ... --warp-slot 350000000  # current mainnet slot range
-```
+This way oracle prices remain fresh for 4 hours of validator runtime. The Pyth feed
+accounts (7UVim..., Axaxy..., Dpw1E...) are still cloned but the program only reads
+the aggregated Oracle PDA — individual Pyth accounts are not checked for staleness.
 
-**Mitigation C** — Override oracle in test (advanced):
-Clone the Oracle PDA account, patch its timestamp field to the current time,
-and inject via `--account`. Requires understanding the Oracle PDA binary layout.
+**Important**: Do NOT use `--warp-slot` — it advances the validator's block clock by
+N slots × 0.4s, which would make wall-clock-patched oracle timestamps appear old.
 
-**If all else fails**: Document the exact error code (0x1XX program error) in the
-findings section below and proceed to the mainnet dust run.
+**Collateral injection**: The Oracle PDA patch gives us oracle access. Collateral is
+provided by injecting a pre-funded USDC ATA (`test-wallet-usdc-ata.json`) owned by the
+local test wallet. This bypasses the real USDC mint's Centre multisig authority.
+
+Both fixes are applied automatically by `bash scripts/localnet-adrena/setup.sh`.
 
 ## Jito / Transaction Send
 
@@ -190,21 +187,31 @@ the Jito tip instruction can simply be omitted for non-mainnet environments.
 
 | Limitation | Impact | Status |
 |------------|--------|--------|
-| Oracle staleness (frozen snapshot) | Open/close instructions may be rejected | Mitigation A: re-run setup.sh |
-| Real USDC not mintable locally | Open tx needs real USDC collateral | Mitigation: whale ATA injection |
-| No keeper infrastructure | SL/TP orders accepted but never executed | Expected — mainnet dust run validates |
-| Jito required for SDK high-level API | Must use low-level instruction builders | Documented — send path implemented |
+| Oracle staleness (frozen snapshot) | Open/close instructions may be rejected | RESOLVED — timestamps patched +4h in setup.sh |
+| Real USDC not mintable locally | Open tx needs real USDC collateral | RESOLVED — whale ATA injection (`test-wallet-usdc-ata.json`) |
+| No keeper infrastructure | SL/TP orders accepted but never executed | Expected — keepers run on mainnet; localnet just tests acceptance |
+| Jito required for SDK high-level API | Must use low-level instruction builders | RESOLVED — low-level builders + `rpc.sendTransaction()` implemented |
+| PositionTooYoung (6070) on immediate close | Must wait ~30s between open and close | Expected — probe includes 30s delay before closeLong |
 | Single position per (owner, market, side) | One JITOSOL long at a time per keypair | Protocol constraint, not a bug |
+| Oracle freshness window | Timestamps expire after ~4h of validator uptime | Restart validator with `setup.sh` after 4h |
 
-## What Works
+## What Works — Full E2E Green
 
+All four lifecycle steps execute with real on-chain transactions against the localnet validator:
+
+1. **Open long + SL + TP** — `getOpenLongIxs` + `getSetStopLossLongIx` + `getTakeProfitLongIx` bundled in one tx; SL/TP metadata confirmed set on-chain
+2. **Read position state** — `getPositionStatus` returns `entryPrice`, `sizeUsd`, `stopLossIsSet=1`, `takeProfitIsSet=1`
+3. **Cancel SL/TP** — `getCancelSLTPLongIxs` accepted on-chain, clears the SL/TP metadata
+4. **Close long** — `getClosePositionLongIxs` accepted on-chain (after 30s PositionTooYoung delay)
+
+Other infrastructure that works:
 - `solana-test-validator` with real Adrena program + cloned mainnet state
 - Pool, custody, and oracle accounts readable via RPC
 - `fetchPoolUtil("main-pool", ...)` decodes pool account correctly
 - All PDAs derivable deterministically
-- Instruction building (open, SL, TP, cancel, close) — SDK functions work
 - `rpc.sendTransaction()` as Jito bypass for localnet
-- Reproducible one-command startup + teardown
+- Confirmation polling via `getSignatureStatuses` (avoids race conditions)
+- Reproducible one-command startup + teardown (`bash scripts/localnet-adrena/setup.sh`)
 
 ## File Structure
 

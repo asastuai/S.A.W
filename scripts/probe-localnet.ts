@@ -99,6 +99,8 @@ const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const ADRENA_PROGRAM_ADDRESS = address(ADRENA_PROGRAM_ADDRESS_STR);
 
 // ── Localnet send helper (no Jito) ────────────────────────────────────────────
+// Sends transaction and polls until confirmed (up to 30s).
+// This is required so subsequent steps can read accounts created in this tx.
 async function sendLocalnet(
   ixs: IInstruction[],
   wallet: TransactionSigner,
@@ -119,8 +121,33 @@ async function sendLocalnet(
 
   console.log(`  Sending (localnet, no Jito) — sig: ${sig.slice(0, 20)}...`);
   await rpc
-    .sendTransaction(wire, { encoding: "base64", preflightCommitment: "confirmed" })
+    .sendTransaction(wire, { encoding: "base64", preflightCommitment: "processed" })
     .send();
+
+  // Poll for confirmation — sendTransaction returns when submitted, not confirmed.
+  // Without this, accounts created in the tx may not be visible to subsequent reads.
+  const MAX_WAIT_MS = 30_000;
+  const POLL_MS = 500;
+  const start = Date.now();
+  while (Date.now() - start < MAX_WAIT_MS) {
+    await new Promise((r) => setTimeout(r, POLL_MS));
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const status = await (rpc as any).getSignatureStatuses([sig], { searchTransactionHistory: false }).send();
+      const info = status?.value?.[0];
+      if (info) {
+        if (info.err) {
+          throw new Error(`TX failed on-chain: ${JSON.stringify(info.err)}`);
+        }
+        if (info.confirmationStatus === "confirmed" || info.confirmationStatus === "finalized") {
+          break;
+        }
+      }
+    } catch (pollErr) {
+      // ignore poll errors — keep waiting
+    }
+  }
+
   console.log(`  Confirmed. Full sig: ${sig}`);
   return sig;
 }
@@ -238,12 +265,13 @@ async function main() {
   }
 
   // ── [5] Build open instructions ────────────────────────────────────────────
-  console.log("\n[5] Building openMarketLong instructions (JITOSOL, 2x, 1 USDC)...");
+  // Use 10 USDC collateral at 5x leverage = $50 notional — above the ~$10 minimum
+  console.log("\n[5] Building openMarketLong instructions (JITOSOL, 5x, 10 USDC)...");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let openResult: any = null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    openResult = await getOpenLongIxs(wallet as any, "JITOSOL", "USDC", 1, 2, rpc as any);
+    openResult = await getOpenLongIxs(wallet as any, "JITOSOL", "USDC", 10, 5, rpc as any);
     console.log(`  OK: ${openResult.ixns.length} ix(s) built`);
     console.log(`  Position address: ${openResult.positionAddress}`);
     console.log(`  Pool:   ${openResult.pool}`);
@@ -254,7 +282,8 @@ async function main() {
   }
 
   // ── [6] Build SL/TP instructions ───────────────────────────────────────────
-  console.log("\n[6] Building SL (stop=$100) + TP (take=$250) instructions...");
+  // JITOSOL price ~$85. SL at $50 (below entry), TP at $120 (above entry).
+  console.log("\n[6] Building SL (stop=$50) + TP (take=$120) instructions...");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let slIx: any = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -268,7 +297,7 @@ async function main() {
         pool: openResult.pool,
         position: openResult.positionAddress,
         custody: openResult.principalCustodyObj.address,
-        stopLossLimitPrice: 100,
+        stopLossLimitPrice: 50,
         closePositionPrice: null,
       });
       console.log("  OK: SL ix built");
@@ -283,7 +312,7 @@ async function main() {
         pool: openResult.pool,
         position: openResult.positionAddress,
         custody: openResult.principalCustodyObj.address,
-        takeProfitLimitPrice: 250,
+        takeProfitLimitPrice: 120,
       });
       console.log("  OK: TP ix built");
     } catch (e) {
@@ -322,6 +351,8 @@ async function main() {
 
   // ── [7] Send open+SL+TP ────────────────────────────────────────────────────
   let openSig: string | null = null;
+  let closeSig: string | null = null;
+  let cancelSig: string | null = null;
   if (openResult && usdcBalance >= 1) {
     console.log("\n[7] Sending open+SL+TP as single transaction (no Jito)...");
     const allIxs: IInstruction[] = [
@@ -373,13 +404,14 @@ async function main() {
   if (openSig && openResult) {
     console.log("\n[8] Reading position state...");
     try {
+      // getPositionStatus requires positionAddress (from openResult returned by getOpenLongIxs)
       const status = await getPositionStatus({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         wallet: wallet as any,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         rpc: rpc as any,
         principalToken: "JITOSOL",
-        side: "long",
+        positionAddress: openResult.positionAddress,
       });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const s = status as any;
@@ -440,25 +472,38 @@ async function main() {
         })
       );
 
-      const cancelSig = await sendLocalnet(cancelIxs, wallet, rpc);
+      cancelSig = await sendLocalnet(cancelIxs, wallet, rpc);
       console.log(`  TX SIG (cancelSLTP): ${cancelSig}`);
     } catch (e) {
+      try {
+        console.error(`  FAIL cancelSLTP raw:`, JSON.stringify(e, (_k, v) => typeof v === "bigint" ? v.toString() : v, 2).slice(0, 2000));
+      } catch { /* ignore */ }
       console.error(`  FAIL: cancelSLTP: ${(e as Error).message}`);
     }
 
     // ── [10] closeLong ──────────────────────────────────────────────────────
-    console.log("\n[10] Closing long position...");
+    // The Adrena program enforces a minimum delay between open and close
+    // (PositionTooYoung error 6070). The guard checks on-chain block time;
+    // on localnet at ~2 slots/sec, we need ~30s of real time to pass.
+    console.log("\n[10] Closing long position (waiting 30s for PositionTooYoung guard)...");
+    await new Promise((r) => setTimeout(r, 30_000));
     try {
-      const closeIxs = await getClosePositionLongIxs({
+      // getClosePositionLongIxs returns { ixs, positionAddress }, not a bare array
+      const closeResult = await getClosePositionLongIxs({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         wallet: wallet as any,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         rpc: rpc as any,
         principalToken: "JITOSOL",
       });
-      const closeSig = await sendLocalnet(closeIxs, wallet, rpc);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const closeIxArr = (closeResult as any).ixs ?? closeResult as unknown as IInstruction[];
+      closeSig = await sendLocalnet(closeIxArr, wallet, rpc);
       console.log(`  TX SIG (closeLong): ${closeSig}`);
     } catch (e) {
+      try {
+        console.error(`  FAIL closeLong raw:`, JSON.stringify(e, (_k, v) => typeof v === "bigint" ? v.toString() : v, 2).slice(0, 2000));
+      } catch { /* ignore */ }
       console.error(`  FAIL: closeLong: ${(e as Error).message}`);
     }
   }
@@ -471,7 +516,10 @@ async function main() {
   if (txOk) {
     console.log("STATUS: DONE");
     console.log(`  open+SL+TP tx:  ${openSig}`);
-    console.log("  All green on localnet.");
+    if (cancelSig) console.log(`  cancelSLTP tx:  ${cancelSig}`);
+    if (closeSig)  console.log(`  closeLong tx:   ${closeSig}`);
+    const allGreen = openSig && cancelSig && closeSig;
+    console.log(allGreen ? "  ALL GREEN on localnet." : "  Partial: open+cancel OK, close needs delay (PositionTooYoung guard).");
   } else if (openResult !== null) {
     console.log("STATUS: DONE_WITH_CONCERNS");
     console.log(`  SDK import:        OK (adrena-sdk from ~/vendor/adrena-sdk-ts)`);

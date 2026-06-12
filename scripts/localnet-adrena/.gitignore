@@ -1,0 +1,18 @@
+# Ephemeral localnet-only keypairs — NEVER commit
+.keys/
+
+# Compiled program bytecode — large binary, re-dump from mainnet
+*.so
+
+# Generated config (contains local paths)
+.localnet-config.json
+
+# Injected account JSON files (contain pre-funded wallet state)
+test-wallet-usdc-ata.json
+
+# Timestamp-patched oracle snapshot (regenerated at every setup.sh run)
+oracle-patched.json
+
+# Validator output
+validator.log
+*.log

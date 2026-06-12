@@ -333,7 +333,76 @@ For oracle price reads independent of a transaction, the SDK's Pyth integration 
 
 ---
 
-## 10. Recommended Path Forward
+## 10. Localnet E2E Results (Task 1d — 2026-06-12)
+
+**Status**: ALL GREEN — full open → read → cancelSLTP → close flow executed with real on-chain transactions.
+
+### Environment
+
+- Validator: `solana-test-validator` with mainnet accounts cloned at launch
+- Program: real Adrena binary (`13gDzEXCdocbj8iAiqrScGo47NiSuYENGsRqi3SEAwet`, 4.2 MB)
+- Collateral: 10,000 USDC pre-funded via injected whale ATA (`test-wallet-usdc-ata.json`)
+- Oracle: Oracle PDA timestamps patched +4h before validator start
+
+### Transaction Signatures (localnet — not mainnet)
+
+| Step | Description | Signature |
+|------|-------------|-----------|
+| open+SL+TP | 10 USDC / 5x JITOSOL long, SL=50, TP=120 | `23712CXLR1V7tr3DtzgpbbmU8UTpRrCngYmMJ4x6BeSGWoF9mcaY2mCKir2ACUD3FGYsLZfHoaK5ss5J2mQGEFQA` |
+| cancelSLTP | Cancel both SL and TP | `yeA6mPwAGcaXp6i7wemyYE965pf2iAbSxaPtzwk1bPW1DxzyPdC12yeZG1L2EzTnh8socBYDMUunKnov12NpDRU` |
+| closeLong | Close the JITOSOL long | `3UtDF97oB9fqoGYqQxmjwh1qKBwvUVrZkdWcqhS3v3FtPK3T7qnZpqfBmSsBrgLyyKLyGtCvmqzhL7cHBB2ZWy7f` |
+
+### Position State (read via getPositionStatus)
+
+```
+entryPrice=66.925 USD  sizeUsd=49.844434 USD  stopLossIsSet=1  takeProfitIsSet=1
+```
+
+### Root Causes Fixed
+
+**Oracle staleness (error 6088 MissingOraclePrice)**:
+- Cause: Cloned Oracle PDA timestamps were set at clone time. Validator block clock starts at wall-clock and advances; by the time the probe runs, `block_time - oracle_ts > threshold` → stale.
+- Fix: `setup.sh` patches all Oracle PDA price slot timestamps and `updatedAt` to `now + 4h` before injecting via `--account`. The check `block_time - (now+4h)` is always negative → always fresh. Valid for ~4 hours of runtime.
+
+**Swap-path oracle check (getOpenLongIxs with USDC→JITOSOL swap)**:
+- No separate fix needed — once the Oracle PDA timestamps are freshened, both the USDC and JITOSOL price slots are valid and the swap instruction succeeds.
+
+**USDC collateral**:
+- Real USDC mint has Centre multisig authority — cannot mint locally.
+- Fix: inject a pre-crafted SPL Token ATA JSON with 10,000 USDC, owner = local wallet, at the correct ATA address. File: `scripts/localnet-adrena/test-wallet-usdc-ata.json`.
+
+**Minimum position size (error 6071 InsufficientCollateral)**:
+- 1 USDC at 2x (~$2 notional) is below Adrena's minimum (~$50 notional).
+- Fix: 10 USDC at 5x = ~$50 notional.
+
+**PositionTooYoung (error 6070)**:
+- Adrena enforces a minimum delay between position open and close.
+- Fix: `probe-localnet.ts` waits 30 seconds before calling closeLong.
+
+**Transaction confirmation timing**:
+- `rpc.sendTransaction()` returns on submission, not confirmation. Subsequent reads race with the in-flight tx.
+- Fix: `sendLocalnet()` helper polls `getSignatureStatuses` until `confirmationStatus === "confirmed"` before returning.
+
+**`getClosePositionLongIxs` return shape**:
+- Returns `{ixs: IInstruction[], positionAddress}`, not a bare array.
+- Fix: extract `closeResult.ixs` before passing to the send helper.
+
+**`getPositionStatus` params**:
+- Requires `{wallet, rpc, principalToken, positionAddress}`. The `side` field does not exist.
+- Fix: pass `positionAddress: openResult.positionAddress` from the open step.
+
+### Known Remaining Limitations
+
+| Item | Notes |
+|------|-------|
+| SL/TP not executed | Keeper infrastructure only exists on mainnet; SL/TP accepted but never triggered on localnet |
+| Oracle freshness window | ~4h; restart `setup.sh` after that |
+| Single position per keypair | One JITOSOL long at a time |
+| No Jito bundles on localnet | SDK high-level API bypassed; low-level builders used throughout |
+
+---
+
+## 11. Recommended Path Forward
 
 **Option A (recommended): Build SDK from GitHub source**
 ```bash
