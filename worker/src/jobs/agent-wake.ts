@@ -15,7 +15,8 @@
 import { logger, schedules } from "@trigger.dev/sdk/v3";
 import { supabaseAdmin } from "../lib/supabase.ts";
 import { describeMarket, getMarketSnapshot } from "../lib/market.ts";
-import { isVenueEnabled, makeAdrenaAdapter } from "../lib/venue.ts";
+import { isVenueEnabled, makeAdrenaAdapter, type VenueAdapter } from "../lib/venue.ts";
+import { makeSurAdapter } from "../lib/sur-venue.ts";
 import { DEFAULT_PERP_POLICY } from "../lib/perp-policy.ts";
 import { dispatchPerpItem, sumMarginExecutedTodayUTC, reconcileStuckExecuting } from "../lib/dispatch-perp.ts";
 import { loadTradingKeypair } from "../lib/trading-key.ts";
@@ -137,7 +138,12 @@ export const agentWakeJob = schedules.task({
             }
 
             const rpcUrl = process.env["VENUE_RPC_URL"] ?? "http://127.0.0.1:8899";
-            const adapter = await makeAdrenaAdapter({ rpcUrl, authority: kp });
+            // Select the venue adapter by VENUE env (gated by isVenueEnabled above).
+            // sur is sync, adrena is async — both satisfy VenueAdapter.
+            const adapter: VenueAdapter =
+              process.env["VENUE"] === "sur"
+                ? makeSurAdapter({ rpcUrl, authority: kp })
+                : await makeAdrenaAdapter({ rpcUrl, authority: kp });
             try {
               const policy: PerpPolicyParams = a.perp_policy ?? DEFAULT_PERP_POLICY;
               const dailyUsed = await sumMarginExecutedTodayUTC(db, a.id);
