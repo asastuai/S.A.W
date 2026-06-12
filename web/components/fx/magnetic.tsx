@@ -24,7 +24,9 @@ export function Magnetic({ children, className = "" }: { children: ReactNode; cl
     c.y += (t.y - c.y) * LERP;
     el.style.transform = `translate3d(${c.x.toFixed(2)}px, ${c.y.toFixed(2)}px, 0)`;
     const settled = Math.abs(c.x - t.x) < 0.05 && Math.abs(c.y - t.y) < 0.05;
-    raf.current = settled && t.x === 0 && t.y === 0 ? 0 : requestAnimationFrame(tick);
+    // parar SIEMPRE al asentarse (mismo fix que tilt.tsx — sin rAF idle a 60fps);
+    // onMove/onLeave rearrancan con start(). transform se limpia solo en reposo real.
+    raf.current = settled ? 0 : requestAnimationFrame(tick);
     if (settled && t.x === 0 && t.y === 0) el.style.transform = "";
   };
   const start = () => { if (!raf.current) raf.current = requestAnimationFrame(tick); };

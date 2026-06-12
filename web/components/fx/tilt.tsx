@@ -24,7 +24,9 @@ export function Tilt({ children, className = "" }: { children: ReactNode; classN
     c.ry += (t.ry - c.ry) * LERP;
     el.style.transform = `perspective(800px) rotateX(${c.rx.toFixed(2)}deg) rotateY(${c.ry.toFixed(2)}deg)`;
     const settled = Math.abs(c.rx - t.rx) < 0.01 && Math.abs(c.ry - t.ry) < 0.01;
-    raf.current = settled && t.rx === 0 && t.ry === 0 ? 0 : requestAnimationFrame(tick);
+    // parar SIEMPRE al asentarse (cursor quieto adentro = loop muerto, no 60fps de no-ops);
+    // onMove/onLeave rearrancan con start(). transform se limpia solo en reposo real (target 0).
+    raf.current = settled ? 0 : requestAnimationFrame(tick);
     if (settled && t.rx === 0 && t.ry === 0) el.style.transform = "";
   };
   const start = () => { if (!raf.current) raf.current = requestAnimationFrame(tick); };
