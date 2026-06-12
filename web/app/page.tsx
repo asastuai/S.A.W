@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Reveal } from "@/components/reveal";
 import { Spotlight } from "@/components/fx/spotlight";
 import { Tilt } from "@/components/fx/tilt";
+import { Magnetic } from "@/components/fx/magnetic";
 import { BootSequence } from "@/components/terminal/boot-sequence";
 import { Caret } from "@/components/terminal/caret";
 import { CommandLine } from "@/components/terminal/command-line";
@@ -136,6 +137,7 @@ function Hero() {
                 </p>
 
                 <div className="flex flex-col items-start gap-3 font-mono">
+                  <Magnetic>
                   <Link
                     href="/demo"
                     className="group inline-flex items-center gap-2 border border-gold/70 bg-gold/[0.08] px-5 py-3 text-sm text-bone shadow-glow transition hover:bg-gold hover:text-ink hover:shadow-glow-lg"
@@ -145,6 +147,7 @@ function Hero() {
                       <span className="ml-2 text-bone/40 group-hover:text-ink/60">→</span>
                     </CommandLine>
                   </Link>
+                  </Magnetic>
                   <a
                     href="https://github.com/asastuai/S.A.W"
                     target="_blank"
