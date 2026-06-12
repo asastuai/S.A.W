@@ -90,16 +90,32 @@ import {
   getTakeProfitLongIx,
 } from "adrena-sdk/instructions";
 
-// getOpenShortIxs is not in the instructions re-export index (only getOpenLongIxs is).
-// Phase 1 spec only trades SOL-PERP longs, but the adapter supports shorts for completeness.
-// Loaded lazily in _openPerpLocalnet to avoid top-level import from a non-exported path.
-let _getOpenShortIxs: ((...args: any[]) => Promise<any>) | null = null;
-async function loadGetOpenShortIxs(): Promise<(...args: any[]) => Promise<any>> {
-  if (!_getOpenShortIxs) {
-    const mod = await import("adrena-sdk/dist/src/instructions/getOpenShortIxs.js" as any);
-    _getOpenShortIxs = (mod as any).getOpenShortIxs;
+// The short-side instruction builders are NOT in the adrena-sdk/instructions re-export
+// index (only the long-side builders are). They exist at the dist path, so we lazy-load
+// them to avoid top-level imports from non-exported paths.
+// CRITICAL: short positions need short-specific SL/TP instructions — the Long and Short
+// setStopLoss/setTakeProfit ixs have DIFFERENT on-chain discriminators. Using a Long SL
+// ix against a short position is rejected by the Adrena program.
+let _shortBuilders: {
+  getOpenShortIxs: (...args: any[]) => Promise<any>;
+  getSetStopLossShortIx: (input: any) => Promise<any>;
+  getTakeProfitShortIx: (input: any) => Promise<any>;
+} | null = null;
+
+async function loadShortBuilders(): Promise<NonNullable<typeof _shortBuilders>> {
+  if (!_shortBuilders) {
+    const [openMod, slMod, tpMod] = await Promise.all([
+      import("adrena-sdk/dist/src/instructions/getOpenShortIxs.js" as any),
+      import("adrena-sdk/dist/src/instructions/getStopLossShortIx.js" as any),
+      import("adrena-sdk/dist/src/instructions/getTakeProfitShortIx.js" as any),
+    ]);
+    _shortBuilders = {
+      getOpenShortIxs: (openMod as any).getOpenShortIxs,
+      getSetStopLossShortIx: (slMod as any).getSetStopLossShortIx,
+      getTakeProfitShortIx: (tpMod as any).getTakeProfitShortIx,
+    };
   }
-  return _getOpenShortIxs!;
+  return _shortBuilders;
 }
 
 import {
@@ -266,6 +282,7 @@ async function sendAndConfirm(
   const MAX_WAIT_MS = 45_000;
   const POLL_MS = 500;
   const start = Date.now();
+  let confirmed = false;
   while (Date.now() - start < MAX_WAIT_MS) {
     await new Promise((r) => setTimeout(r, POLL_MS));
     try {
@@ -279,6 +296,7 @@ async function sendAndConfirm(
           info.confirmationStatus === "confirmed" ||
           info.confirmationStatus === "finalized"
         ) {
+          confirmed = true;
           break;
         }
       }
@@ -287,6 +305,13 @@ async function sendAndConfirm(
       if (msg.startsWith("TX failed")) throw pollErr;
       // transient poll error — keep waiting
     }
+  }
+
+  // Do NOT return an unconfirmed signature — the caller must be able to trust
+  // that a returned sig means the tx landed. A timeout here is a hard error
+  // (no auto-retry — spec rule 1; the caller decides what to do).
+  if (!confirmed) {
+    throw new Error(`TX not confirmed after ${MAX_WAIT_MS}ms: ${sig}`);
   }
 
   return sig;
@@ -400,9 +425,10 @@ class AdrenaAdapter implements VenueAdapter {
   ): Promise<OpenResult> {
     // Use lower-level instruction builders — Jito not available on localnet.
     // All ixs go in one transaction (same atomicity guarantee as a Jito bundle).
+    const isLong = intent.side === "long";
     let openResult: any;
 
-    if (intent.side === "long") {
+    if (isLong) {
       openResult = await getOpenLongIxs(
         this.signer as any,
         principalToken,
@@ -412,7 +438,7 @@ class AdrenaAdapter implements VenueAdapter {
         this.rpc as any,
       );
     } else {
-      const getOpenShortIxs = await loadGetOpenShortIxs();
+      const { getOpenShortIxs } = await loadShortBuilders();
       openResult = await getOpenShortIxs(
         this.signer as any,
         principalToken,
@@ -425,30 +451,59 @@ class AdrenaAdapter implements VenueAdapter {
 
     const allIxs: unknown[] = [...(openResult.ixns as unknown[])];
 
-    // Append SL ix if requested (uses setStopLossLong — same ix for long/short in v1)
+    // Append SL ix if requested — MUST use side-specific instruction.
+    // setStopLossLong and setStopLossShort have different on-chain discriminators;
+    // a Long SL ix against a short position is rejected by the program.
     if (intent.stopLoss != null) {
-      const slIx = await getSetStopLossLongIx({
-        owner: this.signer as any,
-        cortex: openResult.cortex,
-        pool: openResult.pool,
-        position: openResult.positionAddress,
-        custody: openResult.principalCustodyObj.address,
-        stopLossLimitPrice: intent.stopLoss,
-        closePositionPrice: null,
-      });
+      let slIx: unknown;
+      if (isLong) {
+        slIx = await getSetStopLossLongIx({
+          owner: this.signer as any,
+          cortex: openResult.cortex,
+          pool: openResult.pool,
+          position: openResult.positionAddress,
+          custody: openResult.principalCustodyObj.address,
+          stopLossLimitPrice: intent.stopLoss,
+          closePositionPrice: null,
+        });
+      } else {
+        const { getSetStopLossShortIx } = await loadShortBuilders();
+        slIx = await getSetStopLossShortIx({
+          owner: this.signer as any,
+          cortex: openResult.cortex,
+          pool: openResult.pool,
+          position: openResult.positionAddress,
+          custody: openResult.principalCustodyObj.address,
+          stopLossLimitPrice: intent.stopLoss,
+          closePositionPrice: null,
+        });
+      }
       allIxs.push(slIx);
     }
 
-    // Append TP ix if requested
+    // Append TP ix if requested — side-specific (same reasoning as SL above).
     if (intent.takeProfit != null) {
-      const tpIx = await getTakeProfitLongIx({
-        owner: this.signer as any,
-        cortex: openResult.cortex,
-        pool: openResult.pool,
-        position: openResult.positionAddress,
-        custody: openResult.principalCustodyObj.address,
-        takeProfitLimitPrice: intent.takeProfit,
-      });
+      let tpIx: unknown;
+      if (isLong) {
+        tpIx = await getTakeProfitLongIx({
+          owner: this.signer as any,
+          cortex: openResult.cortex,
+          pool: openResult.pool,
+          position: openResult.positionAddress,
+          custody: openResult.principalCustodyObj.address,
+          takeProfitLimitPrice: intent.takeProfit,
+        });
+      } else {
+        const { getTakeProfitShortIx } = await loadShortBuilders();
+        tpIx = await getTakeProfitShortIx({
+          owner: this.signer as any,
+          cortex: openResult.cortex,
+          pool: openResult.pool,
+          position: openResult.positionAddress,
+          custody: openResult.principalCustodyObj.address,
+          takeProfitLimitPrice: intent.takeProfit,
+        });
+      }
       allIxs.push(tpIx);
     }
 
@@ -680,6 +735,11 @@ class AdrenaAdapter implements VenueAdapter {
       const result = await (this.rpc as any).getTokenAccountBalance(ata).send();
       return Number(result.value.uiAmount ?? 0);
     } catch {
+      // Fail-closed: an RPC error (node down, network partition) is treated as a
+      // zero balance so that ensureDeposited() throws "insufficient float" rather
+      // than letting an open proceed on an unverified balance. Callers using this
+      // read independently of the deposit check get 0 on failure with no error
+      // signal — acceptable for Phase 1; revisit if used outside ensureDeposited.
       return 0;
     }
   }
