@@ -143,6 +143,45 @@ SDK lockeado: `@drift-labs/sdk@2.156.0` (en sync con mainnet).
 
 ---
 
+### Task 1c (ADDENDUM #2, 2026-06-11): PIVOT DE VENUE — Drift → Adrena (dev) / Jupiter Perps (prod)
+
+**Task 1b queda CERRADA con descubrimiento mayor:** el localnet-clone falló porque
+`dRiftyHA` ya no contiene las ixs de trading. Research posterior (fuentes primarias):
+**Drift sufrió un exploit de ~$285-295M el 1-abril-2026 y está suspendido** — mainnet
+shim, devnet congelado, relaunch sin fecha. Decisión de Juan: **Adrena devnet para v1,
+Jupiter Perps mainnet para producción**, venue abstraído.
+
+**Renombres que aplican a Tasks 4 y 7** (mismas firmas, nuevo naming):
+- `worker/src/lib/drift.ts` → `worker/src/lib/venue.ts` — interfaz `VenueAdapter`
+  (idéntica a la ex-`DriftAdapter`) + `makeAdrenaAdapter(...)`
+- `isDriftEnabled()` → `isVenueEnabled()`; envs `VENUE=adrena`, `VENUE_ENV=devnet`,
+  `VENUE_RPC_URL` (defaults seguros: apagado)
+- `web/lib/drift-read.ts` → `web/lib/venue-read.ts`
+- El mercado v1 sigue siendo el perp de SOL (naming del market según SDK de Adrena)
+
+**Spike nuevo (gates Tasks 4 y 7 — reemplaza los findings Drift-specific):**
+
+**Files:**
+- Create: `scripts/adrena-probe.ts`
+- Create: `docs/superpowers/specs/2026-06-11-adrena-devnet-findings.md`
+- Modify: `worker/package.json` (dep SDK de Adrena; remover `@drift-labs/sdk` si no
+  quedó ningún consumidor)
+
+- [ ] **Step 1:** instalar SDK (`adrena-sdk-ts` o el paquete oficial de AdrenaFoundation
+  — verificar en npm/GitHub cuál está mantenido), program devnet
+  (mainnet: `13gDzEXCdocbj8iAiqrScGo47NiSuYENGsRqi3SEAwet`; derivar/confirmar el de devnet).
+- [ ] **Step 2:** probe contra Adrena devnet con keypair descartable (in-memory, NUNCA
+  a disco): collateral de prueba (faucet/mint devnet — documentar mecánica), abrir
+  long SOL chico con leverage, **verificar mecánica de SL/TP**: ¿órdenes trigger
+  nativas del protocolo (keeper-ejecutadas) adjuntables al abrir? ¿en la misma tx
+  (atómico) o tx separada? Si NO hay SL/TP nativo → documentar el fallback y SU
+  IMPACTO en la regla de la spec "exits viven en el venue" (decisión a escalar).
+- [ ] **Step 3:** leer posición/PnL/liq price, cerrar, cancelar triggers huérfanos.
+  Documentar TODO en findings (precisiones, shape de params, oracle reads).
+- [ ] **Step 4:** commit `spike: Adrena devnet probe — venue pivot findings`.
+
+---
+
 ### Task 2: Migración DB 0014 — perp en scheduled_items + trading keys + perp_policy
 
 **Files:**
