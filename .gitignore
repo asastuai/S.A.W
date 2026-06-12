@@ -40,3 +40,13 @@ sdk/dist
 # Personal drafts (not for public repo)
 APPLY_TO_SENDAI.md
 *.tsbuildinfo
+
+# Localnet Adrena — ephemeral keys, binary, and generated config
+scripts/localnet-adrena/.keys/
+scripts/localnet-adrena/*.so
+scripts/localnet-adrena/.localnet-config.json
+scripts/localnet-adrena/test-wallet-usdc-ata.json
+scripts/localnet-adrena/oracle-patched.json
+scripts/localnet-drift/.keys/
+scripts/localnet-drift/*.so
+scripts/localnet-drift/.localnet-config.json
