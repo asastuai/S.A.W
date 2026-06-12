@@ -60,8 +60,16 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import * as anchor from "@coral-xyz/anchor";
-import { AnchorProvider, BN, Program, Wallet } from "@coral-xyz/anchor";
+// @coral-xyz/anchor is CJS with no "exports" map. In the worker's ESM context
+// ("type": "module"), Node's cjs-named-export detection MISSES some re-exports
+// (notably `BN` resolves to undefined), so `import { BN } from "@coral-xyz/anchor"`
+// crashes at runtime even though tsc (moduleResolution: Bundler) accepts it.
+// Use the default import (the full CJS namespace) and destructure the VALUES.
+import anchor from "@coral-xyz/anchor";
+const { AnchorProvider, BN, Program, Wallet } = anchor;
+// Type-only imports for the destructured values (a runtime const cannot be used
+// in type position). Aliased to avoid colliding with the value bindings above.
+import type { BN as BNType, Program as ProgramType } from "@coral-xyz/anchor";
 import {
   Connection,
   Keypair,
@@ -268,8 +276,8 @@ export function calcLiqPrice(
 class SurAdapter implements VenueAdapter {
   private readonly connection: Connection;
   private readonly authority: Keypair;
-  private readonly engine: Program;
-  private readonly vault: Program;
+  private readonly engine: ProgramType;
+  private readonly vault: ProgramType;
   private readonly defaultMarket: string;
 
   constructor(connection: Connection, authority: Keypair, market: string) {
@@ -354,7 +362,7 @@ class SurAdapter implements VenueAdapter {
     const mktData: any = await (this.engine.account as any).market.fetch(
       marketPda(marketIdBuf(market)),
     );
-    return (mktData.markPrice as BN).toNumber() / PRICE_PRECISION;
+    return (mktData.markPrice as BNType).toNumber() / PRICE_PRECISION;
   }
 
   // ── hasOpenOrderWithUserOrderId ─────────────────────────────────────────────
@@ -370,7 +378,7 @@ class SurAdapter implements VenueAdapter {
       const posData: any = await (this.engine.account as any).position.fetch(
         positionPda(marketIdBuf(this.defaultMarket), trader),
       );
-      return (posData.size as BN).toNumber() !== 0;
+      return (posData.size as BNType).toNumber() !== 0;
     } catch {
       return false;
     }
@@ -405,7 +413,7 @@ class SurAdapter implements VenueAdapter {
 
     // Read current markPrice as fill_price (paper-trade oracle).
     const mktData: any = await (this.engine.account as any).market.fetch(mktPda);
-    const fillPrice: BN = mktData.markPrice as BN;
+    const fillPrice: BNType = mktData.markPrice as BNType;
     const priceHuman = fillPrice.toNumber() / PRICE_PRECISION;
 
     // Guard: a fresh Market PDA has markPrice = 0 until pushMarkPrice() is called.
@@ -466,13 +474,13 @@ class SurAdapter implements VenueAdapter {
     } catch {
       return { alreadyClosed: true };
     }
-    if ((posData.size as BN).toNumber() === 0) {
+    if ((posData.size as BNType).toNumber() === 0) {
       return { alreadyClosed: true };
     }
 
     // Read current markPrice as fill_price.
     const mktData: any = await (this.engine.account as any).market.fetch(mktPda);
-    const fillPrice: BN = mktData.markPrice as BN;
+    const fillPrice: BNType = mktData.markPrice as BNType;
 
     const txSig: string = await (this.engine.methods as any)
       .closePosition(fillPrice)
@@ -509,16 +517,16 @@ class SurAdapter implements VenueAdapter {
       return [];
     }
 
-    const sizeRaw: number = (posData.size as BN).toNumber();
+    const sizeRaw: number = (posData.size as BNType).toNumber();
     if (sizeRaw === 0) return [];
 
     const mktData: any = await (this.engine.account as any).market.fetch(
       marketPda(mktId),
     );
 
-    const entryRaw = (posData.entryPrice as BN).toNumber();
-    const marginRaw = (posData.margin as BN).toNumber();
-    const markRaw = (mktData.markPrice as BN).toNumber();
+    const entryRaw = (posData.entryPrice as BNType).toNumber();
+    const marginRaw = (posData.margin as BNType).toNumber();
+    const markRaw = (mktData.markPrice as BNType).toNumber();
 
     return [
       {
@@ -547,7 +555,7 @@ class SurAdapter implements VenueAdapter {
       const balData: any = await (this.vault.account as any).accountBalance.fetch(
         balancePda(trader),
       );
-      return (balData.balance as BN).toNumber() / PRICE_PRECISION;
+      return (balData.balance as BNType).toNumber() / PRICE_PRECISION;
     } catch {
       return 0;
     }
