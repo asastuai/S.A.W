@@ -274,3 +274,107 @@ sequenceDiagram
   Chain-->>UI: signature (finalized)
 ```
 
+---
+
+## Perps — Phase 1 (Adrena venue)
+
+### Venue history
+
+| Date | Event |
+|------|-------|
+| 2026-06-11 (original spec) | Drift chosen as v1 venue |
+| 2026-06-11 (Task 1 spike) | Drift devnet found broken — program frozen ~19-Apr, user-facing ixs disabled, oracles 69 days stale |
+| 2026-06-11 (Task 1b addendum) | Pivot to localnet-clone of Drift mainnet; abandoned when exploit discovered |
+| 2026-06-11 (Task 1c addendum) | **Drift exploited ~$285-295M (1-Apr-2026, UNC4736/DPRK)** — mainnet shim, devnet frozen, relaunch undated. Pivot to **Adrena (devnet → localnet-clone for testing)** for v1; **Jupiter Perps ($660M TVL) slated for mainnet prod** |
+| 2026-06-11 (Task 1d addendum) | Adrena devnet also empty (7 accounts vs ~6,887 mainnet). Final approach: **localnet with Adrena mainnet-clone** via `solana-test-validator --clone` |
+| 2026-06-12 | Full e2e green on localnet — long + short open/close with SL/TP on-chain. See `docs/DEMO-RESULTS-perps.md` |
+
+**VenueAdapter abstraction** (`worker/src/lib/venue.ts`) means blast radius = 1 module for future venue swaps. Jupiter Perps drops in behind the same interface.
+
+### Dispatch flow
+
+```
+NL chat: "Abrime un long de SOL x4 con 300 USDC si baja hasta 64"
+        │
+        ▼
+/api/agents/[id]/chat  ──  new tool: propose_perp_open  (greedie persona only)
+  → TradeIntent { market, side, leverage, marginUsdc, trigger, stopLoss?, takeProfit? }
+        │
+        ▼
+POLICY PRE-CHECK  (web/lib/perp-policy.ts — mirrors worker copy)
+  maxLeverage · maxMarginPerTx · dailyMarginBudget · allowedMarkets
+  maxOpenPositions · requireStopLoss · approvalThresholdMargin
+  → above approval threshold → status: awaiting-approval (human gate)
+  → within limits         → status: queued
+        │
+        ▼
+SCHEDULE  (scheduled_items row, action_type = 'perp-open')
+  descriptor: { market, side, leverage, marginUsdc, stopLoss?, takeProfit?, clientOrderId }
+  trigger:    { kind: below|above|dip, asset, price, deadline? }
+  UI echo before enqueue:
+    "LONG SOL-PERP ×4 · margin 300 USDC
+     entrada: SOL ≤ $64.00 · SL $58.00 · liq est. ~$49.60
+     policy: ✓ leverage ✓ margin ✓ budget ⚠ excede threshold → requiere aprobación"
+        │
+        ▼ (worker agent_wake: trigger fires when price crosses)
+dispatchPerpItem  (worker/src/lib/dispatch-perp.ts)
+  1. Atomic claim:  UPDATE ... SET status='executing' WHERE id=X AND status='queued'
+     → 0 rows updated → another wake claimed it; exit (note M-5)
+  2. Policy re-check at fire time (budget may have changed since enqueue)
+  3. Oracle gap guard: if oracle deviated >1.5% beyond trigger price → skipped
+  4. Dup guard: clientOrderId (deterministic from item UUID) already open → skipped
+  5. ensureDeposited (idempotent USDC check)
+  6. VenueAdapter.openPerp() → on-chain tx confirmed
+  7. VenueAdapter.getPositions() → read entry/mark/SL/TP/liqPrice → persist to DB
+  8. status = 'done' + tx_signature written
+        │
+        ▼
+SL/TP orders (native + atomic on venue)
+  Placed in the SAME transaction as the entry (one tx bundle via low-level instruction builders).
+  Keeper-executed by the venue's keeper network — survive worker downtime.
+  On localnet: keepers are absent; acceptance of the ixs is verified (execution on mainnet only).
+```
+
+For close orders (`action_type = 'perp-close'`): same dispatch path, calls `VenueAdapter.closePerp()` + cancels orphaned SL/TP. If the position was already closed by a keeper (SL/TP hit), `alreadyClosed` guard fires → `skipped` cleanly.
+
+### Key safety properties
+
+| Property | Mechanism |
+|----------|-----------|
+| Policy enforced server-side | `evaluatePerpPolicy` runs in API route before enqueue AND re-runs in worker at fire time |
+| Human-in-the-loop | `approvalThresholdMargin` — orders above the USDC threshold require explicit `approved: true` flag before worker will execute |
+| SL/TP survive worker downtime | Orders live on the venue (keeper-executed), not in SAW's cron |
+| No auto-retry | On any failure, status → `failed` + `error_message`. With leverage, a surprise retry is a bug. Agent re-proposes if needed. |
+| Trading key encrypted at rest | AES-GCM, stored in `agent_trading_keys` (service-role only, no RLS grants to anon/authenticated). Never leaves server RAM as plaintext. |
+| Hard collateral bound | Trading float is a small dedicated ATA separate from the agent's main treasury. Even if off-chain policy failed entirely, max loss = float deposited. |
+| `requireStopLoss: true` by default | Policy rejects any open intent without a stop-loss at both pre-check and at fire time. |
+
+### Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VENUE` | _(unset — disabled)_ | Venue identifier. Set to `adrena` to enable. Unset = venue disabled; no perp dispatch. |
+| `VENUE_ENV` | _(unset)_ | Runtime environment: `localnet`, `devnet`, or `mainnet-dust`. Unset = venue disabled. |
+| `VENUE_RPC_URL` | _(unset)_ | RPC endpoint for the venue. E.g. `http://127.0.0.1:8899` for localnet. |
+| `VENUE_ALLOW_MAINNET_DUST` | `false` | Must be set to `true` to allow mainnet execution (dust-run gate). Protects against accidental mainnet spend. |
+| `SAW_BYOK_ENC_KEY` | _(required)_ | 32-byte AES-GCM key (base64) for encrypting BYOK LLM keys and trading keypairs at rest. Same key used for both. Generate: `openssl rand -base64 32` |
+
+**Safe defaults:** all perp functionality is disabled if `VENUE` and `VENUE_ENV` are unset. No on-chain perp transactions will be attempted.
+
+### Live e2e proof
+
+Full dispatch path exercised on localnet (long open/close + short open/close, SL/TP confirmed on-chain, alreadyClosed guard verified):
+
+- `docs/DEMO-RESULTS-perps.md` — tx signatures, position reads, oracle prices
+
+Localnet runbook (one-command setup): `scripts/localnet-adrena/README.md`
+
+### Not in Phase 1 / pending
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Mainnet dust run | Pending (post-Phase 1) | Validates keeper-executed SL/TP — localnet has no keepers. Gated by `VENUE_ALLOW_MAINNET_DUST=true`. Requires ~5-10 USDC real float. |
+| Column-default jsonb fix for FUTURE agents | Known follow-up | `agents.perp_policy` column default is set by migration 0014. Existing rows already backfilled. However, agents spawned via `spawnAgent` after migration may get a slightly-broken default if the insert path does not explicitly set `perp_policy`. Existing agents are unaffected. Flag as follow-up before enabling for new agent onboarding flows. |
+| I-1: stuck-'executing' reconciler | Hardening follow-up | If the worker process dies between claim and status write, the item stays `executing` forever. A reconciler job that resets items stuck in `executing` for >N minutes is not yet implemented. |
+| M-2: oracle gap guard inactive for dip triggers | Hardening follow-up | The 1.5% oracle gap guard (step 3 in dispatch flow) is active for `below`/`above` triggers. For `dip` triggers it is currently inactive — the guard needs a price-direction-aware implementation before dip-trigger perps are enabled in prod. |
+
