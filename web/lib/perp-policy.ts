@@ -1,6 +1,14 @@
+// MIRROR: copias byte-idénticas en worker/src/lib/perp-policy.ts y
+// web/lib/perp-policy.ts — si editás una, replicá la otra.
+//
 // Módulo PURO (sin IO) — misma interfaz que tendrá evaluate_policy on-chain
 // en Fase 2 (patrón espejo, igual que sdk/src/policy.ts con UTC-day).
 // El struct PerpPolicyParams se diseña fixed-size: futuro layout PolicyAccount.
+//
+// NOTA precisión: todos los montos USDC son unidades humanas (máx 2 decimales,
+// vienen de UI/DB) — la aritmética float es segura a esa magnitud. La versión
+// on-chain de Fase 2 usará unidades base enteras (micro-USDC); NO pasar
+// unidades base a este módulo.
 
 export type PerpPolicyParams = {
   maxLeverage: number;
@@ -61,6 +69,10 @@ export function evaluatePerpPolicy(
 
 // Helper para derivar el userOrderId (u8 1..255) del uuid del item —
 // idempotencia en Drift (spec §errores: clientOrderId determinístico).
+// NOTA colisiones: hash de 255 buckets — las colisiones entre uuids distintos
+// son esperables (~1/255 por par; birthday a partir de ~20 órdenes). El caller
+// DEBE chequear userOrderId duplicado entre sus órdenes ABIERTAS antes de
+// colocar; una colisión resulta en orden salteada, nunca en error de datos.
 export function deriveUserOrderId(itemUuid: string): number {
   let h = 0;
   for (const c of itemUuid) h = (h * 31 + c.charCodeAt(0)) >>> 0;

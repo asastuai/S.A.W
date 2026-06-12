@@ -36,6 +36,19 @@ describe("evaluatePerpPolicy — orden de evaluación de la spec", () => {
   it("permite orden dentro de todos los caps", () => {
     expect(evaluatePerpPolicy(intent({ marginUsdc: 100 }), DEFAULT_PERP_POLICY, ctx).verdict).toBe("allowed");
   });
+  it("margin exactamente en el cap per-tx NO deniega (gate 3 es >, no >=)", () => {
+    const v = evaluatePerpPolicy(intent({ marginUsdc: 500 }), DEFAULT_PERP_POLICY, ctx);
+    expect(v.verdict).not.toBe("denied"); // 500 no excede el cap de 500
+  });
+  it("budget diario exacto NO deniega (gate 4 es >; decimales .5 exactos en float)", () => {
+    const v = evaluatePerpPolicy(intent({ marginUsdc: 299.5 }), DEFAULT_PERP_POLICY,
+      { ...ctx, dailyMarginUsedUsdc: 700.5 });
+    expect(v.verdict).not.toBe("denied"); // 700.5+299.5 === 1000, no > 1000
+  });
+  it("margin exactamente en el threshold NO requiere aprobación (gate 7 es >)", () => {
+    expect(evaluatePerpPolicy(intent({ marginUsdc: 200 }), DEFAULT_PERP_POLICY, ctx).verdict)
+      .toBe("allowed"); // 200 no supera el threshold de 200
+  });
   it("el orden importa: leverage malo + margin malo reporta leverage (gate 2 antes que 3)", () => {
     const v = evaluatePerpPolicy(intent({ leverage: 20, marginUsdc: 600 }), DEFAULT_PERP_POLICY, ctx);
     expect(v.verdict).toBe("denied");
