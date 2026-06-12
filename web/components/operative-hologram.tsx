@@ -4,6 +4,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { MascotPose } from "./mascot";
+import { relPointer, lookTarget } from "./fx/fx-math";
 
 /**
  * Operative hologram — a wireframe rendition of the secret-agent operative
@@ -38,11 +39,23 @@ const POSE: Record<MascotPose, PoseParams> = {
 
 const BASE_Y = -0.35;
 
-function Rig({ poseRef }: { poseRef: React.MutableRefObject<MascotPose> }) {
+function Rig({
+  poseRef,
+  pointerRef,
+}: {
+  poseRef: React.MutableRefObject<MascotPose>;
+  pointerRef: React.MutableRefObject<{ nx: number; ny: number; near: boolean; over: boolean }>;
+}) {
   const group = useRef<THREE.Group>(null);
   const eyes = useRef<THREE.Group>(null);
   const glowRef = useRef(0.55);
   const blink = useRef({ next: 1.5, until: 0, jitter: 0 });
+
+  // Pointer-tracking reactive refs
+  const spinFactor = useRef(1);   // 1 = spin libre, →0 cuando near (atención)
+  const glowBoost = useRef(0);    // +0.25 cuando over
+  const scaleRef = useRef(1);     // →1.04 cuando over
+  const prevOver = useRef(false);
 
   // One shared wireframe material for head + brim + crown, so a single
   // opacity tween dims/brightens the whole operative per pose.
@@ -63,16 +76,41 @@ function Rig({ poseRef }: { poseRef: React.MutableRefObject<MascotPose> }) {
     if (!g) return;
     const t = state.clock.elapsedTime;
     const p = POSE[poseRef.current] ?? POSE.idle;
+    const ptr = pointerRef.current;
 
-    // spin + bob + lean toward the pose's posture
-    g.rotation.y += delta * p.speed;
+    // near → la atención frena el spin y la cabeza sigue el cursor.
+    // (spec dice ~35%: implementado como decay→0 mientras trackea — un spin
+    // residual pelearía contra el look-at; la vida la pone el bob. Desvío
+    // consciente documentado.)
+    spinFactor.current = THREE.MathUtils.lerp(spinFactor.current, ptr.near ? 0 : 1, 0.05);
+    g.rotation.y += delta * p.speed * spinFactor.current;
+    if (ptr.near) {
+      const look = lookTarget(ptr.nx, ptr.ny);
+      // normalizar el yaw acumulado a [-π, π] para lerpear por el camino corto
+      const yaw = Math.atan2(Math.sin(g.rotation.y), Math.cos(g.rotation.y));
+      g.rotation.y = THREE.MathUtils.lerp(yaw, look.yaw, 0.08 * (1 - spinFactor.current));
+      g.rotation.x = THREE.MathUtils.lerp(g.rotation.x, p.pitch + look.pitch, 0.08);
+    } else {
+      // not near: pose-driven pitch lerp unchanged (original behavior)
+      g.rotation.x = THREE.MathUtils.lerp(g.rotation.x, p.pitch, 0.08);
+    }
+
     g.position.y = BASE_Y + Math.sin(t * p.bobF) * p.bob;
     g.rotation.z = THREE.MathUtils.lerp(g.rotation.z, p.tilt, 0.08);
-    g.rotation.x = THREE.MathUtils.lerp(g.rotation.x, p.pitch, 0.08);
 
     // body glow eases toward the pose target
     glowRef.current = THREE.MathUtils.lerp(glowRef.current, p.glow, 0.06);
     bodyMaterial.opacity = glowRef.current;
+
+    // over → glow boost + scale + glitch de saludo en el rising edge
+    glowBoost.current = THREE.MathUtils.lerp(glowBoost.current, ptr.over ? 0.25 : 0, 0.08);
+    bodyMaterial.opacity = Math.min(1, glowRef.current + glowBoost.current);
+    scaleRef.current = THREE.MathUtils.lerp(scaleRef.current, ptr.over ? 1.04 : 1, 0.08);
+    g.scale.setScalar(scaleRef.current);
+    if (ptr.over && !prevOver.current && blink.current.until === 0) {
+      blink.current.next = t; // dispara el glitch holográfico existente YA
+    }
+    prevOver.current = ptr.over;
 
     // holographic blink: a brief shudder + eyes cut out, then schedule next
     const b = blink.current;
@@ -126,15 +164,40 @@ export function OperativeHologram({ pose = "idle" }: { pose?: MascotPose; size?:
   const poseRef = useRef<MascotPose>(pose);
   poseRef.current = pose;
 
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const pointerRef = useRef({ nx: 0, ny: 0, near: false, over: false });
+
+  useEffect(() => {
+    // pointer fine only — qualifies3D ya filtra touch chico, esto cubre tablets
+    if (!window.matchMedia("(pointer: fine)").matches) return;
+    const onMove = (e: MouseEvent) => {
+      const el = wrapRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      // Guard: hidden/unmounted panels have zero-size rect; relPointer would
+      // return nx=ny=0 → dist=0 → near=true spuriously. Skip the update.
+      if (rect.width === 0) return;
+      const { nx, ny } = relPointer(rect, e.clientX, e.clientY);
+      const dist = Math.hypot(nx, ny);
+      const p = pointerRef.current;
+      p.nx = nx;
+      p.ny = ny;
+      p.near = dist <= 1.5;             // spec: <1.5× del radio del panel
+      p.over = Math.abs(nx) <= 1 && Math.abs(ny) <= 1;
+    };
+    window.addEventListener("mousemove", onMove, { passive: true });
+    return () => window.removeEventListener("mousemove", onMove);
+  }, []);
+
   return (
-    <div className="sawm-holo relative z-[1] h-full w-full">
+    <div ref={wrapRef} className="sawm-holo relative z-[1] h-full w-full">
       <Canvas
         camera={{ position: [0, 0, 4.2], fov: 42 }}
         dpr={[1, 1.75]}
         gl={{ antialias: true, alpha: true, powerPreference: "low-power" }}
         style={{ width: "100%", height: "100%" }}
       >
-        <Rig poseRef={poseRef} />
+        <Rig poseRef={poseRef} pointerRef={pointerRef} />
       </Canvas>
       {/* holographic scanlines layered over the canvas (pure CSS) */}
       <span aria-hidden className="sawm-holo-scan pointer-events-none absolute inset-0" />

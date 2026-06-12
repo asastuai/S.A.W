@@ -189,7 +189,9 @@ export function Mascot({
       {use3D ? (
         <OperativeHologram pose={pose} size={size} />
       ) : (
-        <MascotSvgBody pose={pose} glyph={glyph} />
+        <div className="transition-[filter] duration-300 hover:drop-shadow-gold h-full w-full">
+          <MascotSvgBody pose={pose} glyph={glyph} />
+        </div>
       )}
 
       {/* Self-contained, pose-reactive motion. Scoped by styled-jsx — no
