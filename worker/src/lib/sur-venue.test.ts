@@ -138,6 +138,14 @@ describe("size_delta sign computation", () => {
    *   size_human = marginUsdc * leverage / price
    *   size_delta = round(size_human * SIZE_PRECISION)
    *   sign: long -> positive, short -> negative
+   *
+   * WARNING: computeSizeDelta below DUPLICATES the formula from openPerp() in
+   * sur-venue.ts. These tests validate the algorithm spec, not the actual
+   * implementation path (the real openPerp reads markPrice from chain, which
+   * would require a mocked Anchor Program). If you change the formula in
+   * sur-venue.ts, keep this copy in sync MANUALLY or these tests will pass
+   * while the implementation ships a regression. The price<=0 guard case below
+   * mirrors the guard added to openPerp() to prevent BN(Infinity) throws.
    */
 
   function computeSizeDelta(
@@ -146,6 +154,12 @@ describe("size_delta sign computation", () => {
     priceHuman: number,
     side: "long" | "short",
   ): number {
+    // Mirror of openPerp's price=0 guard (sur-venue.ts).
+    if (priceHuman <= 0) {
+      throw new Error(
+        `openPerp: markPrice is ${priceHuman} — call pushMarkPrice() before openPerp`,
+      );
+    }
     const sizeHuman = (marginUsdc * leverage) / priceHuman;
     const sizeRaw = Math.round(sizeHuman * SIZE_PRECISION);
     return side === "long" ? sizeRaw : -sizeRaw;
@@ -174,6 +188,17 @@ describe("size_delta sign computation", () => {
   it("0.1 BTC short @$66k: size_delta = -10_000_000", () => {
     const delta = computeSizeDelta(3300, 2, 66_000, "short");
     expect(delta).toBe(-10_000_000);
+  });
+
+  it("price = 0 (markPrice never pushed): throws descriptive error, NOT BN(Infinity)", () => {
+    // A fresh Market PDA has markPrice = 0. The guard must throw a clear error
+    // instead of computing Infinity and crashing in new BN(Infinity).
+    expect(() => computeSizeDelta(325, 2, 0, "long")).toThrow(/markPrice is 0/);
+    expect(() => computeSizeDelta(325, 2, 0, "long")).toThrow(/pushMarkPrice/);
+  });
+
+  it("negative price (corrupt state): also guarded", () => {
+    expect(() => computeSizeDelta(325, 2, -5, "long")).toThrow(/pushMarkPrice/);
   });
 });
 

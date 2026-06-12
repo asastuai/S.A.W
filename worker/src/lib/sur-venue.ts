@@ -98,6 +98,17 @@ const PERP_VAULT_ID = new PublicKey(
   "2iidk56xin9riWJDdfR9BpFU3sLH4oZbPwQrK64Y3xf1",
 );
 
+// ── SPL Token well-known addresses ────────────────────────────────────────────
+// Vendored as constants so the adapter does NOT depend on @solana/spl-token
+// (which is not a declared worker dependency — it is only hoisted transitively).
+// These are immutable on-chain program addresses.
+const TOKEN_PROGRAM_ID = new PublicKey(
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+);
+const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
+  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+);
+
 // ── Precision constants ───────────────────────────────────────────────────────
 
 /** 1e6 -- mark_price, entry_price, fill_price, AccountBalance.balance */
@@ -147,6 +158,19 @@ function engineAuthorityPda(): PublicKey {
 /** vault_config PDA: seeds=["vault_config"], program=perp_vault */
 function vaultConfigPda(): PublicKey {
   return pdaFind([u("vault_config")], PERP_VAULT_ID);
+}
+
+/**
+ * Associated Token Account address for (owner, mint).
+ * Derived locally (seeds = [owner, TOKEN_PROGRAM_ID, mint] under the ATA program)
+ * to avoid a runtime dependency on @solana/spl-token's getAssociatedTokenAddress.
+ * This is the canonical ATA derivation used across the SPL ecosystem.
+ */
+function associatedTokenAddress(mint: PublicKey, owner: PublicKey): PublicKey {
+  return pdaFind(
+    [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+  );
 }
 
 /**
@@ -285,9 +309,8 @@ class SurAdapter implements VenueAdapter {
     const vcData: any = await (this.vault.account as any).vaultConfig.fetch(vaultCfg);
     const usdcMint: PublicKey = vcData.usdcMint as PublicKey;
 
-    const { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } =
-      await import("@solana/spl-token");
-    const userUsdc = await getAssociatedTokenAddress(usdcMint, trader);
+    // Derive the trader's USDC ATA locally (no @solana/spl-token dependency).
+    const userUsdc = associatedTokenAddress(usdcMint, trader);
 
     await (this.vault.methods as any)
       .deposit(new BN(0))
@@ -384,6 +407,16 @@ class SurAdapter implements VenueAdapter {
     const mktData: any = await (this.engine.account as any).market.fetch(mktPda);
     const fillPrice: BN = mktData.markPrice as BN;
     const priceHuman = fillPrice.toNumber() / PRICE_PRECISION;
+
+    // Guard: a fresh Market PDA has markPrice = 0 until pushMarkPrice() is called.
+    // Without this guard, sizeHuman would be Infinity and new BN(Infinity) throws an
+    // opaque AssertionError. Surface a descriptive error instead (NO auto-retry).
+    if (priceHuman <= 0) {
+      throw new Error(
+        `openPerp: markPrice is ${priceHuman} for ${this.defaultMarket} — ` +
+          `call pushMarkPrice() to set a synthetic price before openPerp`,
+      );
+    }
 
     // size_delta: (marginUsdc * leverage / price) * SIZE_PRECISION, signed for side.
     const sizeHuman = (intent.marginUsdc * intent.leverage) / priceHuman;
