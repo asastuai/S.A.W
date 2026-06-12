@@ -212,6 +212,16 @@ final en mainnet con float de ~5-10 USDC** antes de declarar Phase 1 completa.
 "SOL-PERP" en el intent layer — el usuario dice "SOL", el adapter traduce). El dust
 run de mainnet se gatea con flag explícito `VENUE_ALLOW_MAINNET_DUST=true`.
 
+**Fallback registrado (decisión Juan, 2026-06-11): SUR Protocol como test venue.**
+Si el localnet-Adrena pega una pared insalvable (ej. oracle staleness guard), el
+fallback es `sur-protocol-solana` (perps DEX agent-native PROPIO, Anchor: perp_engine,
+perp_vault, oracle_router, liquidator…): control total del stack, deployable a
+devnet/localnet a voluntad, modificable según necesidad. Estado del port al 2026-06-11:
+a2a_darkpool ✅, perp_vault 🚧, perp_engine pendiente — requiere completar
+vault+engine+oracle para ser usable como venue (laburo real, por eso es Plan B).
+Sinergia pitch: "SAW tradea en SUR" = ambos proyectos componiendo. Un `SurAdapter`
+entra natural detrás de la interfaz `VenueAdapter`.
+
 ---
 
 ### Task 2: Migración DB 0014 — perp en scheduled_items + trading keys + perp_policy
