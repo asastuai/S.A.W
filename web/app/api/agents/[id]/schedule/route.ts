@@ -84,8 +84,8 @@ export async function POST(
       if (perp.side !== "long" && perp.side !== "short") {
         return NextResponse.json({ error: "perp.side must be 'long' or 'short'" }, { status: 400 });
       }
-      if (typeof perp.leverage !== "number" || perp.leverage < 1 || perp.leverage > 20) {
-        return NextResponse.json({ error: "perp.leverage must be a number between 1 and 20" }, { status: 400 });
+      if (typeof perp.leverage !== "number" || !Number.isInteger(perp.leverage) || perp.leverage < 1 || perp.leverage > 20) {
+        return NextResponse.json({ error: "perp.leverage must be an integer between 1 and 20" }, { status: 400 });
       }
       if (typeof perp.marginUsdc !== "number" || perp.marginUsdc <= 0) {
         return NextResponse.json({ error: "perp.marginUsdc must be a positive number" }, { status: 400 });
@@ -269,11 +269,29 @@ export async function PATCH(
     const { supabaseAdmin } = await import("@/lib/supabase");
     const { data: itemRow } = await supabaseAdmin()
       .from("scheduled_items")
-      .select("agent_id")
+      .select("agent_id, action_type, status")
       .eq("id", itemId)
       .maybeSingle();
     if (!itemRow || itemRow.agent_id !== params.id) {
       return NextResponse.json({ error: "item not found" }, { status: 404 });
+    }
+
+    // Aprobación humana de items perp (I-1, review 2026-06-12):
+    // awaiting-approval → queued SOLO con body.approve === true. El PATCH exige el
+    // JWT Privy del handler (el agente/worker no lo tiene), así que este endpoint ES
+    // el mecanismo de aprobación humana — el flag explícito garantiza que la
+    // transición venga de un click de aprobación en la UI (Task 9), nunca de un
+    // flujo automático del cliente que parchee status por su cuenta.
+    if (
+      (itemRow.action_type === "perp-open" || itemRow.action_type === "perp-close") &&
+      itemRow.status === "awaiting-approval" &&
+      body.status === "queued" &&
+      body.approve !== true
+    ) {
+      return NextResponse.json(
+        { error: "perp approval requires explicit approve flag" },
+        { status: 403 }
+      );
     }
 
     await updateScheduledItemStatus(itemId, body.status, {

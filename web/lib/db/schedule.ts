@@ -109,29 +109,23 @@ export async function sumMarginExecutedTodayUTC(agentId: string): Promise<number
  * partial closes or cross-market position tracking.
  */
 export async function countOpenPerpPositions(agentId: string): Promise<number> {
-  const db = supabaseAdmin();
+  const { count: opens, error: e1 } = await supabaseAdmin()
+    .from("scheduled_items")
+    .select("id", { count: "exact", head: true })
+    .eq("agent_id", agentId)
+    .eq("action_type", "perp-open")
+    .eq("status", "done");
+  if (e1) throw new Error(`countOpenPerpPositions: ${e1.message}`);
 
-  const [opensResult, closesResult] = await Promise.all([
-    db
-      .from("scheduled_items")
-      .select("id", { count: "exact", head: true })
-      .eq("agent_id", agentId)
-      .eq("action_type", "perp-open")
-      .eq("status", "done"),
-    db
-      .from("scheduled_items")
-      .select("id", { count: "exact", head: true })
-      .eq("agent_id", agentId)
-      .eq("action_type", "perp-close")
-      .eq("status", "done"),
-  ]);
+  const { count: closes, error: e2 } = await supabaseAdmin()
+    .from("scheduled_items")
+    .select("id", { count: "exact", head: true })
+    .eq("agent_id", agentId)
+    .eq("action_type", "perp-close")
+    .eq("status", "done");
+  if (e2) throw new Error(`countOpenPerpPositions: ${e2.message}`);
 
-  if (opensResult.error) throw new Error(`countOpenPerpPositions (opens): ${opensResult.error.message}`);
-  if (closesResult.error) throw new Error(`countOpenPerpPositions (closes): ${closesResult.error.message}`);
-
-  const opens = (opensResult as any).count ?? 0;
-  const closes = (closesResult as any).count ?? 0;
-  return Math.max(0, opens - closes);
+  return Math.max(0, (opens ?? 0) - (closes ?? 0));
 }
 
 export async function updateScheduledItemStatus(

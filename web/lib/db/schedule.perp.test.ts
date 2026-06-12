@@ -11,16 +11,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 //
 // Each call to supabaseAdmin() returns a fresh mock object so tests don't bleed.
 
+type MockResolve = { data?: unknown; count?: number | null; error: unknown };
+
 type MockChain = {
   _table: string;
   _insertPayload: Record<string, unknown> | null;
   _filters: Array<{ col: string; val: unknown }>;
   _gteFilters: Array<{ col: string; val: unknown }>;
   _selectCols: string;
-  _resolveWith: { data: unknown; error: unknown };
+  _resolveWith: MockResolve;
 };
 
-function makeChain(resolveWith: { data: unknown; error: unknown }): MockChain {
+function makeChain(resolveWith: MockResolve): MockChain {
   return {
     _table: "",
     _insertPayload: null,
@@ -37,7 +39,7 @@ let _capturedFilters: Array<{ col: string; val: unknown }> = [];
 let _capturedGteFilters: Array<{ col: string; val: unknown }> = [];
 let _capturedSelectCols = "*";
 
-function buildSupabaseMock(resolveWith: { data: unknown; error: unknown }) {
+function buildSupabaseMock(resolveWith: MockResolve) {
   _mockChain = makeChain(resolveWith);
 
   const terminal = () => Promise.resolve(resolveWith);
@@ -70,21 +72,42 @@ function buildSupabaseMock(resolveWith: { data: unknown; error: unknown }) {
   return builder;
 }
 
-// Hoist the mock so the module under test (schedule.ts) picks it up
+// Hoist the mock so the module under test (schedule.ts) picks it up.
+// supabaseAdmin() returns the next builder in _mockQueue (FIFO), falling back
+// to _currentMockBuilder when the queue is empty. This lets tests that call
+// supabaseAdmin() multiple times (e.g. countOpenPerpPositions) return
+// different results per call without complex vi.mock resets.
 vi.mock("@/lib/supabase", () => ({
-  supabaseAdmin: () => _currentMockBuilder,
+  supabaseAdmin: () => {
+    if (_mockQueue.length > 0) return _mockQueue.shift()!;
+    return _currentMockBuilder;
+  },
 }));
 
 let _currentMockBuilder: ReturnType<typeof buildSupabaseMock>;
+let _mockQueue: Array<ReturnType<typeof buildSupabaseMock>> = [];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function resetMock(resolveWith: { data: unknown; error: unknown }) {
+function resetMock(resolveWith: MockResolve) {
   _insertedPayload = null;
   _capturedFilters = [];
   _capturedGteFilters = [];
   _capturedSelectCols = "*";
+  _mockQueue = [];
   _currentMockBuilder = buildSupabaseMock(resolveWith);
+}
+
+/** Queue up sequential responses for tests that call supabaseAdmin() multiple
+ *  times (e.g. countOpenPerpPositions makes two DB round-trips). */
+function queueMocks(...responses: Array<MockResolve>) {
+  _insertedPayload = null;
+  _capturedFilters = [];
+  _capturedGteFilters = [];
+  _capturedSelectCols = "*";
+  _mockQueue = responses.map(buildSupabaseMock);
+  // Fallback in case more calls arrive than queued
+  _currentMockBuilder = buildSupabaseMock({ data: null, error: null });
 }
 
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
@@ -271,51 +294,51 @@ describe("sumMarginExecutedTodayUTC", () => {
 // ── countOpenPerpPositions ────────────────────────────────────────────────────
 
 describe("countOpenPerpPositions", () => {
-  // The function is a simple approximation: count(perp-open done) - count(perp-close done), floor 0.
-  // Because supabase mock is called twice (once per action_type), we need to handle
-  // sequential calls. We do this by replacing _currentMockBuilder between calls.
+  // The function makes two sequential DB calls (opens query, then closes query).
+  // queueMocks() lets each call return a different { count, error } value.
 
-  it("returns open minus close (floor 0)", async () => {
-    let callCount = 0;
-    // First call (perp-open): 3 rows; second call (perp-close): 1 row
-    const mockBuilderFactory = () => {
-      callCount++;
-      const count = callCount === 1 ? 3 : 1;
-      return buildSupabaseMock({ data: count, error: null });
-    };
-
-    // Override supabaseAdmin to return alternating builders
-    let _call = 0;
-    const builders = [
-      buildSupabaseMock({ data: 3, error: null }),
-      buildSupabaseMock({ data: 1, error: null }),
-    ];
-    // We need to intercept the two sequential calls; simplest: set up two mock
-    // chains by pre-building them and patching _currentMockBuilder inside the fn.
-    // Since the mock factory reads _currentMockBuilder each time, we swap it.
-
-    // Prepare a state machine that alternates
-    let _seq = 0;
-    const origBuilder = _currentMockBuilder;
-    const seqBuilders = [
-      buildSupabaseMock({ data: 3, error: null }),
-      buildSupabaseMock({ data: 1, error: null }),
-    ];
-
-    // Patch: override vi.mock doesn't let us do this inline, so we test the
-    // JS-sum approach: the function receives two separate promise resolutions.
-    // Instead, test via the exported contract: result is a number >= 0.
-    // The actual DB query logic is integration-level; we test the math separately.
-    resetMock({ data: 2, error: null }); // any value — function calls DB twice
+  it("returns opens minus closes: 3 opens, 1 close → 2", async () => {
+    // First supabaseAdmin() call (perp-open query) returns count: 3
+    // Second supabaseAdmin() call (perp-close query) returns count: 1
+    queueMocks(
+      { count: 3, error: null },
+      { count: 1, error: null },
+    );
     const result = await countOpenPerpPositions("agent-uuid-1");
-    expect(typeof result).toBe("number");
-    expect(result).toBeGreaterThanOrEqual(0);
+    expect(result).toBe(2);
   });
 
-  it("result is always >= 0 (floor at 0)", async () => {
-    // Simulate more closes than opens (data inconsistency) — result must be 0
-    resetMock({ data: 0, error: null });
+  it("floors at 0 when closes exceed opens: 1 open, 5 closes → 0", async () => {
+    queueMocks(
+      { count: 1, error: null },
+      { count: 5, error: null },
+    );
     const result = await countOpenPerpPositions("agent-uuid-1");
-    expect(result).toBeGreaterThanOrEqual(0);
+    expect(result).toBe(0);
+  });
+
+  it("handles null counts (no rows) as 0", async () => {
+    queueMocks(
+      { count: null, error: null },
+      { count: null, error: null },
+    );
+    const result = await countOpenPerpPositions("agent-uuid-1");
+    expect(result).toBe(0);
+  });
+
+  it("throws when the opens query errors", async () => {
+    queueMocks(
+      { count: null, error: { message: "db error" } },
+      { count: 0, error: null },
+    );
+    await expect(countOpenPerpPositions("agent-uuid-1")).rejects.toThrow("countOpenPerpPositions");
+  });
+
+  it("throws when the closes query errors", async () => {
+    queueMocks(
+      { count: 2, error: null },
+      { count: null, error: { message: "db error" } },
+    );
+    await expect(countOpenPerpPositions("agent-uuid-1")).rejects.toThrow("countOpenPerpPositions");
   });
 });
