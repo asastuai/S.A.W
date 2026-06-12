@@ -15,6 +15,11 @@
 import { logger, schedules } from "@trigger.dev/sdk/v3";
 import { supabaseAdmin } from "../lib/supabase.ts";
 import { describeMarket, getMarketSnapshot } from "../lib/market.ts";
+import { isVenueEnabled, makeAdrenaAdapter } from "../lib/venue.ts";
+import { DEFAULT_PERP_POLICY } from "../lib/perp-policy.ts";
+import { dispatchPerpItem, sumMarginExecutedTodayUTC } from "../lib/dispatch-perp.ts";
+import { loadTradingKeypair } from "../lib/trading-key.ts";
+import type { PerpPolicyParams } from "../lib/perp-policy.ts";
 
 type AgentRow = {
   id: string;
@@ -29,6 +34,8 @@ type AgentRow = {
   active_hours_start: number | null;
   active_hours_end: number | null;
   byok_key_id: string | null;
+  // perp_policy: from migration 0014 — jsonb column; null means DEFAULT_PERP_POLICY
+  perp_policy: PerpPolicyParams | null;
 };
 
 function withinActiveHours(agent: AgentRow, now: Date): boolean {
@@ -98,20 +105,72 @@ export const agentWakeJob = schedules.task({
           .eq("status", "queued");
 
         for (const item of pending ?? []) {
-          if (shouldFire(item, snap.priceUsd, startedAt)) {
-            // M-5 fix (v1.5 audit): do NOT flip status to 'executing' here.
-            // There is no on-chain dispatch yet (Phase 1.1), so mutating the
-            // status would leave the row stuck in 'executing' forever, and a
-            // concurrent wake could double-process the same item. Just record
-            // that the trigger fired. Phase 1.1 MUST do the status transition
-            // atomically with the tx send, using an optimistic guard
-            // (.eq("status","queued")) so it can never double-execute.
-            logger.log("trigger fired — dispatch deferred to Phase 1.1", {
-              itemId: item.id,
-            });
-            executed++;
-            outcome = "trigger-detected";
+          if (!shouldFire(item, snap.priceUsd, startedAt)) continue;
+
+          // ── PERP DISPATCH (Phase 1 — Task 7) ───────────────────────────────
+          // Implements the M-5 atomic-claim rule from the v1.5 audit:
+          // The status transition to 'executing' happens INSIDE dispatchPerpItem,
+          // atomically paired with the tx send via an optimistic guard
+          // (.eq("status","queued")). If 0 rows are claimed, a concurrent wake
+          // already took this item — we skip safely with no double-execute.
+          if (
+            item.action_type === "perp-open" ||
+            item.action_type === "perp-close"
+          ) {
+            if (!isVenueEnabled()) {
+              logger.log("venue disabled — skipping perp item", { itemId: item.id });
+              continue;
+            }
+
+            const kp = await loadTradingKeypair(db, a.id);
+            if (!kp) {
+              logger.log("no trading key for agent — skipping perp item", {
+                itemId: item.id,
+                agentId: a.id,
+              });
+              continue;
+            }
+
+            const rpcUrl = process.env["VENUE_RPC_URL"] ?? "http://127.0.0.1:8899";
+            const adapter = await makeAdrenaAdapter({ rpcUrl, authority: kp });
+            try {
+              const policy: PerpPolicyParams = a.perp_policy ?? DEFAULT_PERP_POLICY;
+              const dailyUsed = await sumMarginExecutedTodayUTC(db, a.id);
+              const positions = await adapter.getPositions();
+
+              const r = await dispatchPerpItem({
+                db,
+                adapter,
+                item,
+                policy,
+                dailyMarginUsedUsdc: dailyUsed,
+                openPositions: positions.length,
+              });
+
+              logger.log("perp dispatch result", { itemId: item.id, outcome: r.outcome });
+
+              if (r.outcome === "done") {
+                executed++;
+                outcome = "perp-dispatched";
+              } else if (r.outcome === "claimed-elsewhere") {
+                // Another wake took it — normal, not an error
+                logger.log("item claimed by concurrent wake", { itemId: item.id });
+              }
+            } finally {
+              // Always disconnect, even on throw (adapter is stateless but protocol)
+              await adapter.disconnect();
+            }
+            continue; // pay/swap dispatch stays deferred (Phase 1.1)
           }
+
+          // ── Non-perp items: trigger detected, dispatch still deferred ──────
+          // pay/swap autonomous dispatch is Phase 1.1 — out of scope here.
+          logger.log("trigger fired — non-perp dispatch deferred to Phase 1.1", {
+            itemId: item.id,
+            actionType: item.action_type,
+          });
+          executed++;
+          outcome = "trigger-detected";
         }
 
         // 3. LLM scan (only if BYOK key configured)
