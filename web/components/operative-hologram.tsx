@@ -86,7 +86,9 @@ function Rig({
     g.rotation.y += delta * p.speed * spinFactor.current;
     if (ptr.near) {
       const look = lookTarget(ptr.nx, ptr.ny);
-      // normalizar el yaw acumulado a [-π, π] para lerpear por el camino corto
+      // normalizar el yaw acumulado a [-π, π] para lerpear por el camino corto.
+      // La asignación "resetea" la acumulación del spin — seguro porque three.js
+      // re-aplica el Euler completo cada frame (47.3 rad y 3.1 rad pintan igual).
       const yaw = Math.atan2(Math.sin(g.rotation.y), Math.cos(g.rotation.y));
       g.rotation.y = THREE.MathUtils.lerp(yaw, look.yaw, 0.08 * (1 - spinFactor.current));
       g.rotation.x = THREE.MathUtils.lerp(g.rotation.x, p.pitch + look.pitch, 0.08);
@@ -98,11 +100,8 @@ function Rig({
     g.position.y = BASE_Y + Math.sin(t * p.bobF) * p.bob;
     g.rotation.z = THREE.MathUtils.lerp(g.rotation.z, p.tilt, 0.08);
 
-    // body glow eases toward the pose target
+    // body glow eases toward the pose target (+boost de hover, capped a 1)
     glowRef.current = THREE.MathUtils.lerp(glowRef.current, p.glow, 0.06);
-    bodyMaterial.opacity = glowRef.current;
-
-    // over → glow boost + scale + glitch de saludo en el rising edge
     glowBoost.current = THREE.MathUtils.lerp(glowBoost.current, ptr.over ? 0.25 : 0, 0.08);
     bodyMaterial.opacity = Math.min(1, glowRef.current + glowBoost.current);
     scaleRef.current = THREE.MathUtils.lerp(scaleRef.current, ptr.over ? 1.04 : 1, 0.08);
@@ -176,7 +175,7 @@ export function OperativeHologram({ pose = "idle" }: { pose?: MascotPose; size?:
       const rect = el.getBoundingClientRect();
       // Guard: hidden/unmounted panels have zero-size rect; relPointer would
       // return nx=ny=0 → dist=0 → near=true spuriously. Skip the update.
-      if (rect.width === 0) return;
+      if (rect.width === 0 || rect.height === 0) return;
       const { nx, ny } = relPointer(rect, e.clientX, e.clientY);
       const dist = Math.hypot(nx, ny);
       const p = pointerRef.current;
