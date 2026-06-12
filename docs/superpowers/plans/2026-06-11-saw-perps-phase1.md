@@ -180,6 +180,38 @@ Jupiter Perps mainnet para producción**, venue abstraído.
   Documentar TODO en findings (precisiones, shape de params, oracle reads).
 - [ ] **Step 4:** commit `spike: Adrena devnet probe — venue pivot findings`.
 
+**RESULTADO del spike (commit 0c7bc2a):** ✅ SL/TP nativo + atómico (un bundle Jito,
+keeper-ejecutado) — la regla "exits viven en el venue" se cumple. ✅ Mecánica completa
+mapeada (SOL via JITOSOL, open/close directo contra pool SIN keepers, dedup por
+posición-única). ❌ Adrena devnet SIN estado de pool (7 cuentas vs ~6,887 mainnet) —
+inutilizable. ❌ `adrena-sdk-ts@1.0.0-beta.14` publicado sin JS compilado (build desde
+source). Findings completos: `2026-06-11-adrena-devnet-findings.md`.
+
+### Task 1d (ADDENDUM #3, 2026-06-11): entorno de test — localnet Adrena + 1 dust run
+
+**Decisión de Juan** (no existe devnet de perps funcional en ningún venue de Solana hoy):
+desarrollo y CI contra **localnet con Adrena MAINNET clonado** (programa vivo — el clone
+funciona, y Adrena abre/cierra directo contra el pool sin keepers → open/close/read
+testean gratis). Los SL/TP keeper-ejecutados NO corren en localnet → **una validación
+final en mainnet con float de ~5-10 USDC** antes de declarar Phase 1 completa.
+
+**Files:**
+- Create: `scripts/localnet-adrena/setup.sh` — program dump (`13gDzEXCdocbj8iAiqrScGo47NiSuYENGsRqi3SEAwet`)
+  + `--clone` del subset necesario de mainnet (pool PDA, custodies JITOSOL/USDC, oráculos
+  Pyth, cortex/state) + mock-USDC flow. Reusar lecciones de `scripts/localnet-drift/`.
+- Create: `scripts/localnet-adrena/README.md`
+- Build SDK desde source: clonar `AdrenaFoundation/adrena-sdk-ts`, `pnpm build`, link
+  como workspace package (documentar en README hasta que salga beta.15+ con dist/).
+- Verificación: probe contra `http://127.0.0.1:8899` → open long JITOSOL chico + close
+  + read position VERDES con tx sigs locales. SL/TP: solo verificar que las ixs se
+  aceptan (ejecución keeper queda para el dust run).
+- Commit: `feat(localnet): Adrena mainnet-clone validator for local e2e`
+
+**Nota para Tasks 4 y 7 (actualiza la nota de Task 1b/1c):** `VENUE=adrena`,
+`VENUE_ENV=localnet|mainnet-dust`, mercado v1 = JITOSOL-long/short (mapeado desde
+"SOL-PERP" en el intent layer — el usuario dice "SOL", el adapter traduce). El dust
+run de mainnet se gatea con flag explícito `VENUE_ALLOW_MAINNET_DUST=true`.
+
 ---
 
 ### Task 2: Migración DB 0014 — perp en scheduled_items + trading keys + perp_policy
