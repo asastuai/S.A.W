@@ -455,3 +455,78 @@ Para la implementación de SAW Perps Phase 1 (worker + trigger jobs), todas las 
 
 *Generado por el probe `scripts/drift-probe.ts` — `@drift-labs/sdk 2.156.0`*  
 *Compat spike ejecutado 2026-06-11 — `scripts/drift-compat-test.ts`*
+
+---
+
+## 13. Localnet — Drift mainnet-clone validator (2026-06-11)
+
+> **STATUS**: PARCIALMENTE FUNCIONAL (DONE_WITH_CONCERNS). El validator arranca y los accounts se clonan correctamente. `initializeUserAccount` / `deposit` fallan con `InstructionFallbackNotFound` (error 101). Causa raíz documentada abajo.
+
+### Archivos creados
+
+| Archivo | Descripción |
+|---------|-------------|
+| `scripts/localnet-drift/setup.sh` | One-command startup: dump program → clone accounts → start validator → mock USDC mint |
+| `scripts/localnet-drift/init-markets.ts` | Account bootstrapping: mock USDC ATA, intento initializeUserAccount + deposit |
+| `scripts/localnet-drift/README.md` | Documentación completa, PDAs, limitaciones, paths de desbloqueo |
+| `scripts/localnet-drift/.gitignore` | Ignora `.keys/`, `drift.so`, `.localnet-config.json`, `validator.log` |
+
+### Lo que funciona (verificado con tx signatures reales)
+
+| Operación | Resultado | Tx / evidencia |
+|-----------|-----------|----------------|
+| `solana program dump dRiftyHA...` | `drift.so` 6.4MB, SHA256 `72cc3062523bf87b028b5bee163872140ad7a91f0ee32497e4159daaa312d396` | Matches mainnet programdata exactly |
+| `solana-test-validator --clone-upgradeable-program dRiftyHA...` | Arranca en ~4 segundos | Health check via `solana cluster-version` |
+| Clone Drift state PDA (`5zpq7D...`) | 992 bytes on-chain | `solana account` verificado |
+| Clone SOL-PERP market (`8UJgxai...`) | 1216 bytes on-chain | `solana account` verificado |
+| Clone USDC spot market (`6gMq3mR...`) | 776 bytes on-chain | `solana account` verificado |
+| `DriftClient.subscribe()` vs localnet | `true` | No errors |
+| `getOracleDataForPerpMarket(0)` | SOL a $83.945 (snapshot de clone) | — |
+| Mock USDC mint (SPL Token, 6 decimals) | 10,000 USDC acreditados | `hkbZfiL3ofXMtXZmYb5t2VHpV3NGwx3MLH4WWUKv49bM8cMJDpC2FJyEMriTgUEueku9Jz9mmaX4qJXxufiU2NP` |
+
+### Bloqueante — `InstructionFallbackNotFound` (error 101)
+
+**Síntoma**: `initializeUserAccount()` enviado a `dRiftyHA...` en localnet falla con Anchor error 101.
+
+**Investigación realizada**:
+
+1. Se probaron discriminadores Anchor 0.29 camelCase (`sha256("global:initializeUser")[0:8]` = `05a49dc593dce5f3`) y Anchor 0.30 snake_case (`sha256("global:initialize_user")[0:8]`) — ambos fallan igual.
+2. El IDL on-chain (`anchor idl fetch dRiftyHA...`) retorna v2.150.0 con discriminadores camelCase. También fallan.
+3. Análisis ELF del binario `drift.so`:
+   - Tamaño total del archivo: 6,673,069 bytes
+   - Sección `.text` (bytecode ejecutable): **166,488 bytes** (solo 166KB)
+   - Secciones totales accounted: 204,317 bytes
+   - **Unaccounted: 6,468,752 bytes** (padding de BPFLoaderUpgradeable)
+   - Strings en `.rodata`: solo instrucciones de administración de IDL y `AdminWithdrawFromInsuranceFundVault`
+   - NO hay log strings para `initializeUser`, `deposit`, `placeOrders`
+
+4. **Descubrimiento clave**: El programa `dRiftyHA` en mainnet fue deployado en slot **410633860** (varios meses atrás). Las operaciones de trading recientes en mainnet usan program IDs distintos:
+   - `vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR`
+   - `EBN93eXs5fHGBABuajQqdsKRkCgaqtJa8vEFD6vKXiP`
+
+   El `dRiftyHA` parece ser un **remnant admin-only** — su `.text` section de 166KB es demasiado pequeña para contener un perp DEX completo. La tabla de dispatch del binario deployed no corresponde a ningún discriminador Anchor estándar.
+
+**Causa raíz**: Drift Labs migró la arquitectura del programa. `dRiftyHA` ya no es el programa de trading activo — es el program ID que el SDK usa como anchor point para PDAs, pero la ejecución real se delega (posiblemente via CPI o lookup table) a los nuevos program IDs.
+
+### Estado de lo solicitado en Task 1b
+
+| Entregable | Estado |
+|-----------|--------|
+| `setup.sh` — one-command validator startup | DONE |
+| `init-markets.ts` — mock USDC, user init, deposit | DONE (initializeUser + deposit retornan error 101, documentado) |
+| `README.md` — documentación completa | DONE |
+| `.gitignore` para `.keys/` | DONE (en `scripts/localnet-drift/`) |
+| Tx signatures verificadas | Parcial — mock USDC confirmed; initializeUser/deposit bloqueados |
+| Validator killed antes del commit | DONE (`pkill -f solana-test-validator`) |
+
+### Próximos pasos para desbloquear
+
+**Opción A (recomendada)**: Identificar el program ID activo de trading en mainnet y clonar ESE binario en lugar de `dRiftyHA`. Candidatos: `vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR`, `EBN93eXs5fHGBABuajQqdsKRkCgaqtJa8vEFD6vKXiP`. Confirmar verificando txs recientes de `initializeUser` en mainnet explorer y anotando el `Program Id` del log.
+
+**Opción B**: Fresh Drift state con `AdminClient.initialize()` (sin clonar), usando un oracle Prelaunch. Elimina dependencia de binarios externos. Documentado en `scripts/localnet-drift/README.md` sección "Path B".
+
+**Opción C (corto plazo)**: anchor-bankrun / solana-program-test con stubs. No requiere resolver la arquitectura de program IDs. Suficiente para unit tests del worker sin necesidad de full e2e.
+
+---
+
+*Localnet spike ejecutado 2026-06-11 — `scripts/localnet-drift/setup.sh` + `init-markets.ts`*

@@ -1,0 +1,15 @@
+# Ephemeral localnet keypairs — NEVER commit these
+# They control nothing real but should stay out of git as a hygiene measure
+.keys/
+
+# Cached Drift program bytecode (large binary, reproducible via setup.sh)
+drift.so
+
+# Generated config (paths change per machine)
+.localnet-config.json
+
+# Validator logs
+validator.log
+
+# Ledger (lives at repo root test-ledger but listed here for clarity)
+ledger/
