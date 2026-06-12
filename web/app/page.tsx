@@ -138,15 +138,15 @@ function Hero() {
 
                 <div className="flex flex-col items-start gap-3 font-mono">
                   <Magnetic>
-                  <Link
-                    href="/demo"
-                    className="group inline-flex items-center gap-2 border border-gold/70 bg-gold/[0.08] px-5 py-3 text-sm text-bone shadow-glow transition hover:bg-gold hover:text-ink hover:shadow-glow-lg"
-                  >
-                    <CommandLine prompt="$">
-                      saw run <span className="text-gold group-hover:text-ink">--dossier</span>
-                      <span className="ml-2 text-bone/40 group-hover:text-ink/60">→</span>
-                    </CommandLine>
-                  </Link>
+                    <Link
+                      href="/demo"
+                      className="group inline-flex items-center gap-2 border border-gold/70 bg-gold/[0.08] px-5 py-3 text-sm text-bone shadow-glow transition hover:bg-gold hover:text-ink hover:shadow-glow-lg"
+                    >
+                      <CommandLine prompt="$">
+                        saw run <span className="text-gold group-hover:text-ink">--dossier</span>
+                        <span className="ml-2 text-bone/40 group-hover:text-ink/60">→</span>
+                      </CommandLine>
+                    </Link>
                   </Magnetic>
                   <a
                     href="https://github.com/asastuai/S.A.W"
