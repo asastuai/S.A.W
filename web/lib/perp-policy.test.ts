@@ -38,6 +38,8 @@ describe("evaluatePerpPolicy — orden de evaluación de la spec", () => {
   });
   it("el orden importa: leverage malo + margin malo reporta leverage (gate 2 antes que 3)", () => {
     const v = evaluatePerpPolicy(intent({ leverage: 20, marginUsdc: 600 }), DEFAULT_PERP_POLICY, ctx);
+    expect(v.verdict).toBe("denied");
+    if (v.verdict === "allowed") throw new Error("unreachable");
     expect(v.reason).toContain("leverage");
   });
 });
