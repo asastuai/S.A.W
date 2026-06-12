@@ -1,83 +1,136 @@
 # SAW Perps -- SUR Adapter Live Integration Results
 
-**Date:** 2026-06-12
+**Date (probe run):** 2026-06-12 (prior run — blocked by ESM bug)
+**Date (adapter run):** 2026-06-12 (this run — ESM bug fixed at commit 9e5489b, adapter-driven)
 **Network:** localnet (solana-test-validator 3.1.14)
 **Operator:** `4gAdo7R69XgZJ2QazB1N2o21nfY2gjto9KijUDzjg6kv` (deployer key, throwaway localnet only)
 **RPC:** `http://127.0.0.1:8899`
-**Status:** DONE_WITH_CONCERNS -- probe clean, integration suite blocked by CRITICAL ESM bug in sur-venue.ts
+**Status:** DONE — SurAdapter drives all tx sigs. 27/27 PASS, 0 failures.
 
 ---
 
 ## Summary
 
-The `sur-adapter-probe.ts` ran end-to-end on localnet with all four tx sigs confirmed.
-The integration suite (`sur-venue.integration.ts`) was blocked by a CRITICAL import bug in
-`sur-venue.ts` that prevents the file from loading in the ESM worker context.
-The integration driver script itself requires no changes.
+`sur-venue.integration.ts` ran end-to-end via `makeSurAdapter` (commit 9e5489b, ESM fix).
+All four critical tx sigs (long open/close, short open/close) are **adapter-driven** —
+emitted by `sur-venue.ts` calling `openPerp` / `closePerp` / `pushMarkPrice` through the
+`SurAdapterWithPushPrice` interface, not by the probe directly.
+
+The prior run (f3e01b3) was blocked by a CJS named-import ESM crash (`BN` undefined).
+That bug is now fixed at commit 9e5489b. No driver fixes were needed —
+`sur-venue.integration.ts` was correct as written.
 
 | Step | Source | Outcome | Tx Signature |
 |------|--------|---------|-------------|
-| LONG open (0.1 BTC @ $65,000) | probe | PASS | `pVnEyaR3aePB6wZGMPUSxJTKart8xzgk5zrK5yyJRKYM4pJT88LXBLL8TybWXH4NrXLfve73ZBW7zAffgouCBhY` |
-| LONG close (@ $66,000, +$100) | probe | PASS | `5LTXeKq1Zz4iA8aBkTGJGgGJddM8jLHKBkjwaUyQSRT6n5w1A3cbStBKHfnX7fCsoGJtPubN4xmdxrSQuVqEFL2X` |
-| SHORT open (0.1 BTC @ $66,000) | probe | PASS | `2qwPC85kWMzg5RkpGRnNWEZk79wpqU49R371gBREfe5CcLZVjE8Q3j97jv4LcVuT4PuTrbjFMcQNhrheWKAb385R` |
-| SHORT close (@ $65,000, +$100) | probe | PASS | `3nY4BTbuWm3bEYcWU5kf4oeFbKZdDTpfBfUVPvSK7VKsZgAGHk4hKbT45QToQK6FGG192m1RpAkAkMUK9U5BBA6k` |
-| Integration suite (sur-venue.integration.ts) | adapter | BLOCKED | ESM named import error in sur-venue.ts line 64 |
+| LONG open (0.1 BTC @ $65,000) | **SurAdapter** | PASS | `4Gt3vCytBniVLqZ8Wzar7F1TzxeT4CB8AFZjjthi5EeutMbQJzs4imoLXSnP3nBS1uxEvYm6zbp26wkYb39qcger` |
+| LONG close (@ $66,000, +$100) | **SurAdapter** | PASS | `3uTfCfbGZ2qB8dbdQeYjpT2ksUSu5SdEBRQRNpA5zs4z5Gdxf4h9xq3gyivZZUhyaRYrD5vHTka2jiciNKhnkxHY` |
+| SHORT open (0.1 BTC @ $66,000) | **SurAdapter** | PASS | `4VTgdyZXACXt7t2g8uYLEaJoUckQxatuXzzqiRF8yTybJL1qru7gjvQCjM9JCxeZXZstgaqWxKaHthLShYr4djkn` |
+| SHORT close (@ $65,000, +$100) | **SurAdapter** | PASS | `5chXFbKzpotukudP2ksARzTMTRbzcerLQ7qGnE1dAjFiY83YX7zkzdj4rjf5fLe4WeiQKYC69uD28x1kjcvVcFcH` |
+
+**Prior (probe-driven, commit f3e01b3) — kept for reference only — NOT adapter-driven:**
+
+| Step | Source | Outcome | Tx Signature |
+|------|--------|---------|-------------|
+| LONG open (probe) | probe | PASS | `pVnEyaR3aePB6wZGMPUSxJTKart8xzgk5zrK5yyJRKYM4pJT88LXBLL8TybWXH4NrXLfve73ZBW7zAffgouCBhY` |
+| LONG close (probe) | probe | PASS | `5LTXeKq1Zz4iA8aBkTGJGgGJddM8jLHKBkjwaUyQSRT6n5w1A3cbStBKHfnX7fCsoGJtPubN4xmdxrSQuVqEFL2X` |
+| SHORT open (probe) | probe | PASS | `2qwPC85kWMzg5RkpGRnNWEZk79wpqU49R371gBREfe5CcLZVjE8Q3j97jv4LcVuT4PuTrbjFMcQNhrheWKAb385R` |
+| SHORT close (probe) | probe | PASS | `3nY4BTbuWm3bEYcWU5kf4oeFbKZdDTpfBfUVPvSK7VKsZgAGHk4hKbT45QToQK6FGG192m1RpAkAkMUK9U5BBA6k` |
 
 ---
 
-## CRITICAL BUG -- sur-venue.ts lines 63-64: ESM named import from CJS anchor
+## SurAdapter Integration Suite -- Full Results (27/27 PASS)
 
-**File:** `worker/src/lib/sur-venue.ts`, lines 63-64
-**Error at runtime (Node.js v22, tsx v4.22.4):**
+Run via: `VENUE=sur VENUE_ENV=localnet VENUE_RPC_URL=http://127.0.0.1:8899 pnpm exec tsx src/lib/sur-venue.integration.ts`
 
 ```
-SyntaxError: The requested module '@coral-xyz/anchor' does not provide an export named 'BN'
-    at ModuleJob._instantiate (node:internal/modules/esm/module_job:226:21)
+=== SurAdapter Integration Suite -- SUR Localnet ===
+Date: 2026-06-12T17:58:10.510Z
+
+Operator (deployer): 4gAdo7R69XgZJ2QazB1N2o21nfY2gjto9KijUDzjg6kv
+RPC: http://127.0.0.1:8899
+
+[1] makeSurAdapter
+  PASS makeSurAdapter
+
+[2] ensureUserInitialized
+  PASS ensureUserInitialized (first call)
+  PASS ensureUserInitialized (idempotent)
+
+[3] getFloatBalanceUsdc
+  PASS getFloatBalanceUsdc  1200.00 USDC
+
+[4] ensureDeposited
+  PASS ensureDeposited(1000) -- pass
+  PASS ensureDeposited(999999999) -- correctly throws  insufficient float: have 1200.00 USDC, need 999999999.00 USDC
+
+[5] pushMarkPrice($65,000)
+  PASS pushMarkPrice(65000)
+
+[6] getOraclePrice
+  PASS getOraclePrice -> $65,000  $65000.00
+
+[7] hasOpenOrderWithUserOrderId (before open)
+  PASS hasOpenOrderWithUserOrderId(42) = false
+
+[8] openPerp LONG (3250 USDC x2 @ $65k)
+  PASS openPerp LONG  txSig=4Gt3vCytBniVLqZ8Wzar7F1TzxeT4CB8AFZjjthi5EeutMbQJzs4imoLXSnP3nBS1uxEvYm6zbp26wkYb39qcger
+    TX SIG (long open): 4Gt3vCytBniVLqZ8Wzar7F1TzxeT4CB8AFZjjthi5EeutMbQJzs4imoLXSnP3nBS1uxEvYm6zbp26wkYb39qcger
+
+[9] getPositions (expect 1 long)
+  PASS getPositions -> 1 long  entry=$65000.00 mark=$65000.00 uPnL=0.00 liq=$63375.00
+  PASS   stopLoss = null (GAP-1 confirmed)
+  PASS   takeProfit = null (GAP-1 confirmed)
+
+[10] hasOpenOrderWithUserOrderId (after open -> true)
+  PASS hasOpenOrderWithUserOrderId(42) = true
+
+[11] pushMarkPrice($66,000) + closePerp LONG
+  PASS pushMarkPrice(66000) before close
+  PASS closePerp LONG  txSig=3uTfCfbGZ2qB8dbdQeYjpT2ksUSu5SdEBRQRNpA5zs4z5Gdxf4h9xq3gyivZZUhyaRYrD5vHTka2jiciNKhnkxHY
+    TX SIG (long close): 3uTfCfbGZ2qB8dbdQeYjpT2ksUSu5SdEBRQRNpA5zs4z5Gdxf4h9xq3gyivZZUhyaRYrD5vHTka2jiciNKhnkxHY
+
+[12] getPositions (expect [])
+  PASS getPositions -> [] (long closed)
+
+[13] closePerp again (expect alreadyClosed)
+  PASS closePerp second call -> { alreadyClosed: true }
+
+[14] pushMarkPrice($66,000) + openPerp SHORT (3300 USDC x2)
+  PASS pushMarkPrice(66000) before short open
+  PASS openPerp SHORT  txSig=4VTgdyZXACXt7t2g8uYLEaJoUckQxatuXzzqiRF8yTybJL1qru7gjvQCjM9JCxeZXZstgaqWxKaHthLShYr4djkn
+    TX SIG (short open): 4VTgdyZXACXt7t2g8uYLEaJoUckQxatuXzzqiRF8yTybJL1qru7gjvQCjM9JCxeZXZstgaqWxKaHthLShYr4djkn
+
+[15] getPositions (expect 1 short)
+  PASS getPositions -> 1 short  entry=$66000.00 mark=$66000.00 uPnL=0.00 liq=$67650.00
+  PASS   stopLoss = null (GAP-1 confirmed)
+  PASS   takeProfit = null (GAP-1 confirmed)
+
+[16] pushMarkPrice($65,000) + closePerp SHORT
+  PASS pushMarkPrice(65000) before short close
+  PASS closePerp SHORT  txSig=5chXFbKzpotukudP2ksARzTMTRbzcerLQ7qGnE1dAjFiY83YX7zkzdj4rjf5fLe4WeiQKYC69uD28x1kjcvVcFcH
+    TX SIG (short close): 5chXFbKzpotukudP2ksARzTMTRbzcerLQ7qGnE1dAjFiY83YX7zkzdj4rjf5fLe4WeiQKYC69uD28x1kjcvVcFcH
+
+[17] getPositions (expect [])
+  PASS getPositions -> [] (short closed)
+
+[18] disconnect
+  PASS disconnect (no-op)
+
+=== SUMMARY ===
+Status: DONE  (27 passed, 0 failed)
+
+TX SIGS:
+  long  open : 4Gt3vCytBniVLqZ8Wzar7F1TzxeT4CB8AFZjjthi5EeutMbQJzs4imoLXSnP3nBS1uxEvYm6zbp26wkYb39qcger
+  long  close: 3uTfCfbGZ2qB8dbdQeYjpT2ksUSu5SdEBRQRNpA5zs4z5Gdxf4h9xq3gyivZZUhyaRYrD5vHTka2jiciNKhnkxHY
+  short open : 4VTgdyZXACXt7t2g8uYLEaJoUckQxatuXzzqiRF8yTybJL1qru7gjvQCjM9JCxeZXZstgaqWxKaHthLShYr4djkn
+  short close: 5chXFbKzpotukudP2ksARzTMTRbzcerLQ7qGnE1dAjFiY83YX7zkzdj4rjf5fLe4WeiQKYC69uD28x1kjcvVcFcH
 ```
-
-**Root cause:**
-
-`worker/package.json` has `"type": "module"` -- all `.ts` files run as ESM.
-`@coral-xyz/anchor@0.31.1` has `"exports": {}` (empty), so Node.js always loads
-`main: ./dist/cjs/index.js` (CommonJS). In ESM, named imports from a CJS module only
-work if Node.js can statically synthesize them -- which it cannot for anchor's CJS bundle.
-The anchor ESM dist (`dist/esm/index.js`) does export `BN` correctly, but Node.js never
-reaches it because `exports` is empty and the `module` field is a bundler-only hint.
-
-**Problematic lines in sur-venue.ts:**
-
-```typescript
-// line 63 -- works (CJS default export = whole module.exports)
-import * as anchor from "@coral-xyz/anchor";
-// line 64 -- FAILS: BN, AnchorProvider, Program, Wallet not synthesized as named ESM exports
-import { AnchorProvider, BN, Program, Wallet } from "@coral-xyz/anchor";
-```
-
-**Required fix (two lines only, in sur-venue.ts):**
-
-```typescript
-// Replace lines 63-64 with:
-import anchor from "@coral-xyz/anchor";
-const { AnchorProvider, BN, Program, Wallet } = anchor as any;
-// anchor.setProvider(provider) on line 285 still works --
-// setProvider is on the default export object
-```
-
-**Impact:** BLOCKS the integration suite AND the production dispatch loop.
-`sur-venue.ts` cannot be imported by any ESM file in `worker/`.
-No SAW trade can be routed through SUR until this is fixed.
-**The parallel review agent must fix this in sur-venue.ts -- not the integration driver.**
-
-**Why the probe works:** `npx ts-node` uses the root `tsconfig.json` which sets
-`"module": "commonjs"` -- anchor CJS named imports work fine in that CJS context.
 
 ---
 
-## Long Position Evidence
+## getPositions() Reads -- Adapter-Driven
 
-**Setup:** deposited 1,000 USDC to vault AccountBalance PDA, mark price set to $65,000
-
-**Position read immediately after open (0.1 BTC, $65k, 2x leverage):**
+### After openPerp LONG (0.1 BTC @ $65,000, 2x leverage)
 
 ```json
 {
@@ -86,7 +139,6 @@ No SAW trade can be routed through SUR until this is fixed.
   "baseSize": 0.1,
   "entryPrice": 65000.00,
   "markPrice": 65000.00,
-  "margin": 325.00,
   "unrealizedPnlUsdc": 0.00,
   "liqPrice": 63375.00,
   "stopLoss": null,
@@ -94,22 +146,10 @@ No SAW trade can be routed through SUR until this is fixed.
 }
 ```
 
-Formula: liqPrice = 65000 - (325 - 0.025 * 6500) / 0.1 = $63,375
+Formula: liqPrice = 65000 - (325 - 0.025 * 6500) / 0.1 = $63,375.00 (confirmed)
+uPnL at entry = 0.00 (confirmed -- mark == entry)
 
-**Long open tx sig:**
-`pVnEyaR3aePB6wZGMPUSxJTKart8xzgk5zrK5yyJRKYM4pJT88LXBLL8TybWXH4NrXLfve73ZBW7zAffgouCBhY`
-
-**Long close tx sig** (mark moved to $66,000, profit +$100, return $425.00):
-`5LTXeKq1Zz4iA8aBkTGJGgGJddM8jLHKBkjwaUyQSRT6n5w1A3cbStBKHfnX7fCsoGJtPubN4xmdxrSQuVqEFL2X`
-
-- `position.size` after close: `0` confirmed
-- Return to trader: `$425.00` ($325 margin + $100 profit) confirmed
-
----
-
-## Short Position Evidence
-
-**Position read immediately after open (0.1 BTC, $66k, 2x leverage):**
+### After openPerp SHORT (0.1 BTC @ $66,000, 2x leverage)
 
 ```json
 {
@@ -118,7 +158,6 @@ Formula: liqPrice = 65000 - (325 - 0.025 * 6500) / 0.1 = $63,375
   "baseSize": 0.1,
   "entryPrice": 66000.00,
   "markPrice": 66000.00,
-  "margin": 330.00,
   "unrealizedPnlUsdc": 0.00,
   "liqPrice": 67650.00,
   "stopLoss": null,
@@ -126,18 +165,15 @@ Formula: liqPrice = 65000 - (325 - 0.025 * 6500) / 0.1 = $63,375
 }
 ```
 
-Formula: liqPrice = 66000 + (330 - 0.025 * 6600) / 0.1 = $67,650
+Formula: liqPrice = 66000 + (330 - 0.025 * 6600) / 0.1 = $67,650.00 (confirmed)
+uPnL at entry = 0.00 (confirmed -- mark == entry)
 
-**Short open tx sig:**
-`2qwPC85kWMzg5RkpGRnNWEZk79wpqU49R371gBREfe5CcLZVjE8Q3j97jv4LcVuT4PuTrbjFMcQNhrheWKAb385R`
+---
 
-**Short close tx sig** (mark moved to $65,000, profit +$100, return $430.00):
-`3nY4BTbuWm3bEYcWU5kf4oeFbKZdDTpfBfUVPvSK7VKsZgAGHk4hKbT45QToQK6FGG192m1RpAkAkMUK9U5BBA6k`
+## Integration Driver Fixes Applied
 
-- `position.size` after close: `0` confirmed
-- Return to trader: `$430.00` ($330 margin + $100 profit) confirmed
-
-**Final vault balance:** $1,200 USDC ($1,000 initial + $200 total profit) confirmed.
+None. `sur-venue.integration.ts` is correct as written -- no changes made.
+The prior blocker was in `sur-venue.ts` (production code, fixed at commit 9e5489b).
 
 ---
 
@@ -175,7 +211,7 @@ until curl -sf http://127.0.0.1:8899/health >/dev/null 2>&1; do sleep 1; done
 cd ~/projects/sur-protocol-solana
 npx ts-node scripts/sur-adapter-probe.ts
 
-# 5. Run integration suite (requires CRITICAL BUG fix in sur-venue.ts first)
+# 5. Run integration suite
 cd ~/projects/saw/worker
 VENUE=sur VENUE_ENV=localnet VENUE_RPC_URL=http://127.0.0.1:8899 \
   pnpm exec tsx src/lib/sur-venue.integration.ts
@@ -195,11 +231,3 @@ kill $VALIDATOR_PID
 | `oracle_router` | `8yLenSHEkdkbsCiQLmiQrZg7Kdb3ZBb1MKTFmJsA37zk` |
 
 Devnet IDs = localnet IDs (programs compiled once with these `declare_id!` values).
-
----
-
-## Integration Driver Fixes Applied
-
-None. `sur-venue.integration.ts` is correct as written -- no changes made.
-The bug is in `sur-venue.ts` (production code). Per task constraints, the integration
-driver was not modified and the production file was not silently patched.
