@@ -8,6 +8,9 @@ import { extractPrivyClaims } from "@/lib/auth";
 import { getHandlerByPrivy } from "@/lib/db/handlers";
 import { llmRateLimitReached, recordLlmUsage } from "@/lib/db/llm";
 import type { Provider } from "@/lib/db/types";
+import { evaluatePerpPolicy, DEFAULT_PERP_POLICY } from "@/lib/perp-policy";
+import type { PerpPolicyParams } from "@/lib/perp-policy";
+import { buildPerpEcho } from "@/lib/perp-echo";
 
 export const runtime = "nodejs";
 
@@ -38,6 +41,8 @@ type RequestBody = {
       dailyLimit: number;
       perTxLimit: number;
       approvalThreshold: number;
+      /** Optional perp policy overrides — falls back to DEFAULT_PERP_POLICY */
+      perpPolicy?: PerpPolicyParams;
     };
     walletBalance: number;
   };
@@ -69,6 +74,17 @@ type ActionAdd = {
       slippageBps?: number;
       expectedOut?: string;
       routeLabel?: string;
+    };
+    /** Perp order descriptor — present when action_type is perp-open or perp-close */
+    perpOrder?: {
+      market: string;
+      side: "long" | "short";
+      leverage: number;
+      marginUsdc: number;
+      stopLoss: number | null;
+      takeProfit: number | null;
+      /** "queued" for allowed, "awaiting-approval" for requires-approval */
+      intendedStatus: "queued" | "awaiting-approval";
     };
   };
 };
@@ -127,7 +143,15 @@ Workflow when the handler asks you to buy/sell/swap something:
 
 For the demo: use short timeframes. Trigger deadlines in 90-180 seconds.
 
-v1.0 note: Jupiter has no real devnet liquidity, so swaps run in mock mode (the fee, audit log, and UX are real; the on-chain leg is simulated). Real Jupiter integration lands when SAW moves to mainnet.`
+v1.0 note: Jupiter has no real devnet liquidity, so swaps run in mock mode (the fee, audit log, and UX are real; the on-chain leg is simulated). Real Jupiter integration lands when SAW moves to mainnet.
+
+PERPS WORKFLOW (v1, SOL-PERP only):
+1. ALWAYS call get_market_price first — you need a live price before anything perp-related.
+2. Map natural language to propose_perp_open args. Example: "abrime un long de SOL x4 con 300 si baja a 64" → propose_perp_open({ market: "SOL-PERP", side: "long", leverage: 4, marginUsdc: 300, stopLoss: <suggest>, trigger: { kind: "below", price: 64 } }).
+3. If the user gave NO stop-loss and policy requires one (default: it does), PROPOSE one at -8 to -12% from the entry price for x3-x5 leverage, and say so explicitly in your reply: "No diste stop, te sugiero SL en $X (−10% del entry estimado)."
+4. NEVER invent leverage the user didn't ask for. If they said "x4", use 4.
+5. For closing: use propose_perp_close with the market and a short reason.
+6. After propose_perp_open, explain the verdict in one sentence (approved / needs your sign-off).`
     : "";
 
   const estableExtras = isEstable
@@ -572,6 +596,54 @@ const greedieTools = [
       },
     },
   },
+  // ── PERPS (greedie-only, v1) ─────────────────────────────────────────────
+  {
+    type: "function" as const,
+    function: {
+      name: "propose_perp_open",
+      description:
+        "Open a leveraged perp position (SOL-PERP). Use for any 'long/short X with leverage' intent. Supports conditional entry via trigger (below/above/dip) and attaching stop-loss / take-profit. ALWAYS call get_market_price for the asset first.",
+      parameters: {
+        type: "object",
+        properties: {
+          market: { type: "string", enum: ["SOL-PERP"] },
+          side: { type: "string", enum: ["long", "short"] },
+          leverage: { type: "number", description: "1-20, policy caps apply" },
+          marginUsdc: { type: "number", description: "collateral to commit, in USDC" },
+          stopLoss: { type: "number", description: "trigger price for protective stop. Required by policy unless told otherwise." },
+          takeProfit: { type: "number" },
+          trigger: {
+            type: "object",
+            description: "conditional entry; omit or use kind=time for immediate",
+            properties: {
+              kind: { type: "string", enum: ["below", "above", "dip"] },
+              price: { type: "number" },
+              basisPrice: { type: "number" },
+              dropPct: { type: "number" },
+              deadlineMs: { type: "number" },
+            },
+          },
+          reason: { type: "string", description: "one-line rationale shown to the handler" },
+        },
+        required: ["market", "side", "leverage", "marginUsdc", "reason"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "propose_perp_close",
+      description: "Close an open perp position (reduce-only) and cancel its attached SL/TP orders.",
+      parameters: {
+        type: "object",
+        properties: {
+          market: { type: "string", enum: ["SOL-PERP"] },
+          reason: { type: "string" },
+        },
+        required: ["market", "reason"],
+      },
+    },
+  },
 ];
 
 function noKeyReply(canTopUp: boolean): { reply: string; actions: AgentAction[] } {
@@ -742,7 +814,15 @@ export async function POST(req: NextRequest) {
     // prompts steer them toward distinct use-cases (Greedie speculates,
     // Conservador researches yield, Estable builds habits / saves to
     // stables).
-    const baseToolList = [...greedieTools, ...baseTools];
+    const PERP_TOOL_NAMES = ["propose_perp_open", "propose_perp_close"] as const;
+    // Spec §UI.4 hard gate: perp tools exist ONLY for greedie in v1.
+    // Filtering here (not just prompt) ensures other personas physically
+    // cannot call them — the tool doesn't exist in their schema.
+    const baseToolList = [...greedieTools, ...baseTools].filter(
+      (t) =>
+        body.persona.id === "greedie" ||
+        !(PERP_TOOL_NAMES as readonly string[]).includes(t.function.name)
+    );
     const tools: ToolDefinition[] = baseToolList.map((t) => ({
       name: t.function.name,
       description: t.function.description,
@@ -1205,6 +1285,124 @@ export async function POST(req: NextRequest) {
             });
             triggeredAction = true;
             toolResult = `swap scheduled: ${amt} ${from} → ${to} (${tk})`;
+            break;
+          }
+
+          // ── PERP TOOLS (greedie-only, v1) ────────────────────────────────
+
+          case "propose_perp_open": {
+            // Validate required args
+            const market = String(args.market || "SOL-PERP");
+            const side: "long" | "short" = args.side === "short" ? "short" : "long";
+            const leverage = Number(args.leverage);
+            const marginUsdc = Number(args.marginUsdc);
+            const reason = String(args.reason || `open ${side} ${market}`);
+
+            if (!Number.isFinite(leverage) || leverage <= 0) {
+              toolResult = "Invalid leverage — must be a positive number.";
+              break;
+            }
+            if (!Number.isFinite(marginUsdc) || marginUsdc <= 0) {
+              toolResult = "Invalid marginUsdc — must be a positive number.";
+              break;
+            }
+
+            const stopLoss =
+              args.stopLoss != null && args.stopLoss !== "" && Number.isFinite(Number(args.stopLoss))
+                ? Number(args.stopLoss)
+                : null;
+            const takeProfit =
+              args.takeProfit != null && args.takeProfit !== "" && Number.isFinite(Number(args.takeProfit))
+                ? Number(args.takeProfit)
+                : null;
+
+            // Build trigger
+            let perpTrigger: { kind: "time" } | { kind: "below"; asset?: string; price: number } | { kind: "above"; asset?: string; price: number } | { kind: "dip"; basisPrice: number; dropPct: number } = { kind: "time" };
+            if (args.trigger && args.trigger.kind) {
+              const tk = args.trigger;
+              if ((tk.kind === "below" || tk.kind === "above") && Number.isFinite(Number(tk.price))) {
+                perpTrigger = { kind: tk.kind, asset: tk.asset ?? "SOL", price: Number(tk.price) };
+              } else if (tk.kind === "dip" && Number.isFinite(Number(tk.basisPrice)) && Number.isFinite(Number(tk.dropPct))) {
+                perpTrigger = { kind: "dip", basisPrice: Number(tk.basisPrice), dropPct: Number(tk.dropPct) };
+              }
+            }
+
+            const intent = { market, side, leverage, marginUsdc, stopLoss, takeProfit };
+
+            // Policy pre-check (advisory UX — authoritative check is server-side
+            // at schedule route (Task 5) and at fire time (Task 7)).
+            const perpPolicy = body.persona.policy.perpPolicy ?? DEFAULT_PERP_POLICY;
+            const policyCtx = { dailyMarginUsedUsdc: 0, openPositions: 0 };
+            const verdict = evaluatePerpPolicy(intent, perpPolicy, policyCtx);
+
+            if (verdict.verdict === "denied") {
+              toolResult = `Perp order denied by policy: ${verdict.reason}. Tell the handler why and suggest alternatives.`;
+              break;
+            }
+
+            // Estimate liq price from current market snapshot if available.
+            // entry ≈ trigger price for conditional; ≈ current price for immediate.
+            let estLiqPrice: number | null = null;
+            try {
+              const snap = await getSnapshot("SOL");
+              const entryPrice = (() => {
+                if (perpTrigger.kind === "below" || perpTrigger.kind === "above") return perpTrigger.price;
+                if (perpTrigger.kind === "dip") return perpTrigger.basisPrice * (1 - perpTrigger.dropPct / 100);
+                return snap.priceUsd; // time trigger → use current price
+              })();
+              if (entryPrice > 0 && leverage > 0) {
+                estLiqPrice = side === "long"
+                  ? entryPrice * (1 - 1 / leverage)
+                  : entryPrice * (1 + 1 / leverage);
+                estLiqPrice = Math.round(estLiqPrice * 100) / 100;
+              }
+            } catch {
+              // non-fatal — liq est stays null
+            }
+
+            const intendedStatus = verdict.verdict === "requires-approval" ? "awaiting-approval" : "queued";
+
+            actions.push({
+              type: "add",
+              item: {
+                vendor: `PERP · ${side.toUpperCase()} ${market} ×${leverage}`,
+                amount: Math.round(marginUsdc * 10 ** DEMO_DECIMALS),
+                scheduledFor: Date.now(),
+                reason,
+                trigger: perpTrigger.kind === "time" ? { kind: "time" } : perpTrigger as any,
+                perpOrder: { market, side, leverage, marginUsdc, stopLoss, takeProfit, intendedStatus },
+              },
+            });
+            triggeredAction = true;
+            toolResult = buildPerpEcho({ intent, trigger: perpTrigger, estLiqPrice, verdict });
+            break;
+          }
+
+          case "propose_perp_close": {
+            const market = String(args.market || "SOL-PERP");
+            const reason = String(args.reason || `close ${market} position`);
+
+            actions.push({
+              type: "add",
+              item: {
+                vendor: `PERP CLOSE · ${market}`,
+                amount: 0,
+                scheduledFor: Date.now(),
+                reason,
+                trigger: { kind: "time" },
+                perpOrder: {
+                  market,
+                  side: "long", // placeholder — close is reduce-only; actual side from open position
+                  leverage: 0,
+                  marginUsdc: 0,
+                  stopLoss: null,
+                  takeProfit: null,
+                  intendedStatus: "queued",
+                },
+              },
+            });
+            triggeredAction = true;
+            toolResult = `perp close proposed: ${market}. Tell the handler the position will be closed reduce-only at market price.`;
             break;
           }
 
