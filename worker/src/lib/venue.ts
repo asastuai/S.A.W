@@ -88,34 +88,20 @@ import {
   getCancelTakeProfitIx,
   getSetStopLossLongIx,
   getTakeProfitLongIx,
+  // Short-side builders — now exported from instructions barrel (added to vendor
+  // ~/vendor/adrena-sdk-ts/dist/src/instructions/index.js). The three short builders
+  // existed in dist/ but were not in the index re-export; we patched the vendor index.
+  // CRITICAL: short positions need short-specific SL/TP instructions — the Long and Short
+  // setStopLoss/setTakeProfit ixs have DIFFERENT on-chain discriminators. Using a Long SL
+  // ix against a short position is rejected by the Adrena program.
+  getOpenShortIxs,
+  getSetStopLossShortIx,
+  getTakeProfitShortIx,
 } from "adrena-sdk/instructions";
 
-// The short-side instruction builders are NOT in the adrena-sdk/instructions re-export
-// index (only the long-side builders are). They exist at the dist path, so we lazy-load
-// them to avoid top-level imports from non-exported paths.
-// CRITICAL: short positions need short-specific SL/TP instructions — the Long and Short
-// setStopLoss/setTakeProfit ixs have DIFFERENT on-chain discriminators. Using a Long SL
-// ix against a short position is rejected by the Adrena program.
-let _shortBuilders: {
-  getOpenShortIxs: (...args: any[]) => Promise<any>;
-  getSetStopLossShortIx: (input: any) => Promise<any>;
-  getTakeProfitShortIx: (input: any) => Promise<any>;
-} | null = null;
-
-async function loadShortBuilders(): Promise<NonNullable<typeof _shortBuilders>> {
-  if (!_shortBuilders) {
-    const [openMod, slMod, tpMod] = await Promise.all([
-      import("adrena-sdk/dist/src/instructions/getOpenShortIxs.js" as any),
-      import("adrena-sdk/dist/src/instructions/getStopLossShortIx.js" as any),
-      import("adrena-sdk/dist/src/instructions/getTakeProfitShortIx.js" as any),
-    ]);
-    _shortBuilders = {
-      getOpenShortIxs: (openMod as any).getOpenShortIxs,
-      getSetStopLossShortIx: (slMod as any).getSetStopLossShortIx,
-      getTakeProfitShortIx: (tpMod as any).getTakeProfitShortIx,
-    };
-  }
-  return _shortBuilders;
+// loadShortBuilders: replaced by direct static imports above (vendor index patched)
+async function loadShortBuilders() {
+  return { getOpenShortIxs, getSetStopLossShortIx, getTakeProfitShortIx };
 }
 
 import {
