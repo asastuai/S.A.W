@@ -90,12 +90,12 @@ describe("createAgent — Fix 3: perp_policy always set in insert", () => {
   it("insert payload uses explicit perp_policy when provided", async () => {
     const customPolicy = {
       maxLeverage: 10,
-      maxMarginPerTxUsdc: 500,
-      dailyMarginBudgetUsdc: 2000,
+      maxMarginPerTx: 500,
+      dailyMarginBudget: 2000,
       maxOpenPositions: 5,
       allowedMarkets: ["SOL-PERP"],
       requireStopLoss: false,
-      approvalThresholdMarginUsdc: 1000,
+      approvalThresholdMargin: 1000,
     };
 
     const mockAgent = {
