@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import type { Agent, Persona } from "./types";
+import { DEFAULT_PERP_POLICY, type PerpPolicyParams } from "@/lib/perp-policy";
 
 export async function listAgentsForHandler(handlerId: string): Promise<Agent[]> {
   const db = supabaseAdmin();
@@ -36,6 +37,10 @@ export async function createAgent(input: {
   queuePda: string;
   byokKeyId?: string | null;
   cronCadenceMinutes?: number;
+  /** Explicitly set perp_policy on insert. Defaults to DEFAULT_PERP_POLICY.
+   *  Always included in the insert payload to avoid broken column defaults
+   *  on agents created after migration 0014 (Fix 3). */
+  perpPolicy?: PerpPolicyParams;
 }): Promise<Agent> {
   const db = supabaseAdmin();
   const { data, error } = await db
@@ -52,6 +57,9 @@ export async function createAgent(input: {
       next_wake_at: new Date(
         Date.now() + (input.cronCadenceMinutes ?? 60) * 60_000
       ).toISOString(),
+      // Always set perp_policy explicitly to avoid broken column defaults
+      // on agents spawned after migration 0014 (Fix 3 — hardening).
+      perp_policy: input.perpPolicy ?? DEFAULT_PERP_POLICY,
     })
     .select("*")
     .single();
