@@ -20,6 +20,7 @@ export default function LandingPage() {
       <Personas />
       <ShipLog />
       <FeatureGrid />
+      <SurBridge />
       <Footer />
     </main>
   );
@@ -564,6 +565,75 @@ function FeatureGrid() {
             </Reveal>
           ))}
         </div>
+      </div>
+    </section>
+  );
+}
+
+function SurBridge() {
+  return (
+    <section className="relative px-6 py-24 border-t border-ash/60 bg-obsidian">
+      <div className="mx-auto max-w-6xl">
+        <Reveal>
+          <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.3em] text-gold/70">
+            // your agent needs a venue
+          </p>
+          <h2 className="mb-4 font-display text-4xl uppercase tracking-cinema text-bone sm:text-5xl md:text-6xl">
+            Put your agent to work on SUR Protocol
+          </h2>
+        </Reveal>
+        <Reveal delay={80}>
+          <p className="mb-10 max-w-[560px] font-mono text-sm leading-relaxed text-bone/60">
+            Agent-native perpetual futures on Solana — intent dark pool, on-chain agent reputation,
+            MCP-native settlement. SAW brings the policy layer. SUR brings the venue. Built to trade
+            together.
+          </p>
+        </Reveal>
+        <Reveal delay={120}>
+          <Spotlight brackets className="inline-block">
+            <TerminalPanel className="overflow-hidden">
+              {/* Fake terminal title bar */}
+              <div className="flex items-center justify-between border-b border-ash/60 bg-ink/80 px-4 py-2">
+                <div className="flex items-center gap-1.5">
+                  <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-gold/30" />
+                  <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-gold/20" />
+                  <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-gold/10" />
+                </div>
+                <span className="font-mono text-[10px] uppercase tracking-widest text-bone/40">
+                  saw://venue/sur
+                </span>
+              </div>
+              {/* Terminal body */}
+              <div className="p-7 pt-6 sm:p-9 sm:pt-7">
+                <div className="mb-2 font-mono text-[10px] uppercase tracking-widest text-phosphor/60">
+                  <CommandLine prompt="#">
+                    connecting to venue layer ...{" "}
+                    <span className="text-gold/80">ok</span>
+                  </CommandLine>
+                </div>
+                <div className="mb-6 font-mono text-[10px] uppercase tracking-widest text-phosphor/60">
+                  <CommandLine prompt="#">
+                    agent reputation handshake ...{" "}
+                    <span className="text-gold/80">verified</span>
+                  </CommandLine>
+                </div>
+                <Magnetic>
+                  <a
+                    href="https://web-sigma-gules-63.vercel.app/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group inline-flex items-center gap-2 border border-gold/70 bg-gold/[0.08] px-5 py-3 font-mono text-sm text-bone shadow-glow transition hover:bg-gold hover:text-ink hover:shadow-glow-lg"
+                  >
+                    <CommandLine prompt="$">
+                      open SUR Protocol{" "}
+                      <span className="ml-2 text-bone/40 group-hover:text-ink/60">→</span>
+                    </CommandLine>
+                  </a>
+                </Magnetic>
+              </div>
+            </TerminalPanel>
+          </Spotlight>
+        </Reveal>
       </div>
     </section>
   );
