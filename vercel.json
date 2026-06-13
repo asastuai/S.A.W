@@ -1,6 +1,6 @@
 {
   "buildCommand": "pnpm -F @asastuai/saw-sdk build && pnpm -F @asastuai/saw-web build",
-  "installCommand": "pnpm install --no-frozen-lockfile --filter @asastuai/saw-web... --filter @asastuai/saw-sdk...",
+  "installCommand": "pnpm install --frozen-lockfile --filter @asastuai/saw-web... --filter @asastuai/saw-sdk...",
   "outputDirectory": "web/.next",
   "framework": "nextjs"
 }
