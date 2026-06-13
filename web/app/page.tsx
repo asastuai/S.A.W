@@ -619,7 +619,7 @@ function SurBridge() {
                 </div>
                 <Magnetic>
                   <a
-                    href="https://web-sigma-gules-63.vercel.app/"
+                    href="https://sur.vercel.app/"
                     target="_blank"
                     rel="noreferrer"
                     className="group inline-flex items-center gap-2 border border-gold/70 bg-gold/[0.08] px-5 py-3 font-mono text-sm text-bone shadow-glow transition hover:bg-gold hover:text-ink hover:shadow-glow-lg"
