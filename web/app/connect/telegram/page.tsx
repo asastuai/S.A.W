@@ -133,17 +133,22 @@ export default function ConnectTelegramPage() {
         {/* PAIRING FLOW — the handshake terminal */}
         <Reveal delay={80}>
           {!code && (
-            <TerminalPanel label="no_channel" className="border-rust/50">
-              <div className="relative overflow-hidden border-l-2 border-rust p-6 sm:p-7">
-                <p className="mb-3 font-mono text-[0.65rem] uppercase tracking-[0.3em] text-rust/80">
-                  No channel
+            <TerminalPanel label="saw // telegram_bridge" className="border-gold/40">
+              <div className="relative overflow-hidden border-l-2 border-gold/50 p-6 sm:p-7">
+                <p className="mb-3 font-mono text-[0.65rem] uppercase tracking-[0.3em] text-gold/70">
+                  How to get here
                 </p>
-                <p className="text-sm leading-relaxed font-mono text-bone/70">
-                  No pair code in URL. Start in Telegram: send{" "}
+                <p className="mb-5 text-sm leading-relaxed font-mono text-bone/70">
+                  This page pairs your Telegram conversation with your SAW handler.
+                  It is only accessible via a deep-link sent by the bot — you cannot
+                  open it directly.
+                </p>
+                <p className="text-sm leading-relaxed font-mono text-bone/50">
+                  To start: open the SAW Telegram bot and send{" "}
                   <code className="rounded-sm bg-smoke px-1.5 py-0.5 font-mono text-gold">
                     /start
-                  </code>{" "}
-                  to the bot.
+                  </code>
+                  . The bot will send you a link that lands here with the correct pair code.
                 </p>
               </div>
             </TerminalPanel>

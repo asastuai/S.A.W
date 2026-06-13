@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Connection, PublicKey } from "@solana/web3.js";
-import { getTreasuryAddressString } from "@/lib/treasury";
+import { getTreasuryAddressString, isTreasuryConfigured } from "@/lib/treasury";
 import { Reveal } from "@/components/reveal";
 import { TerminalPanel } from "@/components/terminal/terminal-panel";
 import { Readout } from "@/components/terminal/readout";
@@ -17,6 +17,10 @@ export const dynamic = "force-dynamic";
 export const revalidate = 30;
 
 async function fetchTreasuryState() {
+  if (!isTreasuryConfigured()) {
+    console.error("[SAW] NEXT_PUBLIC_SAW_TREASURY is not set — treasury page is unavailable.");
+    return { notConfigured: true as const };
+  }
   try {
     const treasury = getTreasuryAddressString();
     const rpcUrl =
@@ -137,7 +141,21 @@ export default async function TreasuryPage() {
           </p>
         </section>
 
-        {"error" in state ? (
+        {"notConfigured" in state ? (
+          <Reveal>
+            <TerminalPanel label="signal // unconfigured" className="border-ash/50">
+              <div className="relative p-8">
+                <div className="stamp text-bone/50 border-ash/50 mb-4">
+                  Treasury not configured
+                </div>
+                <p className="font-mono text-sm text-bone/60 leading-relaxed">
+                  <code className="text-gold">NEXT_PUBLIC_SAW_TREASURY</code> is not set.
+                  Set this environment variable to a valid Solana address to enable the treasury view.
+                </p>
+              </div>
+            </TerminalPanel>
+          </Reveal>
+        ) : "error" in state ? (
           <Reveal>
             <TerminalPanel label="signal" className="border-rust/50">
               <div className="relative p-8">

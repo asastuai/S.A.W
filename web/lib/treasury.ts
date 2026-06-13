@@ -11,14 +11,25 @@
 import { PublicKey } from "@solana/web3.js";
 
 const RAW = process.env.NEXT_PUBLIC_SAW_TREASURY;
-const FALLBACK = "11111111111111111111111111111111"; // system program (visible-bug if leaked)
 
 export function getTreasuryAddress(): PublicKey {
-  return new PublicKey(RAW || FALLBACK);
+  if (!RAW) {
+    console.error(
+      "[SAW] NEXT_PUBLIC_SAW_TREASURY is not set — refusing to fall back to System Program address. Set the env var to a real treasury address."
+    );
+    throw new Error("treasury not configured");
+  }
+  return new PublicKey(RAW);
 }
 
 export function getTreasuryAddressString(): string {
-  return RAW || FALLBACK;
+  if (!RAW) {
+    console.error(
+      "[SAW] NEXT_PUBLIC_SAW_TREASURY is not set — refusing to fall back to System Program address. Set the env var to a real treasury address."
+    );
+    throw new Error("treasury not configured");
+  }
+  return RAW;
 }
 
 export function isTreasuryConfigured(): boolean {
