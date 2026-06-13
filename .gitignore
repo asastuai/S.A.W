@@ -38,8 +38,11 @@ out
 sdk/dist
 
 # Personal drafts (not for public repo)
-APPLY_TO_SENDAI.md
 *.tsbuildinfo
+
+# QA screenshot output (regenerate with scripts/qa-shots*.mjs — findings live in docs/)
+qa-screenshots/
+qa-screenshots-sur/
 
 # Localnet Adrena — ephemeral keys, binary, and generated config
 scripts/localnet-adrena/.keys/
