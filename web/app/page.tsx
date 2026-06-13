@@ -18,9 +18,9 @@ export default function LandingPage() {
       <Hero />
       <HowItWorks />
       <Personas />
-      <ShipLog />
-      <FeatureGrid />
       <SurBridge />
+      <FeatureGrid />
+      <ShipLog />
       <Footer />
     </main>
   );
