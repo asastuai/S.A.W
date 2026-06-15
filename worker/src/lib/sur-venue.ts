@@ -600,6 +600,45 @@ class SurAdapter implements VenueAdapter {
       })
       .rpc();
   }
+
+  // ── fundFloat (EXTRA -- not in VenueAdapter interface) ──────────────────────
+
+  /**
+   * Deposits `amountUsdc` from the operator's USDC ATA into the SUR vault,
+   * crediting the trader's AccountBalance (float). vault.deposit uses
+   * init_if_needed, so this also creates the AccountBalance PDA if missing.
+   *
+   * EXTRA harness/setup method beyond VenueAdapter. On localnet the probe funds
+   * the float; on devnet the harness calls this once before opening positions.
+   * The operator's USDC ATA must already hold >= amountUsdc test USDC.
+   *
+   * @param amountUsdc Human USDC amount (e.g. 5000 for 5,000 USDC)
+   * @returns the deposit transaction signature
+   */
+  async fundFloat(amountUsdc: number): Promise<string> {
+    const trader = this.authority.publicKey;
+    const balPda = balancePda(trader);
+    const vaultCfg = vaultConfigPda();
+    const usdcVaultAcc = pdaFind([u("usdc_vault")], PERP_VAULT_ID);
+
+    const vcData: any = await (this.vault.account as any).vaultConfig.fetch(vaultCfg);
+    const usdcMint: PublicKey = vcData.usdcMint as PublicKey;
+    const userUsdc = associatedTokenAddress(usdcMint, trader);
+
+    const rawAmount = new BN(Math.round(amountUsdc * PRICE_PRECISION));
+    return await (this.vault.methods as any)
+      .deposit(rawAmount)
+      .accounts({
+        vaultConfig: vaultCfg,
+        usdcVault: usdcVaultAcc,
+        userUsdc,
+        accountBalance: balPda,
+        depositor: trader,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+  }
 }
 
 // ── Factory ───────────────────────────────────────────────────────────────────
@@ -611,6 +650,11 @@ export type SurAdapterWithPushPrice = VenueAdapter & {
    * Used by the paper-trade harness and integration tests.
    */
   pushMarkPrice(price: number, market?: string): Promise<void>;
+  /**
+   * Deposit `amountUsdc` from the operator ATA into the vault as float.
+   * Harness/setup helper (localnet uses the probe instead). Returns the tx sig.
+   */
+  fundFloat(amountUsdc: number): Promise<string>;
 };
 
 /**

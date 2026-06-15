@@ -88,8 +88,10 @@ function fail(label: string, err: unknown): void {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  console.log(`\n${C}=== SurAdapter Integration Suite -- SUR Localnet ===${Z}`);
-  console.log(`${B}Date: ${new Date().toISOString()}${Z}\n`);
+  const rpcUrl = process.env["VENUE_RPC_URL"] ?? "http://127.0.0.1:8899";
+  console.log(`\n${C}=== SurAdapter Integration Suite -- SUR ===${Z}`);
+  console.log(`${B}Date: ${new Date().toISOString()}${Z}`);
+  console.log(`${B}RPC: ${rpcUrl}${Z}\n`);
 
   // Load deployer keypair (registered as SUR engine operator by probe)
   const kpPath = path.join(os.homedir(), ".config", "solana", "id.json");
@@ -98,7 +100,6 @@ async function main(): Promise<void> {
     const bytes = JSON.parse(fs.readFileSync(kpPath, "utf-8")) as number[];
     authority = Keypair.fromSecretKey(new Uint8Array(bytes));
     console.log(`Operator (deployer): ${authority.publicKey.toBase58()}`);
-    console.log(`RPC: http://127.0.0.1:8899\n`);
   } catch (e) {
     console.error(`${R}FATAL: keypair load failed: ${(e as Error).message}${Z}`);
     process.exit(1);
@@ -109,7 +110,7 @@ async function main(): Promise<void> {
   let adapter: SurAdapterWithPushPrice;
   try {
     adapter = makeSurAdapter({
-      rpcUrl: "http://127.0.0.1:8899",
+      rpcUrl,
       authority,
       market: "BTC-USD",
     });
@@ -129,6 +130,19 @@ async function main(): Promise<void> {
     ok("ensureUserInitialized (idempotent)");
   } catch (e) {
     fail("ensureUserInitialized", e);
+  }
+
+  // ── [2b] fundFloat (devnet setup — on localnet the probe funds the float) ────
+  // Set SUR_FUND_USDC=5000 on devnet so the open steps have margin. No-op locally.
+  const fundAmount = process.env["SUR_FUND_USDC"];
+  if (fundAmount) {
+    console.log(`\n${Y}[2b] fundFloat(${fundAmount} USDC)${Z}`);
+    try {
+      const sig = await adapter.fundFloat(Number(fundAmount));
+      ok("fundFloat", `txSig=${sig}`);
+    } catch (e) {
+      fail("fundFloat", e);
+    }
   }
 
   // ── [3] getFloatBalanceUsdc ─────────────────────────────────────────────────
