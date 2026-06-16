@@ -14,7 +14,7 @@
 
 import { logger, schedules } from "@trigger.dev/sdk/v3";
 import { supabaseAdmin } from "../lib/supabase.ts";
-import { describeMarket, getMarketSnapshot } from "../lib/market.ts";
+import { describeMarket, getMarketSnapshot, perpMarketToAsset } from "../lib/market.ts";
 import { isVenueEnabled, makeAdrenaAdapter, type VenueAdapter } from "../lib/venue.ts";
 import { makeSurAdapter } from "../lib/sur-venue.ts";
 import { DEFAULT_PERP_POLICY } from "../lib/perp-policy.ts";
@@ -140,10 +140,34 @@ export const agentWakeJob = schedules.task({
             const rpcUrl = process.env["VENUE_RPC_URL"] ?? "http://127.0.0.1:8899";
             // Select the venue adapter by VENUE env (gated by isVenueEnabled above).
             // sur is sync, adrena is async — both satisfy VenueAdapter.
-            const adapter: VenueAdapter =
-              process.env["VENUE"] === "sur"
-                ? makeSurAdapter({ rpcUrl, authority: kp })
-                : await makeAdrenaAdapter({ rpcUrl, authority: kp });
+            let adapter: VenueAdapter;
+            if (process.env["VENUE"] === "sur") {
+              const surAdapter = makeSurAdapter({ rpcUrl, authority: kp });
+              // SUR's mark price is operator-pushed (not Pyth). Sync it from the
+              // live reference price (CoinGecko, cached 60s) before dispatch so
+              // openPerp/closePerp fill at the real price and the oracle gap
+              // guard is meaningful. Without a fresh price we must NOT dispatch
+              // (stale/zero mark = bad fill) — leave the item queued to retry.
+              try {
+                const asset = perpMarketToAsset(item.perp_market as string);
+                const snap = await getMarketSnapshot(asset);
+                await surAdapter.pushMarkPrice(snap.priceUsd, item.perp_market as string);
+                logger.log("synced SUR mark price", {
+                  itemId: item.id,
+                  market: item.perp_market,
+                  priceUsd: snap.priceUsd,
+                });
+              } catch (e) {
+                logger.log("SUR price sync failed — leaving item queued", {
+                  itemId: item.id,
+                  error: (e as Error)?.message ?? String(e),
+                });
+                continue;
+              }
+              adapter = surAdapter;
+            } else {
+              adapter = await makeAdrenaAdapter({ rpcUrl, authority: kp });
+            }
             try {
               const policy: PerpPolicyParams = a.perp_policy ?? DEFAULT_PERP_POLICY;
               const dailyUsed = await sumMarginExecutedTodayUTC(db, a.id);

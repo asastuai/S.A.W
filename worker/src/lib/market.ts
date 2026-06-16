@@ -48,6 +48,16 @@ export async function getMarketSnapshot(asset: string): Promise<Snapshot> {
   return snap;
 }
 
+/**
+ * Base asset symbol from a perp market symbol, e.g. "BTC-USD" -> "BTC".
+ * Used to look up the reference price via getMarketSnapshot before pushing
+ * SUR's operator-set mark price (SUR's oracle is operator-pushed, not Pyth).
+ */
+export function perpMarketToAsset(perpMarket: string): string {
+  const base = perpMarket.split("-")[0] ?? perpMarket;
+  return base.trim().toUpperCase();
+}
+
 export function describeMarket(s: Snapshot): string {
   const dir = s.pct24h >= 0 ? "+" : "";
   return `${s.asset} $${s.priceUsd.toFixed(2)} (${dir}${s.pct24h.toFixed(2)}% 24h, range $${s.low24h.toFixed(2)}–$${s.high24h.toFixed(2)})`;
