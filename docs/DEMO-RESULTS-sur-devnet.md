@@ -78,3 +78,43 @@ VENUE=sur VENUE_ENV=devnet \
 
 Prereq: `~/.config/solana/id.json` = the deployer/operator (`4gAdo…`), with devnet SOL
 for fees and test USDC (mint `HPPfibzQ5GYgjBpBsRNXxD8MUKasBFwpR3UpjFqBbzny`) in its ATA.
+
+---
+
+## Dispatch path (policy enforcement) on devnet — 2026-06-16
+
+The section above proves the **adapter** on devnet. This proves the **real product
+dispatch path** — `dispatchPerpItem` + `evaluatePerpPolicy` (the worker's actual flow,
+not the adapter called directly): atomic claim → fire-time policy re-check (7 gates) →
+oracle gap guard → dedup guard → collateral check → venue send.
+
+Harness `worker/src/lib/dispatch-perp-sur.integration.ts` (SUR counterpart of
+`dispatch-perp.integration.ts`). Only the SupabaseClient is mocked (in-memory claim +
+status log); the dispatch logic, policy, and adapter are all REAL. **6/6 PASS.**
+
+| Case | Through `dispatchPerpItem` | Outcome | Tx (devnet, finalized) |
+|------|----------------------------|---------|------------------------|
+| [A] valid open (long x2, 500 USDC) | passes all 7 gates | `done` | `4KWNkVqj8ziHMBZmK6wqygF9rv9SFDsKxPtrEYW26aT7nvXMJBEXeHCMHQmkmxLaDMZrJCEtUUcxB6tSfQW6KaF` |
+| [B] leverage **x10** (> max x5) | `evaluatePerpPolicy` DENIES | `denied` | — (no tx) |
+| [C] market **DOGE-USD** (not allowed) | `evaluatePerpPolicy` DENIES | `denied` | — (no tx) |
+| [D] close | venue send | `done` | `486hs7wEmNfxc2Wt1cFKtB9DHNV4T641KU22X4PoTRumjCyMVMuKLh7CjYmbtganbb34FsBq6A47VtSXXcmk5rGi` |
+| [D2] second close | `alreadyClosed` guard | `skipped` | — |
+
+The denials carry the real reason written to the row, e.g.
+`policy at fire time: leverage x10 exceeds max x5`,
+`policy at fire time: market DOGE-USD not in allowedMarkets`. The policy gates **block**
+the violating intents (no on-chain tx) and **allow** the valid one (real tx). This is the
+SAW differentiator — on-chain venue execution gated by policy — proven on devnet.
+
+**SUR policy** (`SUR_DEVNET_POLICY` in the harness): `allowedMarkets:["BTC-USD"]`,
+`requireStopLoss:false` (SUR has no on-chain SL/TP), `maxLeverage:5`, `maxMarginPerTx:1000`,
+`dailyMarginBudget:5000`, `approvalThresholdMargin:1000`.
+
+Reproduce:
+```bash
+cd ~/projects/saw/worker
+VENUE=sur VENUE_ENV=devnet \
+  VENUE_RPC_URL=https://api.devnet.solana.com \
+  SUR_FUND_USDC=2000 \
+  pnpm exec tsx src/lib/dispatch-perp-sur.integration.ts
+```
