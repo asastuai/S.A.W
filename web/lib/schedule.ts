@@ -1,4 +1,5 @@
 import type { PublicKey } from "@solana/web3.js";
+import type { PolicyVerdict } from "@/lib/perp-policy";
 
 export type ScheduleStatus =
   | "queued"
@@ -50,6 +51,32 @@ export type ScheduleItem = {
     expectedOut?: string;     // stringified bigint, optional preview
     routeLabel?: string;      // human-readable route, optional preview
   };
+  // Optional perp order descriptor. When set, the item is a leveraged perp
+  // (open or close) the LLM proposed via propose_perp_open/close. Its mere
+  // presence marks the item kind (mirrors the jupiterSwap pattern). The
+  // shape is byte-for-byte what /api/agent/chat emits on its `add` action,
+  // so newItem(action.item) carries it through by spread. On a perp-close
+  // proposal `side` is omitted (reduce-only — side resolved at dispatch).
+  perpOrder?: {
+    market: string;
+    side?: "long" | "short";
+    leverage: number;
+    marginUsdc: number;
+    stopLoss: number | null;
+    takeProfit: number | null;
+    // "queued" for allowed, "awaiting-approval" for requires-approval —
+    // the chat route's client-side hint; the authoritative verdict is the
+    // server policyVerdict surfaced after the /schedule POST.
+    intendedStatus?: "queued" | "awaiting-approval";
+    // Derived server-side from the item id (Drift idempotency u8 1..255).
+    userOrderId?: number | null;
+  };
+  // Discriminator persisted on the DB row. Lets a hydrated item be
+  // identified as perp-open / perp-close (vs pay/swap) after a reload.
+  actionType?: "pay" | "swap" | "perp-open" | "perp-close";
+  // Server policy verdict for perp items, from the /schedule POST response.
+  // Preferred over re-deriving the echo client-side.
+  policyVerdict?: PolicyVerdict["verdict"];
 };
 
 export function describeTrigger(item: ScheduleItem): string {
@@ -75,6 +102,10 @@ export function isItemReady(
   prices: Record<string, number>
 ): boolean {
   if (item.status !== "queued") return false;
+  // Perps are scheduled-only in the demo — the worker executes them on
+  // SUR/Drift devnet, not this client. Never report a perp as "ready" so
+  // the simulator's nextDueItem and the watcher never dispatch one.
+  if (item.perpOrder) return false;
   const t = item.trigger ?? { kind: "time" as const };
   if (t.kind === "time") return item.scheduledFor <= now;
   if (t.deadline && now > t.deadline) return false;

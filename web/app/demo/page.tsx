@@ -303,8 +303,74 @@ export default function DemoPage() {
     try {
       const token = await getAccessToken();
       if (!token) return;
+      // trigger.price is what the /schedule POST reads for below/above; the
+      // local Trigger union already names it `price`, so a plain spread is
+      // contract-correct (server does trigger.price ?? trigger.targetPrice).
       const triggerBody: any = item.trigger ? { ...item.trigger } : { kind: "time" };
-      if (triggerBody.deadline) triggerBody.deadline = triggerBody.deadline;
+
+      // ── perp branch ──────────────────────────────────────────────────
+      // A perp ScheduleItem carries perpOrder (mirrors the jupiterSwap
+      // marker). Persist it as perp-open / perp-close with the perp
+      // descriptor + trigger so the row round-trips and the server runs the
+      // perp policy. NOTE: do NOT send userOrderId — it is derived
+      // server-side from the item id.
+      if (item.perpOrder) {
+        // perp-close proposals omit side (reduce-only); presence of a side
+        // distinguishes open from close.
+        const isOpen = item.perpOrder.side === "long" || item.perpOrder.side === "short";
+        const body: any = {
+          id: item.id,
+          actionType: isOpen ? "perp-open" : "perp-close",
+          reason: item.reason,
+          scheduledFor: item.scheduledFor,
+          trigger: triggerBody,
+          perp: isOpen
+            ? {
+                market: item.perpOrder.market,
+                side: item.perpOrder.side,
+                leverage: item.perpOrder.leverage,
+                marginUsdc: item.perpOrder.marginUsdc,
+                stopLoss: item.perpOrder.stopLoss,
+                takeProfit: item.perpOrder.takeProfit,
+              }
+            : { market: item.perpOrder.market },
+        };
+        const res = await fetch(`/api/agents/${dbAgentId}/schedule`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+        // Surface the server's authoritative verdict + resulting status.
+        // 422 = policy denied (no row created) → mark the local item denied.
+        if (res.status === 422) {
+          const data = await res.json().catch(() => ({}));
+          patchItem(item.id, {
+            status: "denied",
+            policyVerdict: "denied",
+            errorMsg: data?.reason ?? "policy denied",
+          });
+          return;
+        }
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          const verdict = data?.policyVerdict as
+            | ScheduleItem["policyVerdict"]
+            | undefined;
+          const serverStatus = data?.item?.status as ScheduleItem["status"] | undefined;
+          patchItem(item.id, {
+            ...(verdict ? { policyVerdict: verdict } : {}),
+            ...(serverStatus === "awaiting-approval"
+              ? { status: "awaiting-approval" as const }
+              : {}),
+          });
+        }
+        return;
+      }
+
+      // ── pay / swap branch (unchanged behavior) ──────────────────────
       await fetch(`/api/agents/${dbAgentId}/schedule`, {
         method: "POST",
         headers: {
@@ -1174,6 +1240,7 @@ export default function DemoPage() {
                 trigger?: ScheduleItem["trigger"];
                 toAddress?: string;
                 jupiterSwap?: ScheduleItem["jupiterSwap"];
+                perpOrder?: ScheduleItem["perpOrder"];
               };
             }
           | { type: "remove"; id: string }
@@ -1199,7 +1266,16 @@ export default function DemoPage() {
           // Skip the USDC-dev limit check for those; their cap is
           // enforced by Jupiter slippage + the handler's signature.
           const isJupiterItem = Boolean(action.item.jupiterSwap);
-          if (!isJupiterItem && (action.item.amount <= 0 || action.item.amount > maxAmount)) {
+          // Perp items are margin (collateral) denominated, not USDC-dev
+          // spend; their ceilings are enforced by the perp policy server-side
+          // (evaluatePerpPolicy on the /schedule POST), so skip the USDC-dev
+          // gate the same way Jupiter swaps are exempted.
+          const isPerpItem = Boolean(action.item.perpOrder);
+          if (
+            !isJupiterItem &&
+            !isPerpItem &&
+            (action.item.amount <= 0 || action.item.amount > maxAmount)
+          ) {
             skippedReasons.push(
               `${(action.item.amount / 10 ** DEMO_DECIMALS).toFixed(2)} USDC-dev exceeds limits`
             );
@@ -1461,6 +1537,17 @@ export default function DemoPage() {
 
   async function dispatchItem(item: ScheduleItem) {
     if (!handle || !setup || !persona || !sawClient) return;
+
+    // Perp execution is the worker's job (SUR/Drift devnet — see
+    // worker/src/lib/dispatch-perp.ts). The demo ends at "scheduled /
+    // approved": it persists + gates the perp and surfaces its policy
+    // verdict, but must NEVER fire an on-chain tx for it. A perp item
+    // carries `perpOrder` but no `jupiterSwap`/`toAddress` and its vendor
+    // does not start with "SWAP", so without this guard it would fall
+    // through to the generic payDirect/requestPayment path below and
+    // wrongly move its margin as USDC-dev to the SAW treasury. Leave it
+    // at its current status (queued / awaiting-approval).
+    if (item.perpOrder) return;
 
     patchItem(item.id, { status: "executing" });
 
@@ -1761,6 +1848,66 @@ export default function DemoPage() {
     } finally {
       setPendingApproval(null);
     }
+  }
+
+  // ── Perp approval (DB-only) ─────────────────────────────────────────
+  // Unlike pay/swap approval (which signs an on-chain approveAndExecute ix),
+  // a perp item awaiting approval is gated purely at the DB layer: the
+  // /schedule PATCH requires the handler's Privy JWT, so this click IS the
+  // human approval. We PATCH { status:"queued", approve:true } — the only
+  // way the server lets awaiting-approval → queued through (403 otherwise).
+  // Actual on-chain execution is the worker's job (SUR devnet), NOT the demo.
+  async function approvePerpItem(itemId: string) {
+    if (!handler || !briefing || !dbAgentId || !privyAuthed) return;
+    const item = briefing.schedule.find((i) => i.id === itemId);
+    if (!item || item.status !== "awaiting-approval") return;
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const res = await fetch(
+        `/api/agents/${dbAgentId}/schedule?itemId=${encodeURIComponent(itemId)}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status: "queued", approve: true }),
+        }
+      );
+      if (!res.ok) return;
+      // Update local state directly — going through patchItem would re-PATCH
+      // status without the approve flag (and the gated transition is already
+      // committed server-side here).
+      setBriefing((prev) => {
+        if (!prev) return prev;
+        const next = {
+          ...prev,
+          schedule: prev.schedule.map((i) =>
+            i.id === itemId ? { ...i, status: "queued" as const } : i
+          ),
+        };
+        if (handler) saveBriefing(handler, next);
+        return next;
+      });
+    } catch (_) {
+      /* non-fatal */
+    }
+  }
+
+  // Deny a perp item awaiting approval: remove it (DB is source of truth, so
+  // we DELETE the row). Mirrors the "kill"/rm persistence in removeItem.
+  async function denyPerpItem(itemId: string) {
+    if (!handler || !briefing) return;
+    const item = briefing.schedule.find((i) => i.id === itemId);
+    if (!item || item.status !== "awaiting-approval") return;
+    const updated = {
+      ...briefing,
+      schedule: briefing.schedule.filter((i) => i.id !== itemId),
+    };
+    setBriefing(updated);
+    saveBriefing(handler, updated);
+    syncScheduleRemoveFromDb(itemId);
   }
 
   // ── Handler override controls ───────────────────────────────────────
@@ -2126,6 +2273,8 @@ export default function DemoPage() {
             onSend={sendChat}
             onRemove={removeItem}
             onExecute={executeOne}
+            onApprove={approvePerpItem}
+            onDeny={denyPerpItem}
             onStart={startExecution}
             onAcceptOpp={acceptOpportunity}
             onSkipOpp={skipOpportunity}
@@ -2145,6 +2294,8 @@ export default function DemoPage() {
             onAcceptOpp={acceptOpportunity}
             onSkipOpp={skipOpportunity}
             onExecute={executeOne}
+            onApprove={approvePerpItem}
+            onDeny={denyPerpItem}
           />
         ) : null}
 
@@ -2611,6 +2762,8 @@ function BriefingRoom({
   onSend,
   onRemove,
   onExecute,
+  onApprove,
+  onDeny,
   onStart,
   onAcceptOpp,
   onSkipOpp,
@@ -2626,6 +2779,8 @@ function BriefingRoom({
   onSend: (text: string) => void;
   onRemove: (id: string) => void;
   onExecute: (id: string) => void;
+  onApprove: (id: string) => void;
+  onDeny: (id: string) => void;
   onStart: () => void;
   onAcceptOpp: (opp: Opportunity) => void;
   onSkipOpp: (opp: Opportunity) => void;
@@ -2683,6 +2838,8 @@ function BriefingRoom({
           now={now}
           onRemove={onRemove}
           onExecute={onExecute}
+          onApprove={onApprove}
+          onDeny={onDeny}
           approvalThreshold={persona.policy.approvalThreshold}
         />
         <button
@@ -2714,6 +2871,8 @@ function LiveRoom({
   onAcceptOpp,
   onSkipOpp,
   onExecute,
+  onApprove,
+  onDeny,
 }: {
   persona: Persona;
   briefing: Briefing;
@@ -2728,6 +2887,8 @@ function LiveRoom({
   onAcceptOpp: (opp: Opportunity) => void;
   onSkipOpp: (opp: Opportunity) => void;
   onExecute: (id: string) => void;
+  onApprove: (id: string) => void;
+  onDeny: (id: string) => void;
 }) {
   const showMarket = persona.id === "operative";
   const dailyPct = Math.min(
@@ -2848,6 +3009,8 @@ function LiveRoom({
         items={briefing.schedule}
         now={now}
         onExecute={onExecute}
+        onApprove={onApprove}
+        onDeny={onDeny}
         approvalThreshold={persona.policy.approvalThreshold}
       />
     </div>

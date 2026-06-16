@@ -36,6 +36,8 @@ export function ScheduleView({
   now,
   onRemove,
   onExecute,
+  onApprove,
+  onDeny,
   approvalThreshold,
   readOnly,
 }: {
@@ -43,6 +45,8 @@ export function ScheduleView({
   now: number;
   onRemove?: (id: string) => void;
   onExecute?: (id: string) => void;
+  onApprove?: (id: string) => void;
+  onDeny?: (id: string) => void;
   approvalThreshold: number;
   readOnly?: boolean;
 }) {
@@ -133,6 +137,8 @@ export function ScheduleView({
             approvalThreshold={approvalThreshold}
             onRemove={onRemove}
             onExecute={onExecute}
+            onApprove={onApprove}
+            onDeny={onDeny}
             readOnly={readOnly}
           />
         ) : (
@@ -145,6 +151,8 @@ export function ScheduleView({
               approvalThreshold={approvalThreshold}
               onRemove={onRemove}
               onExecute={onExecute}
+              onApprove={onApprove}
+              onDeny={onDeny}
               readOnly={readOnly}
             />
           ))
@@ -180,6 +188,8 @@ function Row({
   approvalThreshold,
   onRemove,
   onExecute,
+  onApprove,
+  onDeny,
   readOnly,
 }: {
   item: ScheduleItem;
@@ -188,17 +198,25 @@ function Row({
   approvalThreshold: number;
   onRemove?: (id: string) => void;
   onExecute?: (id: string) => void;
+  onApprove?: (id: string) => void;
+  onDeny?: (id: string) => void;
   readOnly?: boolean;
 }) {
   const overThreshold = item.amount > approvalThreshold;
   const secsUntil = Math.max(0, Math.round((item.scheduledFor - now) / 1000));
   const conditional = item.trigger && item.trigger.kind !== "time";
+  const isPerp = Boolean(item.perpOrder);
+  const perpClose = isPerp && item.perpOrder!.side == null;
 
   // Hover-to-preview the on-chain instruction. `pinned` keeps it open after
   // a tap (touch has no hover); `hovered` is the desktop affordance.
   const [hovered, setHovered] = useState(false);
   const [pinned, setPinned] = useState(false);
-  const previewable = isUpcoming && item.status === "queued";
+  // Perps are excluded from the pay_direct dry-run: the demo does not fire
+  // any on-chain tx for a perp (the worker does, on SUR/Drift devnet), so a
+  // "pay_direct → SAW treasury" preview would be a false statement of the
+  // instruction. The honest perp verdict is shown via PerpPolicyLine instead.
+  const previewable = isUpcoming && item.status === "queued" && !isPerp;
   const showPreview = previewable && (hovered || pinned);
 
   // Detect yield picks (Conservador): vendor format "{project} · {symbol} · {apy}%"
@@ -244,17 +262,24 @@ function Row({
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
-            {item.jupiterSwap && (
+            {isPerp && (
+              <span className="font-mono text-gold text-xs uppercase tracking-widest border border-gold/40 px-1.5 py-0.5 bg-gold/10">
+                {perpClose
+                  ? "⊗ perp close"
+                  : `⚡ perp ${item.perpOrder!.side} ×${item.perpOrder!.leverage}`}
+              </span>
+            )}
+            {!isPerp && item.jupiterSwap && (
               <span className="font-mono text-gold text-xs uppercase tracking-widest border border-gold/40 px-1.5 py-0.5 bg-gold/10">
                 ⇄ jupiter
               </span>
             )}
-            {!item.jupiterSwap && item.toAddress && (
+            {!isPerp && !item.jupiterSwap && item.toAddress && (
               <span className="font-mono text-gold text-xs uppercase tracking-widest border border-gold/40 px-1.5 py-0.5">
                 ↗ transfer
               </span>
             )}
-            {!item.toAddress && !item.jupiterSwap && item.vendor.toUpperCase().startsWith("SWAP") && (
+            {!isPerp && !item.toAddress && !item.jupiterSwap && item.vendor.toUpperCase().startsWith("SWAP") && (
               <span className="font-mono text-gold text-xs uppercase tracking-widest border border-gold/40 px-1.5 py-0.5">
                 ⇄ swap
               </span>
@@ -301,6 +326,7 @@ function Row({
               <span className="text-rust/60 select-none">! </span>{item.errorMsg}
             </div>
           )}
+          {isPerp && !perpClose && <PerpPolicyLine item={item} />}
           {showPreview && (
             <TxPreview item={item} overThreshold={overThreshold} />
           )}
@@ -332,7 +358,7 @@ function Row({
               ⊙ --dry-run
             </button>
           )}
-          {!readOnly && isUpcoming && item.status === "queued" && onExecute && (
+          {!readOnly && isUpcoming && item.status === "queued" && !isPerp && onExecute && (
             <button
               onClick={() => onExecute(item.id)}
               className="font-mono text-gold border border-gold/60 hover:bg-gold hover:text-ink text-[10px] uppercase tracking-widest px-2 py-1 transition"
@@ -346,6 +372,22 @@ function Row({
               className="font-mono text-rust/80 border border-rust/50 hover:bg-rust hover:text-ink text-[10px] uppercase tracking-widest px-2 py-1 transition"
             >
               ✕ kill
+            </button>
+          )}
+          {!readOnly && isUpcoming && item.status === "awaiting-approval" && onApprove && (
+            <button
+              onClick={() => onApprove(item.id)}
+              className="font-mono text-gold border border-gold/60 hover:bg-gold hover:text-ink text-[10px] uppercase tracking-widest px-2 py-1 transition"
+            >
+              ✓ approve
+            </button>
+          )}
+          {!readOnly && isUpcoming && item.status === "awaiting-approval" && onDeny && (
+            <button
+              onClick={() => onDeny(item.id)}
+              className="font-mono text-rust/80 border border-rust/50 hover:bg-rust hover:text-ink text-[10px] uppercase tracking-widest px-2 py-1 transition"
+            >
+              ✕ deny
             </button>
           )}
           {!readOnly && !isUpcoming && onRemove && (
@@ -427,6 +469,46 @@ function TxPreview({
   );
 }
 
+/**
+ * Per-item perp policy verdict line. Prefers the authoritative server
+ * verdict (item.policyVerdict, set from the /schedule POST response); falls
+ * back to the chat route's client-side hint (perpOrder.intendedStatus) when
+ * the server round-trip hasn't landed yet. Mirrors buildPerpEcho's line-3
+ * format (lib/perp-echo.ts) so the UI reads identically to the chat echo.
+ */
+function PerpPolicyLine({ item }: { item: ScheduleItem }) {
+  // Prefer the server verdict; otherwise derive from the resulting status /
+  // the chat route's intendedStatus hint.
+  const verdict: "allowed" | "requires-approval" | "denied" =
+    item.policyVerdict ??
+    (item.status === "denied"
+      ? "denied"
+      : item.status === "awaiting-approval" ||
+        item.perpOrder?.intendedStatus === "awaiting-approval"
+      ? "requires-approval"
+      : "allowed");
+
+  let text: string;
+  let cls: string;
+  if (verdict === "allowed") {
+    text = "policy: ✓ ok";
+    cls = "text-phosphor";
+  } else if (verdict === "requires-approval") {
+    text = "policy: ⚠ requiere tu aprobación";
+    cls = "text-rust";
+  } else {
+    text = "policy: ✗ denegado";
+    cls = "text-rust";
+  }
+
+  return (
+    <div className={`font-mono text-xs mt-1 ${cls}`}>
+      <span className="text-bone/30 select-none"># </span>
+      {text}
+    </div>
+  );
+}
+
 function Kv({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex gap-2">
@@ -448,6 +530,8 @@ function Timeline({
   approvalThreshold,
   onRemove,
   onExecute,
+  onApprove,
+  onDeny,
   readOnly,
 }: {
   upcoming: ScheduleItem[];
@@ -455,6 +539,8 @@ function Timeline({
   approvalThreshold: number;
   onRemove?: (id: string) => void;
   onExecute?: (id: string) => void;
+  onApprove?: (id: string) => void;
+  onDeny?: (id: string) => void;
   readOnly?: boolean;
 }) {
   return (
@@ -470,6 +556,8 @@ function Timeline({
             approvalThreshold={approvalThreshold}
             onRemove={onRemove}
             onExecute={onExecute}
+            onApprove={onApprove}
+            onDeny={onDeny}
             readOnly={readOnly}
           />
         ))}
@@ -486,6 +574,8 @@ function TimelineNode({
   approvalThreshold,
   onRemove,
   onExecute,
+  onApprove,
+  onDeny,
   readOnly,
 }: {
   item: ScheduleItem;
@@ -495,9 +585,13 @@ function TimelineNode({
   approvalThreshold: number;
   onRemove?: (id: string) => void;
   onExecute?: (id: string) => void;
+  onApprove?: (id: string) => void;
+  onDeny?: (id: string) => void;
   readOnly?: boolean;
 }) {
   const overThreshold = item.amount > approvalThreshold;
+  const isPerp = Boolean(item.perpOrder);
+  const perpClose = isPerp && item.perpOrder!.side == null;
   const secsUntil = Math.max(0, Math.round((item.scheduledFor - now) / 1000));
   const conditional = item.trigger && item.trigger.kind !== "time";
   const timeText =
@@ -543,7 +637,11 @@ function TimelineNode({
         }`}
       >
         <div className="flex items-center gap-1 mb-1 flex-wrap">
-          {item.jupiterSwap ? (
+          {isPerp ? (
+            <span className="font-mono text-gold text-[9px] uppercase tracking-widest border border-gold/40 px-1 bg-gold/10">
+              {perpClose ? "⊗ close" : `⚡ ${item.perpOrder!.side} ×${item.perpOrder!.leverage}`}
+            </span>
+          ) : item.jupiterSwap ? (
             <span className="font-mono text-gold text-[9px] uppercase tracking-widest border border-gold/40 px-1 bg-gold/10">
               ⇄ jup
             </span>
@@ -588,6 +686,26 @@ function TimelineNode({
             {onRemove && (
               <button
                 onClick={() => onRemove(item.id)}
+                className="font-mono text-rust/80 border border-rust/50 hover:bg-rust hover:text-ink text-[9px] uppercase tracking-widest px-1.5 py-1 transition"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
+        {!readOnly && item.status === "awaiting-approval" && (
+          <div className="flex gap-1 mt-2">
+            {onApprove && (
+              <button
+                onClick={() => onApprove(item.id)}
+                className="flex-1 font-mono text-gold border border-gold/60 hover:bg-gold hover:text-ink text-[9px] uppercase tracking-widest py-1 transition"
+              >
+                ✓ ok
+              </button>
+            )}
+            {onDeny && (
+              <button
+                onClick={() => onDeny(item.id)}
                 className="font-mono text-rust/80 border border-rust/50 hover:bg-rust hover:text-ink text-[9px] uppercase tracking-widest px-1.5 py-1 transition"
               >
                 ✕
