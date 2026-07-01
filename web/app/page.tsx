@@ -312,36 +312,38 @@ function Personas() {
           <Reveal delay={120}>
             <TerminalPanel
               label="ps // operative"
-              className="relative max-w-2xl overflow-hidden p-7 pt-9 shadow-glow sm:p-9 sm:pt-10"
+              className="relative max-w-2xl shadow-glow"
             >
-              <div
-                aria-hidden
-                className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gold/10 blur-3xl"
-              />
-              <div className="relative mb-5 flex items-center justify-between">
-                <span className="text-glow animate-glow-pulse text-4xl text-gold">
-                  ◉
-                </span>
-                <Readout
-                  items={[
-                    { label: "pid", value: "0001", tone: "bone" },
-                    { label: "state", value: "live", tone: "phosphor" },
-                    { label: "ver", value: "1.3", tone: "gold" },
-                  ]}
+              <div className="relative overflow-hidden p-7 pt-9 sm:p-9 sm:pt-10">
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gold/10 blur-3xl"
                 />
+                <div className="relative mb-5 flex items-center justify-between">
+                  <span className="text-glow animate-glow-pulse text-4xl text-gold">
+                    ◉
+                  </span>
+                  <Readout
+                    items={[
+                      { label: "pid", value: "0001", tone: "bone" },
+                      { label: "state", value: "live", tone: "phosphor" },
+                      { label: "ver", value: "1.3", tone: "gold" },
+                    ]}
+                  />
+                </div>
+                <h3 className="relative mb-2 font-display text-3xl uppercase tracking-wide text-bone">
+                  Operative
+                </h3>
+                <p className="relative mb-5 font-mono text-[11px] uppercase tracking-[0.25em] text-bone/40">
+                  customizable codename · pick yours in settings
+                </p>
+                <p className="relative border-l border-gold/40 pl-4 font-mono text-sm leading-relaxed text-bone/75">
+                  <span aria-hidden className="mr-2 text-gold/60">&gt;</span>
+                  "Operative reporting. I trade, I research yield, I help you
+                  build habits. What's the mission?"
+                  <Caret className="ml-1" />
+                </p>
               </div>
-              <h3 className="relative mb-2 font-display text-3xl uppercase tracking-wide text-bone">
-                Operative
-              </h3>
-              <p className="relative mb-5 font-mono text-[11px] uppercase tracking-[0.25em] text-bone/40">
-                customizable codename · pick yours in settings
-              </p>
-              <p className="relative border-l border-gold/40 pl-4 font-mono text-sm leading-relaxed text-bone/75">
-                <span aria-hidden className="mr-2 text-gold/60">&gt;</span>
-                "Operative reporting. I trade, I research yield, I help you
-                build habits. What's the mission?"
-                <Caret className="ml-1" />
-              </p>
             </TerminalPanel>
           </Reveal>
 
@@ -547,19 +549,21 @@ function FeatureGrid() {
               <Spotlight brackets className="h-full">
                 <TerminalPanel
                   label={f.tag}
-                  className="group relative h-full overflow-hidden p-7 pt-9 transition-colors hover:bg-smoke"
+                  className="group relative h-full transition-colors hover:bg-smoke"
                 >
-                  <p className="relative mb-3 font-mono text-[11px] text-phosphor/70">
-                    <CommandLine prompt="$">
-                      saw <span className="text-gold/80">{f.flag}</span>
-                    </CommandLine>
-                  </p>
-                  <h3 className="relative mb-3 font-display text-xl uppercase tracking-wide text-bone">
-                    {f.title}
-                  </h3>
-                  <p className="relative font-mono text-sm leading-relaxed text-bone/60">
-                    {f.body}
-                  </p>
+                  <div className="relative h-full overflow-hidden p-7 pt-9">
+                    <p className="relative mb-3 font-mono text-[11px] text-phosphor/70">
+                      <CommandLine prompt="$">
+                        saw <span className="text-gold/80">{f.flag}</span>
+                      </CommandLine>
+                    </p>
+                    <h3 className="relative mb-3 font-display text-xl uppercase tracking-wide text-bone">
+                      {f.title}
+                    </h3>
+                    <p className="relative font-mono text-sm leading-relaxed text-bone/60">
+                      {f.body}
+                    </p>
+                  </div>
                 </TerminalPanel>
               </Spotlight>
             </Reveal>

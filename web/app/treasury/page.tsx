@@ -174,8 +174,9 @@ export default async function TreasuryPage() {
             <Reveal>
               <TerminalPanel
                 label="vault.001"
-                className="relative mb-14 border-gold/60 bg-gradient-to-b from-ink/60 to-obsidian/80 shadow-glow-lg overflow-hidden"
+                className="relative mb-14 border-gold/60 bg-gradient-to-b from-ink/60 to-obsidian/80 shadow-glow-lg"
               >
+                <div className="relative overflow-hidden">
                 {/* corner stamp + scan accent */}
                 <div className="absolute right-0 top-0 h-16 w-16 border-l border-b border-gold/30" />
                 <div className="p-7 sm:p-10">
@@ -217,6 +218,7 @@ export default async function TreasuryPage() {
                       </a>
                     </div>
                   </div>
+                </div>
                 </div>
               </TerminalPanel>
             </Reveal>
