@@ -2386,7 +2386,7 @@ export default function DemoPage() {
         ) : process.env.NEXT_PUBLIC_PRIVY_APP_ID && handlerState.status === "error" ? (
           <HandlerError message={handlerState.error} />
         ) : !wallet.connected ? (
-          <Idle />
+          <Idle onGuest={enterGuestMode} />
         ) : phase === "pick" ? (
           // Auto-bootstrap fires on wallet.connected; this is the
           // ~1s flash before the setup tx is offered.
@@ -2598,7 +2598,7 @@ function PersonaTabs({
   );
 }
 
-function Idle() {
+function Idle({ onGuest }: { onGuest?: () => void }) {
   const [showMobileHint, setShowMobileHint] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -2670,6 +2670,20 @@ function Idle() {
           Open Phantom → settings → developer settings → switch network to{" "}
           <span className="text-gold">Devnet</span>. Then click Select Wallet
           above.
+        </div>
+      )}
+
+      {onGuest && (
+        <div className="mt-6">
+          <p className="font-mono text-xs text-bone/40 mb-3">
+            No wallet? No problem — no real txs, just you and your operative.
+          </p>
+          <button
+            onClick={onGuest}
+            className="border border-gold/60 text-gold px-6 py-2.5 font-mono text-xs uppercase tracking-widest hover:bg-gold hover:text-obsidian transition"
+          >
+            Try without wallet · demo mode
+          </button>
         </div>
       )}
     </TerminalPanel>
