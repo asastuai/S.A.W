@@ -11,6 +11,7 @@ import type { Provider } from "@/lib/db/types";
 import { evaluatePerpPolicy, DEFAULT_PERP_POLICY } from "@/lib/perp-policy";
 import type { PerpPolicyParams } from "@/lib/perp-policy";
 import { buildPerpEcho } from "@/lib/perp-echo";
+import { clampConversation } from "@/lib/prompt-clamp";
 
 export const runtime = "nodejs";
 
@@ -109,11 +110,14 @@ function buildSystemPrompt(body: RequestBody): string {
   const isGreedie = persona.id === "greedie";
   const isConservador = persona.id === "conservador";
   const isEstable = persona.id === "estable";
+  // Cap the schedule dump: terminal items pile up forever in the DB and a
+  // full dump can blow the provider's request-token limit on its own.
+  const visibleSchedule = schedule.slice(-20);
   const scheduleSummary =
     schedule.length === 0
       ? "Schedule is currently empty."
-      : `Current schedule (${schedule.length} items):\n` +
-        schedule
+      : `Current schedule (showing ${visibleSchedule.length} of ${schedule.length} items):\n` +
+        visibleSchedule
           .map(
             (i) =>
               `- ${i.id} | ${fmt(i.amount)} → ${i.vendor} at ${new Date(
@@ -834,7 +838,7 @@ export async function POST(req: NextRequest) {
 
     const messages: ProviderMessage[] = [
       { role: "system", content: system },
-      ...body.conversation.map(
+      ...clampConversation(body.conversation).map(
         (m): ProviderMessage => ({
           role: m.role === "agent" ? "assistant" : m.role === "system" ? "system" : "user",
           content: m.content,
