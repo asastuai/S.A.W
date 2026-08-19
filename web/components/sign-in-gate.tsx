@@ -10,7 +10,7 @@ import { usePrivy } from "@privy-io/react-auth";
  * Once the user signs in (wallet / email / social), the demo page reads
  * the handler from /api/handler/me via useHandler() and proceeds.
  */
-export function SignInGate() {
+export function SignInGate({ onGuest }: { onGuest?: () => void }) {
   const { ready, login } = usePrivy();
 
   return (
@@ -21,18 +21,28 @@ export function SignInGate() {
           Step into the dossier.
         </h2>
         <p className="text-bone/60 max-w-xl mx-auto mb-8 text-sm sm:text-base leading-relaxed">
-          Bring your Solana wallet to handle the agent. SAW creates a
-          programmable wallet alongside yours — you remain the handler,
-          always.
+          Connect with Phantom to operate on devnet — or step in without a
+          wallet in demo mode to try it. Anyone can paste an LLM key and
+          chat with their operative.
         </p>
 
-        <button
-          onClick={() => login()}
-          disabled={!ready}
-          className="bg-gold text-ink px-8 py-3 uppercase tracking-widest text-sm hover:bg-bone disabled:opacity-40 disabled:cursor-not-allowed transition"
-        >
-          {ready ? "Sign in" : "Loading…"}
-        </button>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <button
+            onClick={() => login()}
+            disabled={!ready}
+            className="bg-gold text-ink px-8 py-3 uppercase tracking-widest text-sm hover:bg-bone disabled:opacity-40 disabled:cursor-not-allowed transition"
+          >
+            {ready ? "Sign in with wallet" : "Loading…"}
+          </button>
+          {onGuest && (
+            <button
+              onClick={onGuest}
+              className="border border-gold/60 text-gold px-8 py-3 uppercase tracking-widest text-sm hover:bg-gold hover:text-ink transition"
+            >
+              Try without wallet
+            </button>
+          )}
+        </div>
 
         <p className="text-bone/40 text-xs mt-8">
           Devnet only · test SOL · no real funds · disconnect any time

@@ -47,6 +47,7 @@ import {
   saveSetup,
 } from "@/lib/saw";
 import { PERSONAS, Persona, getPersona } from "@/lib/personas";
+import { GuidedTour, hasSeenTour, type TourStep } from "@/components/guided-tour";
 import {
   Briefing,
   Opportunity,
@@ -112,6 +113,40 @@ type Setup = {
   mint: PublicKey;
   agent: Keypair;
 };
+
+// Synthetic handler key for guest (no-wallet) demo sessions. Only used as
+// a localStorage namespace + non-null placeholder; never signs anything.
+const GUEST_HANDLER = PublicKey.default;
+
+// First-visit guided tour. Steps whose anchor isn't mounted are skipped
+// automatically, so the same list serves guest and full sessions.
+const TOUR_STEPS: TourStep[] = [
+  {
+    target: "operative",
+    title: "your operative",
+    body: "One agent, full spectrum. It reads your intent and picks the right tool — trading, yield, transfers, savings. It reacts while it thinks, executes, and sleeps between wakes.",
+  },
+  {
+    target: "chat",
+    title: "briefing chat",
+    body: 'Chat here directly. Your agent can help with any crypto task you can imagine — ask for APRs, send money, stake, trade. Try: "best safe USDC yield right now".',
+  },
+  {
+    target: "schedule",
+    title: "the schedule",
+    body: "Every move the agent proposes lands here as a scheduled order. Nothing executes outside your on-chain policy — daily cap, per-tx cap, and the threshold above which YOU sign.",
+  },
+  {
+    target: "brain",
+    title: "connect a brain",
+    body: "Paste your own LLM key (free at console.groq.com) — or load fuel with SOL and SAW runs the LLM for you. Keys are encrypted server-side and never touch the chain.",
+  },
+  {
+    target: "fuel",
+    title: "load fuel",
+    body: "0.01 SOL = 500 calls. Fuel is what your agent breathes — when it runs out, it sleeps until you top up. No subscriptions, no card. SOL in, SOL out.",
+  },
+];
 
 const fmt = (n: number) =>
   `${(n / 10 ** DEMO_DECIMALS).toLocaleString(undefined, {
@@ -243,6 +278,8 @@ export default function DemoPage() {
   const [apiKey, setApiKeyState] = useState<string | null>(null);
   const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
   const [sawCredits, setSawCredits] = useState<number>(0);
+  const [guestMode, setGuestMode] = useState<boolean>(false);
+  const [showTour, setShowTour] = useState<boolean>(false);
   const executingRef = useRef<boolean>(false);
   const briefingRef = useRef<Briefing | null>(null);
 
@@ -250,6 +287,49 @@ export default function DemoPage() {
   useEffect(() => {
     setApiKeyState(loadApiKey());
   }, []);
+
+  // ── Guest (no-wallet) demo mode ──────────────────────────────────────
+  // Anyone can step in without a wallet, paste an LLM key, and chat with
+  // the operative. On-chain execution stays gated behind a real wallet;
+  // the chat API already supports anonymous BYOK callers.
+  function enterGuestMode() {
+    const op = PERSONAS.find((p) => p.id === "operative") ?? PERSONAS[0];
+    const saved = loadBriefing(GUEST_HANDLER, op.id);
+    const initial: Briefing = saved ?? {
+      personaId: op.id,
+      conversation: [newMessage("agent", op.greeting)],
+      schedule: [],
+      opportunities: [],
+      ready: false,
+    };
+    setActivePersonaIdState(op.id);
+    setBriefings((prev) => ({ ...prev, [op.id]: initial }));
+    setPhase("briefing");
+    setGuestMode(true);
+    try {
+      localStorage.setItem("saw_guest", "1");
+    } catch {}
+  }
+  function exitGuestMode() {
+    try {
+      localStorage.removeItem("saw_guest");
+    } catch {}
+    location.reload();
+  }
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("saw_guest") === "1") enterGuestMode();
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-show the guided tour the first time the console is usable.
+  useEffect(() => {
+    if ((phase === "briefing" || phase === "live") && !hasSeenTour()) {
+      const t = setTimeout(() => setShowTour(true), 900);
+      return () => clearTimeout(t);
+    }
+  }, [phase]);
 
   // Fetch SAW credit balance once Privy is ready. Used to bypass the
   // AgentGate when the handler has paid credits but no BYOK key.
@@ -565,7 +645,7 @@ export default function DemoPage() {
     return new SawClient(provider);
   }, [connection, wallet.publicKey, wallet.signTransaction]);
 
-  const handler = wallet.publicKey;
+  const handler = wallet.publicKey ?? (guestMode ? GUEST_HANDLER : null);
 
   // Tick clock for countdowns
   useEffect(() => {
@@ -2105,6 +2185,7 @@ export default function DemoPage() {
         </Link>
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
           <button
+            data-tour="brain"
             onClick={() => setShowApiKeyModal(true)}
             className={`font-mono text-[11px] uppercase tracking-widest border px-3 py-1.5 transition ${
               apiKey
@@ -2115,6 +2196,15 @@ export default function DemoPage() {
           >
             {apiKey ? "● brain --linked" : "○ brain --connect"}
           </button>
+          {(phase === "briefing" || phase === "live") && (
+            <button
+              onClick={() => setShowTour(true)}
+              className="font-mono text-[11px] uppercase tracking-widest text-bone/60 hover:text-gold border border-ash hover:border-gold/50 px-3 py-1.5 transition"
+              title="Replay the guided tour"
+            >
+              man --tour
+            </button>
+          )}
           {phase === "live" && (
             <button
               onClick={backToBriefing}
@@ -2170,7 +2260,7 @@ export default function DemoPage() {
         )}
 
       {(phase === "briefing" || phase === "live") && (
-        <div className="px-4 sm:px-6 py-2 max-w-7xl mx-auto w-full space-y-2">
+        <div className="px-4 sm:px-6 py-2 max-w-7xl mx-auto w-full space-y-2" data-tour="fuel">
           {/* "Connect a brain" CTA — only when the user has neither
               their own BYOK key nor SAW credits. Disappears the moment
               one of those is in place. */}
@@ -2239,15 +2329,53 @@ export default function DemoPage() {
         </div>
       )}
 
+      {showTour && (
+        <GuidedTour steps={TOUR_STEPS} onClose={() => setShowTour(false)} />
+      )}
+
       <section className="px-4 sm:px-6 py-8 max-w-7xl mx-auto">
         {/* Privy is configured: outer gate is sign-in, not wallet-connect.
             If Privy is not configured (no APP_ID), authenticated is always
             false but we still want the legacy demo to work — fall back to
             wallet.connected check by treating that as the gate. */}
-        {process.env.NEXT_PUBLIC_PRIVY_APP_ID && !privyReady ? (
+        {guestMode && persona && briefing ? (
+          <div>
+            <div className="mb-4 border border-gold/40 bg-gold/5 px-4 py-2 flex items-center justify-between gap-3 flex-wrap">
+              <p className="font-mono text-xs text-bone/70">
+                <span className="text-gold uppercase tracking-widest">demo mode</span>
+                {" "}— no wallet, chat-only. On-chain execution unlocks when you
+                connect Phantom.
+              </p>
+              <button
+                onClick={exitGuestMode}
+                className="font-mono text-[11px] uppercase tracking-widest text-bone/50 hover:text-gold transition"
+              >
+                exit --demo
+              </button>
+            </div>
+            <BriefingRoom
+              persona={persona}
+              briefing={briefing}
+              chatBusy={chatBusy}
+              mascotPose={mascotPose}
+              walletBalance={walletBalance}
+              now={now}
+              marketSnap={marketSnap}
+              scanning={scanning}
+              onSend={sendChat}
+              onRemove={removeItem}
+              onExecute={executeOne}
+              onApprove={approvePerpItem}
+              onDeny={denyPerpItem}
+              onStart={startExecution}
+              onAcceptOpp={acceptOpportunity}
+              onSkipOpp={skipOpportunity}
+            />
+          </div>
+        ) : process.env.NEXT_PUBLIC_PRIVY_APP_ID && !privyReady ? (
           <LoadingHandler />
         ) : process.env.NEXT_PUBLIC_PRIVY_APP_ID && !privyAuthed ? (
-          <SignInGate />
+          <SignInGate onGuest={enterGuestMode} />
         ) : process.env.NEXT_PUBLIC_PRIVY_APP_ID && handlerState.status === "loading" ? (
           <LoadingHandler />
         ) : process.env.NEXT_PUBLIC_PRIVY_APP_ID && handlerState.status === "error" ? (
@@ -2801,7 +2929,7 @@ function BriefingRoom({
       )}
     <div className="grid grid-cols-1 lg:grid-cols-[3fr_4fr_3fr] gap-4 lg:gap-6">
       {/* LEFT: mascot + identity */}
-      <div className="space-y-4">
+      <div className="space-y-4" data-tour="operative">
         <TerminalPanel label="operative" className="p-5 flex flex-col items-center">
           <span className="absolute top-2 right-2 z-10">
             <CreatorNote
@@ -2827,12 +2955,12 @@ function BriefingRoom({
       </div>
 
       {/* MIDDLE: chat */}
-      <div>
+      <div data-tour="chat">
         <Chat messages={briefing.conversation} onSend={onSend} busy={chatBusy} />
       </div>
 
       {/* RIGHT: schedule preview + start */}
-      <div className="space-y-4">
+      <div className="space-y-4" data-tour="schedule">
         <ScheduleView
           items={briefing.schedule}
           now={now}
