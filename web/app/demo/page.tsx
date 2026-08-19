@@ -318,7 +318,12 @@ export default function DemoPage() {
   }
   useEffect(() => {
     try {
-      if (localStorage.getItem("saw_guest") === "1") enterGuestMode();
+      // Deep link from the landing ("saw demo --no-wallet") or a
+      // previously started guest session both drop straight into demo mode.
+      const wantsGuest =
+        new URLSearchParams(location.search).get("guest") === "1" ||
+        localStorage.getItem("saw_guest") === "1";
+      if (wantsGuest) enterGuestMode();
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -150,8 +150,21 @@ function Hero() {
                       </CommandLine>
                     </Link>
                   </Magnetic>
+                  <Link
+                    href="/demo?guest=1"
+                    className="group inline-flex items-center gap-2 border border-ash px-5 py-2.5 text-xs text-bone/70 transition hover:border-gold/60 hover:text-gold"
+                  >
+                    <CommandLine prompt="$">
+                      saw demo <span className="text-bone/40 group-hover:text-gold/70">--no-wallet</span>
+                      <span className="ml-2 text-bone/40 group-hover:text-gold/60">→</span>
+                    </CommandLine>
+                  </Link>
+                  <p className="max-w-[26ch] text-[10px] leading-relaxed text-bone/40">
+                    Connect Phantom to operate on devnet — or try it with no
+                    wallet: no real txs, just you and your operative.
+                  </p>
                   <a
-                    href="https://github.com/asastuai/S.A.W"
+                    href="https://github.com/Jc-asastu/S.A.W"
                     target="_blank"
                     rel="noreferrer"
                     className="group inline-flex items-center gap-2 px-5 py-2.5 text-xs text-bone/70 transition hover:text-gold"
