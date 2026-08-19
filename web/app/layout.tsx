@@ -28,6 +28,20 @@ export const metadata: Metadata = {
   title: "SAW — Secret Agent Wallet",
   description:
     "Custody, policy, and oversight for AI agents on Solana. Be the handler of your agent.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "SAW",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport = {
+  themeColor: "#0c0c0c",
 };
 
 export default function RootLayout({
